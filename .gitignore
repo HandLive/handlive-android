@@ -1,2 +1,16 @@
-# Thư mục phiên của Kotlin 2.x (tạo khi build).
+# macOS
+.DS_Store
+
+# Gradle / Android Studio / Kotlin
+.gradle/
+build/
+.idea/
+*.iml
+local.properties
 .kotlin/
+*.keystore
+*.jks
+
+# Secrets / config
+.env
+.env.*
