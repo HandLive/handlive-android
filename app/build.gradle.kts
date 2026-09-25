@@ -16,9 +16,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            // en-XA (long accented text) and ar-XB (right-to-left) catch clipping and hard-coded text (0.12.5).
+            isPseudoLocalesEnabled = true
+        }
         release {
             isMinifyEnabled = false
         }
+    }
+
+    androidResources {
+        // Only the catalog languages ship; libraries' other translations are dropped. Pseudo-locales exist in debug.
+        localeFilters += listOf("en", "vi", "en-rXA", "ar-rXB")
     }
 
     compileOptions {
@@ -44,6 +53,18 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
+    lint {
+        // Lint the app together with its modules: a string resource added anywhere without its Vietnamese
+        // translation fails MissingTranslation against the generated catalog (lint.xml, 0.12.5).
+        checkDependencies = true
+    }
 }
 
 kotlin {
@@ -55,11 +76,17 @@ dependencies {
     implementation(project(":core:crypto"))
     implementation(project(":core:transport"))
     implementation(project(":core:design"))
+    implementation(project(":core:data"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
+    implementation(libs.appcompat)
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
