@@ -46,6 +46,28 @@ class ServiceNotificationTest {
             manager.getNotificationChannel(NotificationChannels.CLIPBOARD).importance,
         )
         assertEquals("Permissions", manager.getNotificationChannel(NotificationChannels.PERMISSION).name)
+        assertEquals(
+            NotificationManager.IMPORTANCE_LOW,
+            manager.getNotificationChannel(NotificationChannels.PERMISSION).importance,
+        )
+    }
+
+    @Test
+    fun everyChannelCarriesItsCatalogDescription() {
+        NotificationChannels.createAll(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        assertEquals(
+            "Connection status with your Mac, iPhone, and iPad, and the Send Clipboard button.",
+            manager.getNotificationChannel(NotificationChannels.SERVICE).description,
+        )
+        assertEquals(
+            "Blocked sensitive content, clipboard conflicts, and image transfer progress.",
+            manager.getNotificationChannel(NotificationChannels.CLIPBOARD).description,
+        )
+        assertEquals(
+            "Suggestions to grant a permission when a Mac or iPhone needs a feature of this phone.",
+            manager.getNotificationChannel(NotificationChannels.PERMISSION).description,
+        )
     }
 
     @Test
