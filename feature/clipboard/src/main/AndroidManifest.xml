@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The clipboard channel: sensitive content, conflicts and image progress (CLIP-01 fields 8, 12; CLIP-03). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <!-- CLIP-01 API 1: copy detection. Receives only the event types it needs, never window content. -->
+        <service
+            android:name=".component.ClipboardAccessibilityService"
+            android:exported="false"
+            android:label="@string/common_app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/clipboard_accessibility" />
+        </service>
+
+        <!-- CLIP-01 API 2: transparent, its own task, never in Recents; the Share target below is its public entry. -->
+        <activity
+            android:name=".component.ClipboardReadActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.HandLive.ClipboardRead" />
+
+        <!-- CLIP-01 API 4: "Send to Devices (HandLive)" in other apps' share sheet, text/plain only. -->
+        <activity-alias
+            android:name=".component.ClipboardShareTarget"
+            android:exported="true"
+            android:label="@string/clipboard_share_target"
+            android:targetActivity=".component.ClipboardReadActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- CLIP-01 API 3: the "Send Clipboard" Quick Settings tile. -->
+        <service
+            android:name=".component.ClipboardTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_symbol_content_copy"
+            android:label="@string/clipboard_send"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- "Send Anyway", "Send Again" and "Cancel" on the clipboard notifications. -->
+        <receiver
+            android:name=".component.ClipActionReceiver"
+            android:exported="false" />
+
+        <!-- CLIP-03 API 6: received images and large texts are pasted from cache/clip/ through this provider. -->
+        <provider
+            android:name=".component.ClipFileProvider"
+            android:authorities="${applicationId}.clipfiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
