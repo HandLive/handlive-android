@@ -47,6 +47,7 @@ object ScreenCatalog {
             "paired" to { PairedScreen("MacBook của Lan", "fc647e0b") {} },
             "pairing failed" to { PairingFailedScreen(PairingFailure.CAMERA_DENIED, {}, {}, {}) },
             "limit reached" to { PairingFailedScreen(PairingFailure.LIMIT_REACHED, {}, {}, {}) },
+            "pairing lost" to { PairingFailedScreen(PairingFailure.DISCONNECTED, {}, {}, {}) },
             "settings" to { SettingsScreen(UiSamples.settings, warnings, UiSamples.NoActions, "System Default") },
             "auto-clear" to { AutoClearScreen(60, {}, {}) },
             "language" to { LanguageScreen(AppLanguage.Vietnamese, {}, {}) },
