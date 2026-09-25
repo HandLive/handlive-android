@@ -10,8 +10,9 @@ import org.junit.Test
 import java.security.MessageDigest
 
 /**
- * PAIR-01 byte strings and MACs (API 3–5, 0.6.2). No shared vector file covers them yet; the expected values were
- * computed independently with Python `hmac`/`hashlib` from the same inputs (see the report of card A1.2).
+ * PAIR-01 byte strings and MACs (API 3–5, 0.6.2) on synthetic inputs; the expected values were computed independently
+ * with Python `hmac`/`hashlib` from the same inputs (see the report of card A1.2). The shared vectors of
+ * pair-handshake.json check the same derivations with real keys (PairHandshakeVectorTest).
  */
 class PairingAuthDerivationTest {
     private val client =
