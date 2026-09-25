@@ -1,0 +1,10 @@
+HandLive for Android
+Copyright 2026 Hồ Xuân Dũng and HandLive contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles third-party fonts, each under the SIL Open Font License 1.1
+(license texts in core/design/src/main/assets/licenses/):
+- Inter — Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+- Be Vietnam Pro — Copyright 2021 The Be Vietnam Pro Project Authors (https://github.com/bettergui/BeVietnamPro)
+- Roboto Mono — Copyright 2015 The Roboto Mono Project Authors (https://github.com/googlefonts/robotomono)
