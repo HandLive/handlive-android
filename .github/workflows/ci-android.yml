@@ -55,6 +55,8 @@ jobs:
     steps:
       - name: Resolve matching branches of the hub and handlive-shared
         id: refs
+        # Runs before any checkout, so android/ (the job's default directory) does not exist yet.
+        working-directory: ${{ github.workspace }}
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
           OWNER: ${{ github.repository_owner }}
