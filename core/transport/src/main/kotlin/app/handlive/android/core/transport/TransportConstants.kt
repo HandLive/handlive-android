@@ -9,6 +9,9 @@ import kotlin.time.Duration.Companion.seconds
 object TransportConstants {
     const val CTL_PATH = "/v1/ctl"
 
+    /** Pairing endpoint, open only during a pairing window (0.4.1, PAIR-01). */
+    const val PAIR_PATH = "/v1/pair"
+
     /** `CTL_PORT` 47800; cổng bận thì thử lần lượt 47801–47809 (0.4.1). */
     const val CTL_PORT = 47800
     const val CTL_PORT_LAST_FALLBACK = 47809

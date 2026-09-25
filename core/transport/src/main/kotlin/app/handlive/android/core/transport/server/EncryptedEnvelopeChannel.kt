@@ -40,14 +40,18 @@ internal class EncryptedEnvelopeChannel(
 
     suspend fun open(envelope: Envelope): ByteArray = lock.withLock { cipher.open(envelope) }
 
-    /** Mã hóa và gửi; nếu đến ngưỡng rekey và chưa có rekey đang chờ thì gửi `session/rekey` trước. */
+    /**
+     * Mã hóa và gửi; nếu đến ngưỡng rekey và chưa có rekey đang chờ thì gửi `session/rekey` trước. [id] lets a
+     * caller that waits for an `ack` register its waiter before the envelope leaves.
+     */
     suspend fun send(
         type: String,
         plaintext: ByteArray,
+        id: String = ids.next(),
     ): String =
         lock.withLock {
             startRekeyIfDueLocked()
-            ids.next().also { writeLocked(type, plaintext, it) }
+            id.also { writeLocked(type, plaintext, it) }
         }
 
     suspend fun startRekeyIfDue() = lock.withLock { startRekeyIfDueLocked() }

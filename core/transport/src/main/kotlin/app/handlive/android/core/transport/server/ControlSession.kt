@@ -64,11 +64,15 @@ class ControlSession internal constructor(
     val effectiveFeatures: StateFlow<Set<Feature>> = effectiveFlow.asStateFlow()
     val inbound: ReceiveChannel<InboundEnvelope> = inboundChannel
 
-    /** Gửi một envelope ứng dụng đã mã hóa; trả `id` của envelope. */
+    /**
+     * Gửi một envelope ứng dụng đã mã hóa; trả `id` của envelope. A caller-chosen UUIDv7 [id] lets a request's `ack`
+     * waiter exist before the envelope leaves.
+     */
     suspend fun send(
         type: MessageType,
         plaintext: ByteArray,
-    ): String = channel.send(type.wire, plaintext)
+        id: String? = null,
+    ): String = if (id == null) channel.send(type.wire, plaintext) else channel.send(type.wire, plaintext, id)
 
     /** Gửi `capability/update` (ảnh chụp đầy đủ) khi cấu hình Android đổi, và tính lại tính năng hiệu lực. */
     suspend fun sendCapabilityUpdate() {
