@@ -3,6 +3,7 @@ package app.handlive.android.feature.clipboard.module
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.feature.clipboard.ClipMessage
+import app.handlive.android.feature.clipboard.ClipNotices
 import app.handlive.android.feature.clipboard.engine.ChunkSource
 import app.handlive.android.feature.clipboard.engine.Clip
 import app.handlive.android.feature.clipboard.engine.ClipContent
@@ -66,9 +67,12 @@ class LocalClipIntake(
         trace.markChanged(content.sha256)
         val settings = context.settings.value
         val sensitive = read.sensitiveExtra || SensitiveContent.looksLikeCardNumber(read.text)
+        val guard = context.state.loopGuard
+        val receivedFrom = guard.justReceivedFrom(content.sha256)
         when {
             read.text.isEmpty() -> onFailed(LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, read.source))
-            context.state.loopGuard.isEcho(content.sha256, read.source == ClipboardValues.SOURCE_AUTO) -> Unit
+            receivedFrom != null -> notices.skipped(read.source, receivedFrom)
+            read.source == ClipboardValues.SOURCE_AUTO && guard.justSent(content.sha256) -> Unit
             settings.clipBlockSensitive && sensitive -> hold(content, read.source)
             else -> send(content, sensitive = false, source = read.source)
         }
@@ -80,19 +84,29 @@ class LocalClipIntake(
         content?.let { trace.markChanged(it.sha256) }
         when {
             // E1: images off on this phone — skipped without a notification.
-            !settings.clipSendImages -> read.file.delete()
+            !settings.clipSendImages -> {
+                read.file.delete()
+            }
 
-            content == null -> onFailed(LocalRead.Failed(ReadFailure.IMAGE_UNREADABLE, read.source))
+            content == null -> {
+                onFailed(LocalRead.Failed(ReadFailure.IMAGE_UNREADABLE, read.source))
+            }
 
-            context.state.loopGuard.isEcho(
-                content.sha256,
-                read.source == ClipboardValues.SOURCE_AUTO,
-            ) -> content.file.delete()
+            context.state.loopGuard.isEcho(content.sha256, read.source == ClipboardValues.SOURCE_AUTO) -> {
+                content.file.delete()
+                context.state.loopGuard
+                    .justReceivedFrom(content.sha256)
+                    ?.let { notices.skipped(read.source, it) }
+            }
 
             // QC3 for images: the IS_SENSITIVE extra only, no Luhn check (CLIP-03 API 1 logic 5).
-            settings.clipBlockSensitive && read.sensitiveExtra -> hold(content, read.source)
+            settings.clipBlockSensitive && read.sensitiveExtra -> {
+                hold(content, read.source)
+            }
 
-            else -> send(content, sensitive = false, source = read.source)
+            else -> {
+                send(content, sensitive = false, source = read.source)
+            }
         }
     }
 
@@ -189,4 +203,15 @@ class LocalClipIntake(
             }
         }
     }
+}
+
+/**
+ * QC4 on a manual action (notification button, tile, Share): the content is what [deviceName] just sent, so it is
+ * not sent back, and the result says so (CLIP-01 field 11, E9). The automatic path stays silent.
+ */
+private fun ClipNotices.skipped(
+    source: String,
+    deviceName: String,
+) {
+    if (source != ClipboardValues.SOURCE_AUTO) show(ClipMessage.SkippedJustReceived(deviceName))
 }

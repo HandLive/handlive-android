@@ -158,16 +158,18 @@ class ClipSender(
                 if (reported.compareAndSet(false, true)) notices.show(ClipMessage.FeatureDisabled(session.peerName))
             }
 
-            failure == ErrorCode.CLIP_TOO_LARGE && reported.compareAndSet(false, true) -> {
-                notices.show(
-                    if (clip.kind ==
-                        ClipboardValues.KIND_IMAGE
-                    ) {
-                        ClipMessage.ImageTooLarge
-                    } else {
-                        ClipMessage.TextTooLarge
-                    },
-                )
+            failure == ErrorCode.CLIP_TOO_LARGE -> {
+                if (reported.compareAndSet(false, true)) notices.show(tooLarge(clip))
+            }
+
+            // CLIP-03 E4: resent once; a second mismatch is "Couldn't send the image" (see deliver).
+            failure == ErrorCode.CLIP_CHECKSUM_MISMATCH -> {
+                Unit
+            }
+
+            // CLIP-01 field 11: any other refusal of a manual send.
+            reported.compareAndSet(false, true) -> {
+                notices.show(ClipMessage.WriteFailedOnDevice(session.peerName))
             }
         }
     }
@@ -176,3 +178,6 @@ class ClipSender(
         const val PEER_ID = 8
     }
 }
+
+private fun tooLarge(clip: Clip): ClipMessage =
+    if (clip.kind == ClipboardValues.KIND_IMAGE) ClipMessage.ImageTooLarge else ClipMessage.TextTooLarge

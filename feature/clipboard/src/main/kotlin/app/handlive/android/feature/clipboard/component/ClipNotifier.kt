@@ -32,15 +32,49 @@ class ClipNotifier(
     override fun show(message: ClipMessage) {
         val text =
             when (message) {
-                is ClipMessage.SentTo -> context.getString(R.string.clipboard_sent_to, message.deviceName)
-                ClipMessage.NotConnected -> context.getString(R.string.clipboard_not_connected_will_send)
-                ClipMessage.EmptyOrNotText -> context.getString(R.string.clipboard_empty_or_not_text)
-                ClipMessage.TextTooLarge -> context.getString(R.string.error_clip_text_too_large)
-                ClipMessage.ImageTooLarge -> context.getString(R.string.error_clip_image_too_large)
-                ClipMessage.ImageUnreadable -> context.getString(R.string.error_clip_image_unreadable)
-                ClipMessage.ImageSendFailed -> context.getString(R.string.error_clip_image_send_failed)
-                ClipMessage.ImageNoSpace -> context.getString(R.string.error_clip_image_no_space)
-                is ClipMessage.FeatureDisabled -> context.getString(R.string.error_feature_disabled, message.deviceName)
+                is ClipMessage.SentTo -> {
+                    context.getString(R.string.clipboard_sent_to, message.deviceName)
+                }
+
+                is ClipMessage.SkippedJustReceived -> {
+                    context.getString(R.string.clipboard_skipped_just_received, message.deviceName)
+                }
+
+                is ClipMessage.WriteFailedOnDevice -> {
+                    context.getString(R.string.error_clip_write_failed_on_device, message.deviceName)
+                }
+
+                ClipMessage.NotConnected -> {
+                    context.getString(R.string.clipboard_not_connected_will_send)
+                }
+
+                ClipMessage.EmptyOrNotText -> {
+                    context.getString(R.string.clipboard_empty_or_not_text)
+                }
+
+                ClipMessage.TextTooLarge -> {
+                    context.getString(R.string.error_clip_text_too_large)
+                }
+
+                ClipMessage.ImageTooLarge -> {
+                    context.getString(R.string.error_clip_image_too_large)
+                }
+
+                ClipMessage.ImageUnreadable -> {
+                    context.getString(R.string.error_clip_image_unreadable)
+                }
+
+                ClipMessage.ImageSendFailed -> {
+                    context.getString(R.string.error_clip_image_send_failed)
+                }
+
+                ClipMessage.ImageNoSpace -> {
+                    context.getString(R.string.error_clip_image_no_space)
+                }
+
+                is ClipMessage.FeatureDisabled -> {
+                    context.getString(R.string.error_feature_disabled, message.deviceName)
+                }
             }
         main.post { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     }

@@ -202,7 +202,7 @@ class ClipReceiver(
             )
         } else {
             BenchLog.event(BenchEvent.CLIP_APPLIED, "clip" to push.clipId)
-            state.loopGuard.onOwnWrite(content.sha256)
+            state.loopGuard.onOwnWrite(content.sha256, session.peerName)
             trace.onWrite(written)
             val clip =
                 Clip(

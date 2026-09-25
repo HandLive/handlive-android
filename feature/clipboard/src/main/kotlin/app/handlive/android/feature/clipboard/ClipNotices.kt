@@ -3,7 +3,17 @@ package app.handlive.android.feature.clipboard
 /** A message reported in place as a toast (C19: clipboard errors are never pushed as notifications). */
 sealed interface ClipMessage {
     /** CLIP-01 field 11: the manual send reached a device. */
-    class SentTo(
+    data class SentTo(
+        val deviceName: String,
+    ) : ClipMessage
+
+    /** CLIP-01 field 11: the manual send is the clip just received from [deviceName] (QC4, E9). */
+    data class SkippedJustReceived(
+        val deviceName: String,
+    ) : ClipMessage
+
+    /** CLIP-01 field 11: [deviceName] refused the manual send (not `FEATURE_DISABLED`, not `CLIP_TOO_LARGE`). */
+    data class WriteFailedOnDevice(
         val deviceName: String,
     ) : ClipMessage
 
@@ -29,7 +39,7 @@ sealed interface ClipMessage {
     data object ImageNoSpace : ClipMessage
 
     /** CLIP-01 E10 on the manual path: the peer answered `FEATURE_DISABLED`. */
-    class FeatureDisabled(
+    data class FeatureDisabled(
         val deviceName: String,
     ) : ClipMessage
 }
