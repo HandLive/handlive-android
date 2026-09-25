@@ -58,7 +58,4 @@ object WsCloseCode {
     /** Too many connections waiting for a handshake, or the IP is blocked after repeated wrong `mac`. */
     const val RATE_LIMITED: Short = 4429
     const val INTERNAL: Short = 4500
-
-    /** RFC 6455 "message too big": a reassembled text message exceeds 256 KiB (0.5.1 rule 4). */
-    const val MESSAGE_TOO_BIG: Short = 1009
 }

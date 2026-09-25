@@ -39,6 +39,10 @@ android {
                 .file(sharedDir.file("test-vectors/session-handshake.json"))
                 .withPropertyName("sessionHandshakeVector")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
+            test.inputs
+                .file(sharedDir.file("schemas/common.schema.json"))
+                .withPropertyName("commonSchema")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
             test.systemProperty("hl.shared.dir", sharedDir.asFile.absolutePath)
         }
     }

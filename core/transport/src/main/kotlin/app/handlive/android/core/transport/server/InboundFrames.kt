@@ -90,6 +90,8 @@ internal class InboundFrames(
 
     private companion object {
         val BINARY_NOT_ALLOWED = CloseReason(WsCloseCode.BAD_REQUEST, "BAD_REQUEST")
-        val TOO_BIG = CloseReason(WsCloseCode.MESSAGE_TOO_BIG, "MESSAGE_TOO_BIG")
+
+        /** RFC 6455 "message too big": a reassembled text message exceeds 256 KiB (0.5.1 rule 4). */
+        val TOO_BIG = CloseReason(CloseReason.Codes.TOO_BIG, "MESSAGE_TOO_BIG")
     }
 }
