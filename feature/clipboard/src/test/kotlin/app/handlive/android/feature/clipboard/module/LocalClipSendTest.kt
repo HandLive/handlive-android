@@ -234,6 +234,33 @@ class LocalClipSendTest {
         }
 
     @Test
+    fun imagesStayOnThePhoneWhenSyncImagesIsOff() =
+        test { h ->
+            h.connect(h.mac)
+            h.settings.value = h.settings.value.copy(clipSendImages = false)
+            h.readImage(ByteArray(1_000), source = ClipboardValues.SOURCE_MANUAL)
+            assertTrue(h.mac.pushes().isEmpty())
+            assertTrue(h.notices.messages.isEmpty())
+            assertTrue(
+                h.clipDir
+                    .listFiles()
+                    .orEmpty()
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun anUndecodableImageIsReportedOnlyOnTheManualPath() =
+        test { h ->
+            h.connect(h.mac)
+            h.imagesDecodable = false
+            h.readImage(ByteArray(1_000))
+            h.readImage(ByteArray(1_000), source = ClipboardValues.SOURCE_MANUAL)
+            assertTrue(h.mac.pushes().isEmpty())
+            assertEquals(listOf(ClipMessage.ImageUnreadable), h.notices.messages)
+        }
+
+    @Test
     fun textAboveTheInlineLimitGoesInChunksAndTheAckWaitStartsAfterTheLastOne() =
         test { h ->
             h.connect(h.mac)

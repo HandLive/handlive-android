@@ -239,6 +239,32 @@ class ChunkedTransferTest {
         }
 
     @Test
+    fun cancelOnTheSendingProgressStopsTheTransferAndTheClipIsNotReplayed() =
+        test { h ->
+            h.connect(h.mac)
+            h.readImage(Random(11).nextBytes(100_000))
+            val transferId =
+                checkNotNull(
+                    h.mac
+                        .pushes()
+                        .single()
+                        .second.transfer,
+                ).transferId
+            h.module.cancelTransfer("pair-mac", transferId, sending = true)
+            h.run()
+            assertEquals(
+                listOf(transferId to ClipboardValues.CANCEL_USER),
+                h.mac.cancels().map {
+                    it.transferId to
+                        it.reason
+                },
+            )
+            h.disconnect(h.mac)
+            h.connect(h.mac)
+            assertEquals(1, h.mac.pushes().size)
+        }
+
+    @Test
     fun theReceiverCancelsAfterThirtySecondsWithoutAChunk() =
         test { h ->
             h.connect(h.mac)

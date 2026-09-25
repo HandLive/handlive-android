@@ -172,6 +172,20 @@ class AutoClearTest {
         }
 
     @Test
+    fun aFailingClearIsIgnored() =
+        test { h ->
+            h.focus.appFocused = true
+            receive(h)
+            h.writer.failClear = true
+            advance(minute)
+            assertEquals(0, h.writer.cleared)
+            h.writer.failClear = false
+            receive(h, "next")
+            advance(minute)
+            assertEquals(1, h.writer.cleared)
+        }
+
+    @Test
     fun aNewClipReplacesTheTimer() =
         test { h ->
             h.focus.appFocused = true

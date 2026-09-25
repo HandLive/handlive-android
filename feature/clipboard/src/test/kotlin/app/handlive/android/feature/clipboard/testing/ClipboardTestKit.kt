@@ -83,7 +83,10 @@ class FakeWriter(
         sensitive: Boolean,
     ) = record(Written(clipId, null, file, sensitive), sha256)
 
+    var failClear = false
+
     override fun clear() {
+        if (failClear) throw SecurityException("clear refused")
         cleared++
         current = null
     }
@@ -248,7 +251,9 @@ class ClipboardHarness(
     val settings = MutableStateFlow(HandLiveSettings(clipA11yConsentAt = BASE_WALL))
     private val dispatcher = StandardTestDispatcher(scope.testScheduler)
     private val ids = UuidV7Generator(wall)
-    private val images = ImageNormalizer { source, mime, _ -> NormalizedImage(source, mime, WIDTH, HEIGHT) }
+    var imagesDecodable = true
+    private val images =
+        ImageNormalizer { source, mime, _ -> NormalizedImage(source, mime, WIDTH, HEIGHT).takeIf { imagesDecodable } }
     val module =
         ClipboardModule(
             dispatcher,
