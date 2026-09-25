@@ -139,7 +139,7 @@ fun PairingFailedScreen(
     }
 }
 
-/** Texts of PAIR-01 E1–E9 (catalog `error.*`, `pairing.*`). */
+/** Texts of PAIR-01 E1–E9 and field 10 (catalog `error.*`, `pairing.*`). */
 val PairingFailure.message: Int
     get() =
         when (this) {
@@ -153,11 +153,10 @@ val PairingFailure.message: Int
 
             PairingFailure.CAMERA_DENIED -> R.string.pairing_camera_denied
 
-            // A closed window, a client that left or an internal error all need a fresh code on the Mac.
-            PairingFailure.PAIRING_CLOSED,
-            PairingFailure.DISCONNECTED,
-            PairingFailure.INTERNAL,
-            -> R.string.error_pairing_closed
+            PairingFailure.PAIRING_CLOSED -> R.string.error_pairing_closed
+
+            // Field 10: failures without their own text (lost connection, internal error).
+            PairingFailure.DISCONNECTED, PairingFailure.INTERNAL -> R.string.error_pairing_failed
         }
 
 /** PAIR-01 A3–A5: the 6-digit PIN, submitted when complete; attempts left after a wrong one (field 7). */
