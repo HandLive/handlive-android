@@ -77,6 +77,7 @@ dependencies {
     implementation(project(":core:transport"))
     implementation(project(":core:design"))
     implementation(project(":core:data"))
+    implementation(project(":feature:connection"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
