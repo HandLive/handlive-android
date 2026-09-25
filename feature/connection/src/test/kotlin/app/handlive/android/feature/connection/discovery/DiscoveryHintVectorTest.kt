@@ -16,9 +16,10 @@ import org.junit.Test
 
 /**
  * discovery-hint.json (0.4.1, CONN-01 API 1–2): `K_disc`, the hint of every hour, the hour index and the TXT `h`
- * that [DiscoveryHints] and [MdnsTxtRecord] advertise at each clock value. The phone only advertises; the client's
- * rule (the hints of its current and previous hour) is rebuilt here from the same primitives to check the match
- * scenarios and that no negative TXT value is taken for its pair.
+ * that [DiscoveryHints] and [MdnsTxtRecord] advertise at each clock value. The phone only advertises its current hour;
+ * the client's rule (the hints of its previous, current and next hour, so a phone clock up to an hour ahead or behind
+ * still matches) is rebuilt here from the same primitives to check the match scenarios and that no negative TXT
+ * value is taken for its pair.
  */
 class DiscoveryHintVectorTest {
     @Test
@@ -62,7 +63,7 @@ class DiscoveryHintVectorTest {
             assertEquals(name, v.strings("accepted"), accepted)
             assertEquals(name, listOf(v.str("matched_hint")), txt.split(",").filter { it in accepted })
         }
-        assertEquals(setOf("current", "previous"), matches.map { it.str("matched_as") }.toSet())
+        assertEquals(setOf("previous", "current", "next"), matches.map { it.str("matched_as") }.toSet())
     }
 
     @Test
@@ -95,14 +96,14 @@ class DiscoveryHintVectorTest {
         fun prk(pair: String): ByteArray =
             vectors.single { it.str("kind") == "key" && it.str("name") == pair }.hex("prk")
 
-        /** The client's rule of 0.4.1: the hints of its current hour, then of the previous hour. */
+        /** The client's rule of 0.4.1: the hints of its previous, current and next hour, in that order. */
         fun accepted(
             prk: ByteArray,
             nowMillis: Long,
         ): List<String> {
             val key = DiscoveryHints.key(prk)
             val hour = DiscoveryHints.hourIndex(nowMillis)
-            return listOf(DiscoveryHints.hint(key, hour), DiscoveryHints.hint(key, hour - 1))
+            return listOf(hour - 1, hour, hour + 1).map { DiscoveryHints.hint(key, it) }
         }
 
         fun JsonObject.strings(key: String): List<String> = getValue(key).jsonArray.map { it.jsonPrimitive.content }
