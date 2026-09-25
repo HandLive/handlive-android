@@ -90,14 +90,29 @@ class HLGroupedSectionScope internal constructor() {
         checked: Boolean,
         onCheckedChange: (Boolean) -> Unit,
         unavailableReason: String? = null,
+        description: String? = null,
     ) = row {
         HLSwitchRow(
             title = title,
             checked = checked,
             onCheckedChange = onCheckedChange,
             unavailableReason = unavailableReason,
+            description = description,
         )
     }
+
+    /** Dòng chỉ đọc "nhãn — giá trị" (chi tiết thiết bị, Mã an toàn). */
+    fun valueRow(
+        title: String,
+        value: String,
+    ) = row { HLValueRow(title = title, value = value) }
+
+    /** Một lựa chọn trong nhóm chọn một (Tự xóa bảng nhớ tạm đã nhận, Ngôn ngữ). */
+    fun checkRow(
+        title: String,
+        selected: Boolean,
+        onClick: () -> Unit,
+    ) = row { HLCheckRow(title = title, selected = selected, onClick = onClick) }
 
     /** Dòng hành động: chữ `accent`; [destructive] thì chữ `destructive-text` và luôn hỏi xác nhận bằng Alert. */
     fun actionRow(

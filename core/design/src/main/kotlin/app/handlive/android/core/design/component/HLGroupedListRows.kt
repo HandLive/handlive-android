@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -67,6 +68,7 @@ internal fun HLSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     unavailableReason: String?,
+    description: String? = null,
 ) {
     val colors = HandLiveTheme.colors
     val typography = HandLiveTheme.typography
@@ -80,11 +82,46 @@ internal fun HLSwitchRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             BasicText(text = title, style = typography.body.copy(color = colors.label))
+            if (description != null) {
+                BasicText(text = description, style = typography.subheadline.copy(color = colors.secondaryLabel))
+            }
             if (unavailableReason != null) {
                 BasicText(text = unavailableReason, style = typography.subheadline.copy(color = colors.textOrange))
             }
         }
         HLSwitch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/** Dòng chỉ đọc: nhãn bên trái, giá trị `secondary-label` bên phải; TalkBack đọc cả dòng một lần. */
+@Composable
+internal fun HLValueRow(
+    title: String,
+    value: String,
+) {
+    val colors = HandLiveTheme.colors
+    val typography = HandLiveTheme.typography
+    HLGroupedRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
+        BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel))
+    }
+}
+
+/** Dòng chọn một trong nhiều giá trị kiểu iOS: dấu kiểm `accent` ở dòng đang chọn; vai trò nút chọn cho TalkBack. */
+@Composable
+internal fun HLCheckRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = HandLiveTheme.colors
+    HLGroupedRow(modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick)) {
+        BasicText(
+            text = title,
+            style = HandLiveTheme.typography.body.copy(color = colors.label),
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) HLIcon(symbol = HLSymbol.Check, contentDescription = null, tint = colors.accent)
     }
 }
 
