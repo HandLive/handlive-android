@@ -10,11 +10,25 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    // The instrumented test APK packs the same Netty jars as the app: drop their duplicate descriptors.
+    packaging {
+        resources {
+            excludes +=
+                setOf(
+                    "META-INF/INDEX.LIST",
+                    "META-INF/io.netty.versions.properties",
+                    "META-INF/license/*",
+                    "META-INF/native-image/**",
+                )
+        }
     }
 
     testOptions {
@@ -69,4 +83,9 @@ dependencies {
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.ktor.client.java)
     testImplementation(testFixtures(project(":core:protocol")))
+
+    // Smoke test on a real device: Netty + TLS 1.3 (Conscrypt) and the Keystore-backed TLS identity.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.core)
 }
