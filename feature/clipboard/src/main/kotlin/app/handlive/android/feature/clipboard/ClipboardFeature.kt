@@ -8,6 +8,7 @@ import app.handlive.android.core.data.HandLiveData
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.envelope.MessageType
+import app.handlive.android.feature.clipboard.component.AccessibilityConsent
 import app.handlive.android.feature.clipboard.component.ClipNotifier
 import app.handlive.android.feature.clipboard.component.ClipboardReadActivity
 import app.handlive.android.feature.clipboard.module.ClipClock
@@ -57,6 +58,9 @@ class ClipboardFeature private constructor(
     private val listener = ClipboardManager.OnPrimaryClipChangedListener { onClipChangedWhileFocused() }
 
     val clipboard = SystemClipboard(appContext)
+
+    /** The disclosure's choices and the service state, for the ConsentSheet and Settings (CLIP-01 A1–A3). */
+    val consent = AccessibilityConsent(appContext, data.settings)
 
     val settings: StateFlow<HandLiveSettings> =
         data.settings.settings.stateIn(scope, SharingStarted.Eagerly, HandLiveSettings())

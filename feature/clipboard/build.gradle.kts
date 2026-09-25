@@ -35,6 +35,7 @@ dependencies {
     implementation(project(":core:design"))
     implementation(project(":core:strings"))
     implementation(libs.androidx.core)
+    implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
