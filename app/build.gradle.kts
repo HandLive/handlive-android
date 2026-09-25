@@ -79,6 +79,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":feature:connection"))
     implementation(project(":feature:pairing"))
+    implementation(project(":feature:clipboard"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)

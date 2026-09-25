@@ -1,6 +1,7 @@
 package app.handlive.android
 
 import android.app.Application
+import app.handlive.android.feature.clipboard.ClipboardFeature
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.notification.NotificationChannels
 import app.handlive.android.feature.pairing.PairingFeature
@@ -15,5 +16,6 @@ class HandLiveApplication : Application() {
         NotificationChannels.createAll(this)
         BenchLog.install(this)
         PairingFeature.install(this)
+        ClipboardFeature.install(this)
     }
 }
