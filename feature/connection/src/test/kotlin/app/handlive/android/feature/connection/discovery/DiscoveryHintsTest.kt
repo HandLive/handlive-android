@@ -8,9 +8,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Hourly hints of 0.4.1 (C6). No shared vector covers them yet: the expected values were computed independently
- * with Python `hmac`/`hashlib` from the PRKs of pair-prk.json — the same values the Mac's HLCrypto tests use, so a
- * Mac finds the phone only if both sides agree byte for byte.
+ * Hourly hints of 0.4.1 (C6). The expected values were computed independently with Python `hmac`/`hashlib` from the
+ * PRKs of pair-prk.json before shared/test-vectors/discovery-hint.json carried them (DiscoveryHintVectorTest); the
+ * Mac's HLCrypto tests use the same values, so a Mac finds the phone only if both sides agree byte for byte.
  */
 class DiscoveryHintsTest {
     private val prks = SharedTestVectors.vectors("pair-prk.json").associate { it.str("name") to it.hex("prk") }

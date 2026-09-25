@@ -36,11 +36,13 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             all { test ->
-                // Discovery hint tests use the PRKs of shared/test-vectors/pair-prk.json.
+                // Discovery hint tests use shared/test-vectors/discovery-hint.json and the PRKs of pair-prk.json.
                 val sharedDir = rootProject.layout.projectDirectory.dir("../shared")
                 test.inputs
-                    .file(sharedDir.file("test-vectors/pair-prk.json"))
-                    .withPropertyName("pairPrkVector")
+                    .files(
+                        sharedDir.file("test-vectors/pair-prk.json"),
+                        sharedDir.file("test-vectors/discovery-hint.json"),
+                    ).withPropertyName("discoveryVectors")
                     .withPathSensitivity(PathSensitivity.RELATIVE)
                 test.systemProperty("hl.shared.dir", sharedDir.asFile.absolutePath)
             }
