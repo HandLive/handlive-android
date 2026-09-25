@@ -1,5 +1,6 @@
 # CI Android: unit test JVM + Android Lint + ktlint + detekt (`./gradlew check`).
-# Bố cục workspace như máy dev: kho này ở android/, kho handlive-shared ở shared/ (Gradle và test đọc ../shared).
+# Bố cục workspace như máy dev: kho hub handlive ở gốc (test core:design đọc ../docs/design-system), kho này ở
+# android/, kho handlive-shared ở shared/ (Gradle và test đọc ../shared). Hub phải checkout TRƯỚC (checkout ở gốc dọn sạch thư mục).
 # Sửa shared không tự kích hoạt workflow này: chạy tay (workflow_dispatch) sau khi shared đổi.
 # Kho private trong group cần secret HANDLIVE_REPOS_TOKEN (quyền đọc nội dung các kho); kho public thì github.token đủ.
 name: ci-android
@@ -52,6 +53,12 @@ jobs:
       run:
         working-directory: android
     steps:
+      - name: Kho hub handlive ở gốc workspace
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/handlive
+          token: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+
       - uses: actions/checkout@v5
         with:
           path: android
