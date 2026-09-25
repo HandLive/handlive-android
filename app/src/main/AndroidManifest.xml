@@ -14,6 +14,7 @@
         android:label="@string/common_app_name"
         android:localeConfig="@xml/locales_config"
         tools:targetApi="33"
+        android:enableOnBackInvokedCallback="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
         <activity
