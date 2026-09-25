@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- PAIR-01 step 3: scanning the QR code shown by the Mac or iPhone (asked just in time, SET-01 part B). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Scanning is optional: a phone without a camera pairs with a PIN. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+</manifest>
