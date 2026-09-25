@@ -36,7 +36,7 @@ private val IconSize = 48.dp
 fun HLStepScreen(
     symbol: HLSymbol,
     title: String,
-    body: String,
+    body: String?,
     modifier: Modifier = Modifier,
     footer: String? = null,
     extra: @Composable () -> Unit = {},
@@ -58,10 +58,12 @@ fun HLStepScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             StepHeading(symbol, title)
-            BasicText(
-                text = body,
-                style = HandLiveTheme.typography.body.copy(color = colors.label, textAlign = TextAlign.Center),
-            )
+            body?.let {
+                BasicText(
+                    text = it,
+                    style = HandLiveTheme.typography.body.copy(color = colors.label, textAlign = TextAlign.Center),
+                )
+            }
             extra()
             footer?.let {
                 BasicText(

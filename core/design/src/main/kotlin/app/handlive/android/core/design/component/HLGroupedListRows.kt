@@ -48,7 +48,7 @@ fun HLGroupedRow(
 }
 
 @Composable
-internal fun HLNavigationRow(
+fun HLNavigationRow(
     title: String,
     value: String?,
     onClick: () -> Unit,
@@ -56,14 +56,21 @@ internal fun HLNavigationRow(
     val colors = HandLiveTheme.colors
     val typography = HandLiveTheme.typography
     HLGroupedRow(modifier = Modifier.clickable(role = Role.Button, onClick = onClick)) {
-        BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
-        if (value != null) BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel))
+        if (value == null) {
+            BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
+        } else {
+            HLLabelValueLayout(
+                label = { BasicText(text = title, style = typography.body.copy(color = colors.label)) },
+                value = { BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         ChevronForward()
     }
 }
 
 @Composable
-internal fun HLSwitchRow(
+fun HLSwitchRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
@@ -95,21 +102,24 @@ internal fun HLSwitchRow(
 
 /** Dòng chỉ đọc: nhãn bên trái, giá trị `secondary-label` bên phải; TalkBack đọc cả dòng một lần. */
 @Composable
-internal fun HLValueRow(
+fun HLValueRow(
     title: String,
     value: String,
 ) {
     val colors = HandLiveTheme.colors
     val typography = HandLiveTheme.typography
     HLGroupedRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-        BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
-        BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel))
+        HLLabelValueLayout(
+            label = { BasicText(text = title, style = typography.body.copy(color = colors.label)) },
+            value = { BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel)) },
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
 /** Dòng chọn một trong nhiều giá trị kiểu iOS: dấu kiểm `accent` ở dòng đang chọn; vai trò nút chọn cho TalkBack. */
 @Composable
-internal fun HLCheckRow(
+fun HLCheckRow(
     title: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -126,7 +136,7 @@ internal fun HLCheckRow(
 }
 
 @Composable
-internal fun HLActionRow(
+fun HLActionRow(
     title: String,
     destructive: Boolean,
     onClick: () -> Unit,
