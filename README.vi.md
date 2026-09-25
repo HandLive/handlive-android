@@ -12,7 +12,7 @@ Kho này là một phần của workspace HandLive: kho hub `handlive` (tài li�
 
 | Đường dẫn | Nội dung |
 |-----------|----------|
-| `app/` | Ứng dụng Compose, gói `app.handlive.android`: cài các tính năng khi tiến trình khởi động (màn giữ chỗ tới khi có các màn Phase 1) |
+| `app/` | Ứng dụng Compose, gói `app.handlive.android`: thiết lập lần đầu (SET-01), hai thẻ Thiết bị và Cài đặt cùng ghép nối, chi tiết thiết bị, lời công bố Hỗ trợ tiếp cận và Quyền và chạy nền; cài các tính năng khi tiến trình khởi động |
 | `buildSrc/` | Task `:core:design:generateHandLiveTheme` sinh `HandLiveTheme` từ `../shared/design-tokens/tokens.json`; `:core:strings:generateStringResources` sinh tài nguyên chuỗi từ `../shared/strings/ui-strings.json` |
 | `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), khung HL, chunk bảng nhớ tạm, UUIDv7, b64/b64u; test fixture đọc `../shared` |
 | `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, lịch khóa phiên/rekey/stream, kho khóa `hl_master` |

@@ -12,7 +12,7 @@ This repository is one part of the HandLive workspace: the hub repository `handl
 
 | Path | Contents |
 |------|----------|
-| `app/` | Compose app, package `app.handlive.android`: installs the features at process start (placeholder screen until the Phase 1 screens) |
+| `app/` | Compose app, package `app.handlive.android`: first-run setup (SET-01), the Devices and Settings tabs with pairing, device details, the Accessibility disclosure and Permissions & Background; installs the features at process start |
 | `buildSrc/` | Task `:core:design:generateHandLiveTheme` generates `HandLiveTheme` from `../shared/design-tokens/tokens.json`; `:core:strings:generateStringResources` generates the string resources from `../shared/strings/ui-strings.json` |
 | `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), HL frames, clipboard chunks, UUIDv7, b64/b64u; test fixtures read `../shared` |
 | `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, session/rekey/stream key schedule, `hl_master` key store |
