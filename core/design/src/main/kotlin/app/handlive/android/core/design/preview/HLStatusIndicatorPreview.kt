@@ -11,25 +11,14 @@ import app.handlive.android.core.design.component.HLStatusIndicatorVariant
 import app.handlive.android.core.design.theme.HandLiveAppearance
 import app.handlive.android.core.design.theme.HandLiveTheme
 
-/** Đủ tám trạng thái của StatusIndicator/README.md và dạng viên. */
+/** Every state the phone shows (StatusIndicator/README.md) and the pill; the device name is sample user content. */
 @Composable
 internal fun HLStatusIndicatorPreviewGallery() {
-    val statuses =
-        listOf(
-            HLConnectionStatus.ConnectedWiFi,
-            HLConnectionStatus.ConnectedInternet,
-            HLConnectionStatus.Usb,
-            HLConnectionStatus.Connecting,
-            HLConnectionStatus.PhoneOffline(lastSeen = "14:05"),
-            HLConnectionStatus.NetworkLost,
-            HLConnectionStatus.NeedsRepair,
-            HLConnectionStatus.CameraStreaming,
-        )
     Column(verticalArrangement = Arrangement.spacedBy(HandLiveTheme.spacing.space8)) {
-        statuses.forEach { HLStatusIndicator(status = it, deviceName = "Pixel 8 của Lan") }
+        HLConnectionStatus.entries.forEach { HLStatusIndicator(status = it, deviceName = SAMPLE_DEVICE_NAME) }
         HLStatusIndicator(
             status = HLConnectionStatus.ConnectedWiFi,
-            deviceName = "Pixel 8 của Lan",
+            deviceName = SAMPLE_DEVICE_NAME,
             variant = HLStatusIndicatorVariant.Pill,
         )
     }

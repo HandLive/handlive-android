@@ -30,9 +30,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.unit.sp
-import app.handlive.android.core.design.R
 import app.handlive.android.core.design.theme.HandLiveDurations
 import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.core.strings.R
 
 /** Độ mờ thấp nhất của nhịp chấm (1 → 0.35 → 1 trong một chu kỳ `duration-pulse`), giống bản Apple. */
 private const val PULSE_MIN_ALPHA = 0.35f
@@ -45,8 +45,8 @@ private const val ICON_TO_TEXT = 1.2f
  * TalkBack đọc cả câu ("Đã kết nối qua Wi-Fi với Pixel 8 của Lan"); là live region lịch sự nên đổi trạng thái
  * được đọc mà không dời focus.
  *
- * States that do not pulse show their Material Symbol (`wifi`, `public`, `usb`, `mobile_off`, `wifi_off`,
- * `warning`); "Đang kết nối…" and "Đang phát camera" keep the pulsing dot.
+ * States that do not pulse show their Material Symbol (`wifi`, `public`, `usb`, `wifi_off`); "Connecting…" keeps
+ * the pulsing dot. Texts come from the string catalog (`status.*`).
  */
 @Composable
 fun HLStatusIndicator(
@@ -58,17 +58,15 @@ fun HLStatusIndicator(
     val colors = HandLiveTheme.colors
     val spacing = HandLiveTheme.spacing
     val subheadlineSize = HandLiveTheme.typography.subheadline.fontSize
-    val fullText = statusText(status)
+    val fullText = stringResource(status.textRes)
+    val withDevice = status.withDeviceRes
     val spoken =
-        if (deviceName.isNullOrBlank() || !status.readsDeviceName) {
-            fullText
-        } else {
-            stringResource(R.string.hl_status_with_device, fullText, deviceName)
-        }
+        if (deviceName.isNullOrBlank() || withDevice == null) fullText else stringResource(withDevice, deviceName)
     val isPill = variant == HLStatusIndicatorVariant.Pill
+    // The pill shows the short channel label "LAN" for the same-Wi-Fi state; TalkBack still reads the sentence.
     val shownText =
         if (isPill && status == HLConnectionStatus.ConnectedWiFi) {
-            stringResource(R.string.hl_status_connected_wifi_short)
+            stringResource(R.string.status_channel_lan)
         } else {
             fullText
         }
@@ -101,7 +99,6 @@ fun HLStatusIndicator(
                 symbol = symbol,
                 contentDescription = null,
                 tint = status.tint(colors),
-                filled = symbol == HLSymbol.Warning,
                 size = iconSize,
             )
         }
@@ -114,14 +111,6 @@ fun HLStatusIndicator(
         )
     }
 }
-
-@Composable
-private fun statusText(status: HLConnectionStatus): String =
-    if (status is HLConnectionStatus.PhoneOffline && status.lastSeen != null) {
-        stringResource(status.textRes, status.lastSeen)
-    } else {
-        stringResource(status.textRes)
-    }
 
 @Composable
 private fun StatusDot(

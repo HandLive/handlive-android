@@ -66,6 +66,8 @@ androidComponents {
 }
 
 dependencies {
+    // Every UI text comes from the generated catalog resources (0.12.2).
+    api(project(":core:strings"))
     api(platform(libs.compose.bom))
     api(libs.compose.ui)
     api(libs.compose.foundation)
