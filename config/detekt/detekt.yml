@@ -8,3 +8,11 @@ style:
   UnusedPrivateMember:
     # Hàm @Preview chỉ công cụ xem trước của Android Studio gọi tới.
     ignoreAnnotated: ['Preview']
+
+complexity:
+  LongParameterList:
+    # A Room entity mirrors its table (0.9.1): one constructor parameter per column.
+    ignoreAnnotated: ['Entity']
+  TooManyFunctions:
+    # A Room DAO groups the queries of one table.
+    ignoreAnnotated: ['Dao']
