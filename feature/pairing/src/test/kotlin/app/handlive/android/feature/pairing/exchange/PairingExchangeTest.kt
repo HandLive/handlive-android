@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -133,6 +134,53 @@ class PairingExchangeTest {
         }
 
     @Test
+    fun aQrClientThatDropsMidExchangeGivesTheWindowBack() =
+        runBlocking {
+            val window = qrWindow()
+            val socket = FakeTextSocket()
+            val result = async { exchange(window).run(socket) }
+            socket.toPhone.send(client.hello())
+            assertEquals(PairOp.OFFER, client.opOf(socket.toClient.receive()))
+            socket.toPhone.close()
+            assertEquals(PairingFailure.DISCONNECTED, (result.await() as PairingOutcome.Failed).failure)
+            assertTrue("the window can be claimed again", window.claim())
+            assertEquals(0, pairs.store.activeCount())
+        }
+
+    @Test
+    fun aConnectionThatNeverClaimedTheWindowLeavesTheClaimAlone() =
+        runBlocking {
+            val window = qrWindow()
+            val holder = FakeTextSocket()
+            val holderResult = async { exchange(window).run(holder) }
+            holder.toPhone.send(client.hello())
+            assertEquals(PairOp.OFFER, client.opOf(holder.toClient.receive()))
+            // A second connection drops before its hello: it never held the claim, so it must not release it.
+            val dropped = FakeTextSocket().apply { toPhone.close() }
+            assertEquals(PairingFailure.DISCONNECTED, (exchange(window).run(dropped) as PairingOutcome.Failed).failure)
+            // A third one is refused while the first still holds the window (API 2 rule 4).
+            assertRefusedWhileHeld(window)
+            holder.toPhone.close()
+            holderResult.await()
+            assertTrue(window.claim())
+        }
+
+    @Test
+    fun aRefusedExchangeKeepsTheQrWindowClaimedUntilTheCoordinatorClosesIt() =
+        runBlocking {
+            val window = qrWindow()
+            val socket = FakeTextSocket()
+            val result = async { exchange(window).run(socket) }
+            socket.toPhone.send(client.hello())
+            val offer =
+                checkNotNull(client.checkOffer(socket.toClient.receive(), client.pairingSecret, phone.tlsSha256))
+            socket.toPhone.send(client.confirm(offer, tamper = FakePairingClient.Tamper.MAC))
+            socket.toClient.receive()
+            assertEquals(PairingFailure.AUTH_FAILED, (result.await() as PairingOutcome.Failed).failure)
+            assertFalse("no second try on the same secret", window.claim())
+        }
+
+    @Test
     fun tamperedConfirmMacIsAuthFailedAndNothingIsStored() =
         assertConfirmRefused { offer ->
             client.confirm(offer, tamper = FakePairingClient.Tamper.MAC)
@@ -161,6 +209,17 @@ class PairingExchangeTest {
         assertEquals(code.name, client.read(reply, PairErrorData.serializer())?.code)
         assertTrue(result.await() is PairingOutcome.Failed)
         assertEquals(0, pairs.store.activeCount())
+    }
+
+    private suspend fun assertRefusedWhileHeld(window: PairingWindow) {
+        val socket = FakeTextSocket()
+        socket.toPhone.send(client.hello())
+        val failed = exchange(window).run(socket) as PairingOutcome.Failed
+        assertEquals(PairingFailure.PAIRING_CLOSED, failed.failure)
+        assertEquals(
+            ErrorCode.PAIRING_CLOSED.name,
+            client.read(socket.toClient.receive(), PairErrorData.serializer())?.code,
+        )
     }
 
     private fun assertConfirmRefused(confirm: (FakePairingClient.Offer) -> String) =

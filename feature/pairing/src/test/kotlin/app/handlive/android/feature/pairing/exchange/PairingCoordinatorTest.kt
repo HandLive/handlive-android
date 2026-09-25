@@ -6,17 +6,24 @@ import app.handlive.android.core.data.pairing.PeerKeys
 import app.handlive.android.core.data.pairing.SignedAttestation
 import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.pairing.PairErrorData
+import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.feature.connection.PairingAdvert
 import app.handlive.android.feature.pairing.testing.FakePairingClient
 import app.handlive.android.feature.pairing.testing.FakeTextSocket
 import app.handlive.android.feature.pairing.testing.PairStoreFixture
 import app.handlive.android.feature.pairing.testing.localPhone
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -122,6 +129,66 @@ class PairingCoordinatorTest {
         }
 
     @Test
+    fun aMacThatDropsMidExchangeFinishesPairingOnANewConnectionWithinTheWindow() =
+        runBlocking {
+            val phone = localPhone()
+            val windowScope = CoroutineScope(SupervisorJob())
+            val coordinator =
+                PairingCoordinator({ phone }, pairs.store, { adverts += it }, windowScope, clock = { NOW })
+            coordinator.onScanned(client.qrCode())
+            coordinator.confirm()
+            // The Mac's network drops after pair/hello and the offer.
+            val first = FakeTextSocket()
+            val firstRun = async { coordinator.handle(first) }
+            first.toPhone.send(client.hello())
+            assertEquals(PairOp.OFFER, client.opOf(first.toClient.receive()))
+            first.toPhone.close()
+            firstRun.await()
+            assertEquals(PairingState.Waiting(pinMode = false), coordinator.state.value)
+            // It reconnects within the same 120 s window and pairing completes.
+            val second = FakeTextSocket()
+            val secondRun = async { coordinator.handle(second) }
+            second.toPhone.send(client.hello())
+            val offer =
+                checkNotNull(client.checkOffer(second.toClient.receive(), client.pairingSecret, phone.tlsSha256))
+            val pairId = UUID.randomUUID().toString()
+            second.toPhone.send(client.confirm(offer, pairId, CREATED_AT))
+            assertTrue(client.checkDone(second.toClient.receive(), offer, pairId, CREATED_AT))
+            second.toPhone.close()
+            secondRun.await()
+            val paired = coordinator.state.value as PairingState.Paired
+            assertEquals(client.name, paired.peerName)
+            assertEquals(1, pairs.store.activeCount())
+            assertEquals(PairingAdvert.NONE, adverts.last())
+            windowScope.cancel()
+        }
+
+    @Test
+    fun aReconnectAfterTheWindowExpiredIsStillPairingClosed() =
+        runTest {
+            val coordinator = coordinator()
+            coordinator.onScanned(client.qrCode())
+            coordinator.confirm()
+            val first = FakeTextSocket()
+            val firstRun = async { coordinator.handle(first) }
+            first.toPhone.send(client.hello())
+            assertEquals(PairOp.OFFER, client.opOf(first.toClient.receive()))
+            first.toPhone.close()
+            firstRun.await()
+            assertEquals(PairingState.Waiting(pinMode = false), coordinator.state.value)
+            advanceTimeBy(PairingWindow.DURATION_MILLIS + 1)
+            runCurrent()
+            assertEquals(PairingState.Failed(PairingFailure.PAIRING_CLOSED), coordinator.state.value)
+            val late = FakeTextSocket()
+            late.toPhone.send(client.hello())
+            coordinator.handle(late)
+            assertEquals(
+                ErrorCode.PAIRING_CLOSED.name,
+                client.read(late.toClient.receive(), PairErrorData.serializer())?.code,
+            )
+        }
+
+    @Test
     fun connectionWithoutAnOpenWindowGetsPairingClosed() =
         runTest {
             val socket = FakeTextSocket()
@@ -141,4 +208,9 @@ class PairingCoordinatorTest {
             peerModel = null,
             attestation = SignedAttestation(ByteArray(8), ByteArray(64), ByteArray(64), 0),
         )
+
+    private companion object {
+        const val NOW = 1_727_150_000_000L
+        const val CREATED_AT = 1_727_150_003_210L
+    }
 }
