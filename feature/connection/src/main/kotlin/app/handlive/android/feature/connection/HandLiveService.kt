@@ -8,14 +8,21 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
+import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.connection.notification.NotificationChannels
 import app.handlive.android.feature.connection.notification.ServiceNotification
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -59,8 +66,9 @@ class HandLiveService : Service() {
         if (!running) {
             running = true
             scope.launch { runtime.start() }
-            // CONN-01 field 6: the text follows the connected clients.
-            runtime.connectedPeers
+            // CONN-01 field 6: the text follows the connected clients; CLIP-01 field 4: the button needs a client
+            // with active clipboard.
+            combine(runtime.connectedPeers, clipboardAvailable(runtime)) { peers, available -> peers to available }
                 .drop(1)
                 .onEach { NotificationManagerCompat.from(this).notifyIfAllowed(notification(runtime)) }
                 .launchIn(scope)
@@ -81,8 +89,23 @@ class HandLiveService : Service() {
             this,
             runtime.connectedPeers.value,
             openAppIntent(this),
-            ServiceHooks.sendClipboardIntent?.invoke(this),
+            ServiceHooks.sendClipboardIntent
+                ?.takeIf {
+                    runtime.sessions.value.values
+                        .any { it.isEffective(Feature.CLIPBOARD) }
+                }?.invoke(this),
         )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun clipboardAvailable(runtime: ConnectionRuntime): Flow<Boolean> =
+        runtime.sessions
+            .flatMapLatest { open ->
+                if (open.isEmpty()) {
+                    flowOf(false)
+                } else {
+                    combine(open.values.map { it.effectiveFeatures }) { sets -> sets.any { Feature.CLIPBOARD in it } }
+                }
+            }.distinctUntilChanged()
 
     private fun NotificationManagerCompat.notifyIfAllowed(notification: android.app.Notification) {
         if (areNotificationsEnabled()) runCatching { notify(ServiceNotification.ID, notification) }
