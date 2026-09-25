@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "app.handlive.android.core.protocol"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 29

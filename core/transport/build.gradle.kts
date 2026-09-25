@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "app.handlive.android.core.transport"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 29

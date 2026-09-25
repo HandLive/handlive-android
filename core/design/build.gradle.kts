@@ -11,7 +11,7 @@ val generatedThemeDir = layout.buildDirectory.dir("generated/source/handLiveThem
 
 android {
     namespace = "app.handlive.android.core.design"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 29

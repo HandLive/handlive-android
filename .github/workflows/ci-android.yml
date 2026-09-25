@@ -92,11 +92,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      # compileSdk 36 (targetSdk 35). setup-android chấp nhận license để AGP tự tải build-tools nếu thiếu.
-      - name: Android SDK platform 36
+      # compileSdk 37 (targetSdk 35); the API 37 package is named platforms;android-37.0. setup-android accepts the
+      # licenses so AGP can fetch missing build-tools.
+      - name: Android SDK platform 37
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-36"
+          packages: "platform-tools platforms;android-37.0"
 
       # Cache ~/.gradle (dependency, wrapper, build cache) và kiểm checksum gradle-wrapper.jar.
       - name: Gradle

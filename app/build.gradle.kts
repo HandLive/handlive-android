@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "app.handlive.android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "app.handlive.android"
