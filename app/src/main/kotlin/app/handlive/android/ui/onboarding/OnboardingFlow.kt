@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.handlive.android.core.design.theme.HandLiveTheme
@@ -24,6 +25,7 @@ import app.handlive.android.feature.connection.ServiceState
 import app.handlive.android.ui.AppDependencies
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.PhoneEnvironmentReader
+import app.handlive.android.ui.system.PrivacyPage
 import app.handlive.android.ui.system.SystemPages
 import app.handlive.android.ui.system.UnusedAppPause
 import kotlinx.coroutines.Dispatchers
@@ -98,9 +100,13 @@ private fun SetupStepContent(
     onBattery: () -> Unit,
 ) {
     val context = LocalContext.current
+    val displayLocale = LocalConfiguration.current.locales[0]
     when (step) {
         SetupStep.WELCOME -> {
-            WelcomeScreen { onStep(SetupSteps.afterWelcome(environment)) }
+            WelcomeScreen(
+                onGetStarted = { onStep(SetupSteps.afterWelcome(environment)) },
+                onPrivacy = { PrivacyPage.open(context, displayLocale) },
+            )
         }
 
         SetupStep.NOTIFICATIONS -> {

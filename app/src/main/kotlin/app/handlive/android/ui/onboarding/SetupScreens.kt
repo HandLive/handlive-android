@@ -11,13 +11,23 @@ import app.handlive.android.core.design.component.HLSymbol
 import app.handlive.android.core.strings.R
 import app.handlive.android.ui.system.Manufacturer
 
-/** SET-01 field 1–2: the welcome screen with its privacy explanation and "Get Started". */
+/** SET-01 fields 1–2: the welcome screen with its privacy explanation, the privacy page link and "Get Started". */
 @Composable
-fun WelcomeScreen(onGetStarted: () -> Unit) {
+fun WelcomeScreen(
+    onGetStarted: () -> Unit,
+    onPrivacy: () -> Unit,
+) {
     HLStepScreen(
         symbol = HLSymbol.Devices,
         title = stringResource(R.string.setup_welcome_title),
         body = stringResource(R.string.setup_welcome_body_android),
+        extra = {
+            HLButton(
+                stringResource(R.string.setup_welcome_privacy_link),
+                onPrivacy,
+                style = HLButtonStyle.Plain,
+            )
+        },
     ) {
         HLButton(stringResource(R.string.common_get_started), onGetStarted, Modifier.fillMaxWidth())
     }
