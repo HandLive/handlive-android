@@ -2,10 +2,10 @@ package app.handlive.android.feature.pairing
 
 import android.content.Context
 import android.os.Build
-import android.provider.Settings
 import app.handlive.android.core.data.HandLiveData
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.feature.connection.ConnectionRuntime
+import app.handlive.android.feature.connection.LocalDeviceName
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.DeviceListModel
 import app.handlive.android.feature.pairing.exchange.LocalPairingDevice
@@ -55,20 +55,16 @@ class PairingFeature private constructor(
     private suspend fun localDevice(): LocalPairingDevice? {
         val tlsSha256 = runtime.certificateSha256 ?: return null
         val identity = withContext(Dispatchers.IO) { data.identity }
-        return LocalPairingDevice(identity, phoneName(), Build.MODEL, Build.VERSION.RELEASE, tlsSha256)
+        return LocalPairingDevice(
+            identity,
+            LocalDeviceName.read(appContext),
+            Build.MODEL,
+            Build.VERSION.RELEASE,
+            tlsSha256,
+        )
     }
 
-    /** PAIR-01 field 9: the name the user gave the phone (`Settings.Global.DEVICE_NAME`), else the model. */
-    private fun phoneName(): String =
-        Settings.Global
-            .getString(appContext.contentResolver, Settings.Global.DEVICE_NAME)
-            ?.takeIf { it.isNotBlank() }
-            ?.take(MAX_NAME)
-            ?: Build.MODEL
-
     companion object {
-        private const val MAX_NAME = 64
-
         @Volatile
         private var instance: PairingFeature? = null
 
