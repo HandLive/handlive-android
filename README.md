@@ -1,30 +1,32 @@
+English | [Tiếng Việt](README.vi.md)
+
 # handlive-android
 
-Ứng dụng trên điện thoại Android, viết bằng Kotlin (minSdk 29). Điện thoại là hub: nó gửi clipboard, SMS, cuộc gọi kèm âm thanh, camera và mic sang Mac, iPhone và iPad.
+The HandLive app for Android phones, written in Kotlin (minSdk 29). The phone is the hub: it sends the clipboard, SMS, calls with live audio, and its camera and microphone to Mac, iPhone and iPad.
 
-Kotlin, Gradle KTS, AGP 9.4, Kotlin 2.4, compileSdk 36 / targetSdk 35, Compose. Đặc tả: `../docs/detailed-design/` (kho hub). Kế hoạch: `../plans/20260925-implementation/`.
+Kotlin, Gradle KTS, AGP 9.4, Kotlin 2.4, compileSdk 36 / targetSdk 35, Jetpack Compose. The UI is multilingual: English by default, Vietnamese as the second language (strings come from `../shared/strings`, detailed design 0.12). Specification: `../docs/detailed-design/` (hub repository). Plan: `../plans/20260925-implementation/`.
 
-Kho này là một phần của workspace HandLive: kho hub `handlive` (tài liệu, kế hoạch) là thư mục cha, `../shared` là kho `handlive-shared` (test vector, schema, design tokens); test `core/design` còn đọc `../docs/design-system` của hub. Clone cả bộ từ hub: `tools/workspace.sh clone <group-url>`. Xem `CLAUDE.md` của kho này.
+This repository is one part of the HandLive workspace: the hub repository `handlive` (docs, plans) is the parent directory, and `../shared` is the `handlive-shared` repository (test vectors, schemas, design tokens); the `core/design` tests also read the hub's `../docs/design-system`. Clone the whole set from the hub with `tools/workspace.sh clone <group-url>`. See this repository's `CLAUDE.md`.
 
-## Bố cục
+## Layout
 
-| Đường dẫn | Nội dung |
-|-----------|----------|
-| `app/` | Ứng dụng Compose, gói `app.handlive.android` (màn giữ chỗ Phase 0) |
-| `buildSrc/` | Task `:core:design:generateHandLiveTheme` sinh `HandLiveTheme` từ `../shared/design-tokens/tokens.json` |
-| `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), khung HL, chunk bảng nhớ tạm, UUIDv7, b64/b64u; test fixture đọc `../shared` |
-| `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, lịch khóa phiên/rekey/stream, kho khóa `hl_master` |
-| `core/transport` | Ktor/Netty WSS (TLS 1.3, chứng chỉ P-256 tự ký), bắt tay phía S, capability, rekey, thay phiên 4409 |
-| `core/design` | `HandLiveTheme` (4 giao diện, Inter / Be Vietnam Pro / Roboto Mono), `HLButton`, `HLSwitch`, `HLGroupedList`, `HLStatusIndicator` |
+| Path | Contents |
+|------|----------|
+| `app/` | Compose app, package `app.handlive.android` (Phase 0 placeholder screen) |
+| `buildSrc/` | Task `:core:design:generateHandLiveTheme` generates `HandLiveTheme` from `../shared/design-tokens/tokens.json` |
+| `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), HL frames, clipboard chunks, UUIDv7, b64/b64u; test fixtures read `../shared` |
+| `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, session/rekey/stream key schedule, `hl_master` key store |
+| `core/transport` | Ktor/Netty WSS (TLS 1.3, self-signed P-256 certificate), server-side handshake, capability, rekey, session replacement (4409) |
+| `core/design` | `HandLiveTheme` (4 appearances, Inter / Be Vietnam Pro / Roboto Mono), `HLButton`, `HLSwitch`, `HLGroupedList`, `HLStatusIndicator` |
 | `config/` | ktlint, detekt |
 
-## Lệnh
+## Commands
 
 ```sh
-./gradlew check            # test JVM + Android Lint + ktlint + detekt (JDK 21, platforms;android-36)
-HL_WRITE_ROUNDTRIP=1 ./gradlew :core:crypto:test   # ghi lại ../shared/test-vectors/envelope-roundtrip.json
+./gradlew check            # JVM tests + Android Lint + ktlint + detekt (JDK 21, platforms;android-36)
+HL_WRITE_ROUNDTRIP=1 ./gradlew :core:crypto:test   # rewrites ../shared/test-vectors/envelope-roundtrip.json
 ```
 
-## Giấy phép
+## License
 
-Apache License 2.0 — xem [LICENSE](LICENSE); font đóng gói theo giấy phép riêng ghi trong [NOTICE](NOTICE). Đóng góp theo [CONTRIBUTING](https://github.com/HandLive/.github/blob/main/CONTRIBUTING.md) (commit nhỏ, đứng tên người thật, ký DCO bằng `git commit -s`); báo lỗi bảo mật kín theo [SECURITY](https://github.com/HandLive/.github/blob/main/SECURITY.md).
+Apache License 2.0 — see [LICENSE](LICENSE); bundled fonts keep their own licenses, listed in [NOTICE](NOTICE). Contributions follow [CONTRIBUTING](https://github.com/HandLive/.github/blob/main/CONTRIBUTING.md) (small commits under a real name, DCO sign-off with `git commit -s`); report vulnerabilities privately as described in [SECURITY](https://github.com/HandLive/.github/blob/main/SECURITY.md).
