@@ -70,17 +70,23 @@ class PeerSession(
         plaintext: ByteArray,
     ): String = ids.next().also { sender.send(type, plaintext, it) }
 
-    /** Sends a request and waits for its `ack` (0.5.1 rule 1); throws [AckTimeoutException] after [timeout]. */
+    /**
+     * Sends a request and waits for its `ack` (0.5.1 rule 1); throws [AckTimeoutException] after [timeout], counted
+     * from the end of [afterSend] — a chunked clip sends its chunks there and the 10 s start after the last one
+     * (CLIP-03 API 3 rule 3). [afterSend] gets the request's `id`.
+     */
     suspend fun request(
         type: MessageType,
         plaintext: ByteArray,
         timeout: Duration = TransportConstants.REQUEST_TIMEOUT,
+        afterSend: suspend (String) -> Unit = {},
     ): Ack {
         val id = ids.next()
         val waiter = CompletableDeferred<Ack>()
         pendingAcks[id] = waiter
         return try {
             sender.send(type, plaintext, id)
+            afterSend(id)
             withTimeoutOrNull(timeout) { waiter.await() } ?: throw AckTimeoutException()
         } finally {
             pendingAcks.remove(id)
