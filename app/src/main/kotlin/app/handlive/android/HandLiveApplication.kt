@@ -3,6 +3,7 @@ package app.handlive.android
 import android.app.Application
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.notification.NotificationChannels
+import app.handlive.android.feature.pairing.PairingFeature
 
 /**
  * Process start: notification channels exist before anything posts, and feature modules register with the
@@ -13,5 +14,6 @@ class HandLiveApplication : Application() {
         super.onCreate()
         NotificationChannels.createAll(this)
         BenchLog.install(this)
+        PairingFeature.install(this)
     }
 }

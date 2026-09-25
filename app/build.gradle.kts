@@ -78,6 +78,7 @@ dependencies {
     implementation(project(":core:design"))
     implementation(project(":core:data"))
     implementation(project(":feature:connection"))
+    implementation(project(":feature:pairing"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
