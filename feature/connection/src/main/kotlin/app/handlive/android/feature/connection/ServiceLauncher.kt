@@ -11,11 +11,12 @@ object ServiceLauncher {
      * from the background, or a missing type permission): the UI retries when it is in the foreground (SET-01 E2).
      */
     fun start(context: Context): Boolean {
+        ConnectionRuntime.get(context).markLaunch(accepted = true)
         val started =
             runCatching {
                 ContextCompat.startForegroundService(context, Intent(context, HandLiveService::class.java))
             }.isSuccess
-        if (!started) ConnectionRuntime.get(context).markFailed()
+        if (!started) ConnectionRuntime.get(context).markLaunch(accepted = false)
         return started
     }
 

@@ -59,7 +59,7 @@ class HandLiveService : Service() {
             }
         if (foreground.isFailure) {
             // ForegroundServiceStartNotAllowedException or SecurityException (SET-01 E2).
-            runtime.markFailed()
+            runtime.markLaunch(accepted = false)
             stopSelf()
             return START_NOT_STICKY
         }

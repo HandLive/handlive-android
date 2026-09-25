@@ -115,9 +115,18 @@ class ConnectionRuntime private constructor(
             stateFlow.value = ServiceState.STOPPED
         }
 
-    /** The foreground service could not start at all (SET-01 E2). */
-    fun markFailed() {
-        stateFlow.value = ServiceState.FAILED
+    /**
+     * A start of the foreground service was requested ([accepted]: a previous failure no longer stands, so the UI can
+     * wait for the outcome of the retry) or refused by Android (SET-01 E2).
+     */
+    fun markLaunch(accepted: Boolean) {
+        stateFlow.update { current ->
+            when {
+                !accepted -> ServiceState.FAILED
+                current == ServiceState.FAILED || current == ServiceState.STOPPED -> ServiceState.STARTING
+                else -> current
+            }
+        }
     }
 
     /** CLIP-01 A3: the Accessibility service connected or disconnected; `auto_send` follows. */
