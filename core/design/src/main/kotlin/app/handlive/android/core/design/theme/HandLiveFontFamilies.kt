@@ -10,6 +10,10 @@ import app.handlive.android.core.design.R
 /**
  * Font đóng gói trong `res/font` (giấy phép OFL ở `assets/licenses/`), chỉ các weight mà tokens.json dùng,
  * để không có weight nào bị tô đậm giả. Test `HandLiveTypographyTokenTest` kiểm điều này.
+ *
+ * Exception: Inter Bold (700) is bundled for the system Bold Text setting (Android 12+,
+ * `Configuration.fontWeightAdjustment`, design system "Kiểu chữ"). Compose adds the adjustment (usually +300) to
+ * every requested weight, and the heaviest bundled face answers — real Bold instead of synthetic emboldening.
  */
 object HandLiveFontFamilies {
     /** Chữ giao diện (`android-*`, `timer`): Inter 4.1 bản tĩnh. */
@@ -18,6 +22,7 @@ object HandLiveFontFamilies {
             Font(R.font.inter_regular, FontWeight.Normal),
             Font(R.font.inter_medium, FontWeight.Medium),
             Font(R.font.inter_semibold, FontWeight.SemiBold),
+            Font(R.font.inter_bold, FontWeight.Bold),
         )
 
     /** Chữ thương hiệu (`brand-large-title`, `brand-title`, `wordmark`). */

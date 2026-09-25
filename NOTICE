@@ -5,6 +5,13 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 This product bundles third-party fonts, each under the SIL Open Font License 1.1
 (license texts in core/design/src/main/assets/licenses/):
-- Inter — Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+- Inter 4.1 (Regular, Medium, SemiBold, Bold) — Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
 - Be Vietnam Pro — Copyright 2021 The Be Vietnam Pro Project Authors (https://github.com/bettergui/BeVietnamPro)
 - Roboto Mono — Copyright 2015 The Roboto Mono Project Authors (https://github.com/googlefonts/robotomono)
+
+This product bundles icons from Material Symbols Rounded — Copyright Google LLC
+(https://github.com/google/material-design-icons), licensed under the Apache License, Version 2.0
+(license text in core/design/src/main/assets/licenses/MaterialSymbols-Apache-2.0.txt). The icons are the
+Android vector drawables of the project's symbols/android directory (weight 400, grade 0, optical size 24,
+FILL 0 and FILL 1), stored as core/design/src/main/res/drawable/ic_symbol_*.xml with the theme tint
+attribute removed.

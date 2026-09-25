@@ -11,8 +11,9 @@ style:
 
 complexity:
   LongParameterList:
-    # A Room entity mirrors its table (0.9.1): one constructor parameter per column.
-    ignoreAnnotated: ['Entity']
+    # A Room entity mirrors its table (0.9.1): one constructor parameter per column. Composables take
+    # optional styling parameters with defaults, as the Compose API guidelines recommend.
+    ignoreAnnotated: ['Entity', 'Composable']
   TooManyFunctions:
     # A Room DAO groups the queries of one table.
     ignoreAnnotated: ['Dao']

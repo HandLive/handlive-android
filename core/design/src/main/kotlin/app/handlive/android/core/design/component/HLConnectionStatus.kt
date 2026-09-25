@@ -76,6 +76,22 @@ internal val HLConnectionStatus.readsDeviceName: Boolean
 internal val HLConnectionStatus.pulses: Boolean
     get() = this == HLConnectionStatus.Connecting || this == HLConnectionStatus.CameraStreaming
 
+/**
+ * Symbol of the non-pulsing states (StatusIndicator README): `wifi`, `public`, `usb`, `mobile_off`, `wifi_off`,
+ * `warning` (filled like `exclamationmark.triangle.fill`). Pulsing states draw a dot instead.
+ */
+internal val HLConnectionStatus.symbol: HLSymbol?
+    get() =
+        when (this) {
+            HLConnectionStatus.ConnectedWiFi -> HLSymbol.Wifi
+            HLConnectionStatus.ConnectedInternet -> HLSymbol.Public
+            HLConnectionStatus.Usb -> HLSymbol.Usb
+            is HLConnectionStatus.PhoneOffline -> HLSymbol.MobileOff
+            HLConnectionStatus.NetworkLost -> HLSymbol.WifiOff
+            HLConnectionStatus.NeedsRepair -> HLSymbol.Warning
+            HLConnectionStatus.Connecting, HLConnectionStatus.CameraStreaming -> null
+        }
+
 /** Ngoại tuyến là xám; đỏ chỉ khi người dùng phải làm gì đó. */
 internal fun HLConnectionStatus.tint(colors: HandLiveColors): Color =
     when (this) {
