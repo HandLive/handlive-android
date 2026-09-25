@@ -164,7 +164,7 @@ internal class ControlConnectionHandler(
             } else {
                 null to BAD_REQUEST
             }
-        capability?.let(session::applyPeerCapability)
+        capability?.let(session.capabilities::apply)
         return close ?: BAD_REQUEST.takeIf { capability == null }
     }
 
