@@ -12,13 +12,17 @@ This repository is one part of the HandLive workspace: the hub repository `handl
 
 | Path | Contents |
 |------|----------|
-| `app/` | Compose app, package `app.handlive.android` (Phase 0 placeholder screen) |
-| `buildSrc/` | Task `:core:design:generateHandLiveTheme` generates `HandLiveTheme` from `../shared/design-tokens/tokens.json` |
+| `app/` | Compose app, package `app.handlive.android`: installs the features at process start (placeholder screen until the Phase 1 screens) |
+| `buildSrc/` | Task `:core:design:generateHandLiveTheme` generates `HandLiveTheme` from `../shared/design-tokens/tokens.json`; `:core:strings:generateStringResources` generates the string resources from `../shared/strings/ui-strings.json` |
 | `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), HL frames, clipboard chunks, UUIDv7, b64/b64u; test fixtures read `../shared` |
 | `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, session/rekey/stream key schedule, `hl_master` key store |
 | `core/transport` | Ktor/Netty WSS (TLS 1.3, self-signed P-256 certificate), server-side handshake, capability, rekey, session replacement (4409), admission limits and idle close (4410/4411/4429); instrumented Netty + TLS smoke test in `src/androidTest` |
 | `core/data` | Room `handlive.db` (`paired_device`, schema in `core/data/schemas`), DataStore settings keys (0.9.5), `HandLiveData` container |
+| `core/strings` | String resources generated at build time from the catalog (English default, Vietnamese); tests match them to the catalog and forbid hard-coded UI text |
 | `core/design` | `HandLiveTheme` (4 appearances, Inter / Be Vietnam Pro / Roboto Mono), `HLButton`, `HLSwitch`, `HLGroupedList`, `HLStatusIndicator`, `HLIcon` (Material Symbols Rounded) |
+| `feature/connection` | `HandLiveService` (foreground service `connectedDevice`), TLS server on 47800–47809 with `/v1/pair`, mDNS with hourly hints, capability updates, envelope routing, `HLBENCH/1` lines in debug builds |
+| `feature/pairing` | Pairing by QR code (CameraX + ZXing core) or PIN (Argon2id), device list and Security Code, unpairing |
+| `feature/clipboard` | Clipboard sync: copy detection through Accessibility, `ClipboardReadActivity`, Send Clipboard button, Quick Settings tile and Share target, writes and forwarding, chunked images, safe auto-clear |
 | `config/` | ktlint, detekt |
 
 ## Commands
@@ -27,6 +31,7 @@ This repository is one part of the HandLive workspace: the hub repository `handl
 ./gradlew check            # JVM tests + Android Lint + ktlint + detekt (JDK 21, platforms;android-37.0)
 ./gradlew :core:transport:connectedDebugAndroidTest   # instrumented smoke test, needs a device
 HL_WRITE_ROUNDTRIP=1 ./gradlew :core:crypto:test   # rewrites ../shared/test-vectors/envelope-roundtrip.json
+adb logcat -s HLBENCH      # debug builds: benchmark lines for ../shared/tools/bench
 ```
 
 ## License
