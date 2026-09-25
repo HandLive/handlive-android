@@ -45,8 +45,11 @@ object LocalCapabilityBuilder {
                     clipboard =
                         ClipboardFeature(
                             enabled = settings.clipboardEnabled,
-                            // Auto-send needs both the setting and the running Accessibility service (SET-02 field 2).
-                            autoSend = settings.clipAutoSend && environment.accessibilityServiceRunning,
+                            // CLIP-01 E1: auto-send needs the setting, the recorded consent and the running service.
+                            autoSend =
+                                settings.clipAutoSend &&
+                                    settings.clipA11yConsentAt != null &&
+                                    environment.accessibilityServiceRunning,
                             maxTextBytes = MAX_TEXT_BYTES,
                             maxImageBytes = MAX_IMAGE_BYTES,
                             mimes = if (settings.clipSendImages) ALL_MIMES else TEXT_MIMES,
