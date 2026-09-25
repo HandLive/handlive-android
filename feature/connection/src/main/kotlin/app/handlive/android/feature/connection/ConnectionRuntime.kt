@@ -24,9 +24,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
@@ -74,6 +77,11 @@ class ConnectionRuntime private constructor(
             .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<ServiceState> = stateFlow.asStateFlow()
+
+    private val endedFlow = MutableSharedFlow<SessionEnded>(extraBufferCapacity = ENDED_BUFFER)
+
+    /** Sessions that closed, with the peer's `session/bye` reason if it sent one (PAIR-03 API 2 needs `revoked`). */
+    val sessionEnded: SharedFlow<SessionEnded> = endedFlow.asSharedFlow()
 
     /** Installed by the pairing feature; `/v1/pair` delegates to it (PAIR-01). */
     @Volatile
@@ -211,11 +219,13 @@ class ConnectionRuntime private constructor(
         } finally {
             recorder.cancel()
             sessionsFlow.update { open -> if (open[control.pairId] === peer) open - control.pairId else open }
+            endedFlow.tryEmit(SessionEnded(control.pairId, control.byeReason.value))
         }
     }
 
     companion object {
         private const val BYE_SHUTDOWN = "shutdown"
+        private const val ENDED_BUFFER = 16
 
         @Volatile
         private var instance: ConnectionRuntime? = null

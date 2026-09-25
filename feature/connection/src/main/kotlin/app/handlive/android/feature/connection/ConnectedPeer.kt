@@ -30,3 +30,9 @@ data class PairingAdvert(
         val NONE = PairingAdvert()
     }
 }
+
+/** A `/v1/ctl` session of [pairId] ended; [byeReason] is the `reason` of the peer's `session/bye`, if any. */
+data class SessionEnded(
+    val pairId: String,
+    val byeReason: String?,
+)
