@@ -116,6 +116,7 @@ fun PairingFailedScreen(
     onRetry: () -> Unit,
     onUsePin: () -> Unit,
     onClose: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     HLStepScreen(
         symbol = HLSymbol.Warning,
@@ -124,6 +125,13 @@ fun PairingFailedScreen(
     ) {
         if (failure == PairingFailure.CAMERA_DENIED) {
             HLButton(stringResource(R.string.pairing_enter_pin), onUsePin, Modifier.fillMaxWidth())
+            // SET-01 E5: a camera permission denied for good is changed in App info.
+            HLButton(
+                stringResource(R.string.common_open_settings),
+                onOpenSettings,
+                Modifier.fillMaxWidth(),
+                style = HLButtonStyle.Glass,
+            )
         } else if (failure != PairingFailure.LIMIT_REACHED) {
             HLButton(stringResource(R.string.common_retry), onRetry, Modifier.fillMaxWidth())
         }

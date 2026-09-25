@@ -22,6 +22,7 @@ import app.handlive.android.feature.pairing.exchange.PairingCoordinator
 import app.handlive.android.feature.pairing.exchange.PairingState
 import app.handlive.android.feature.pairing.scan.QrImageAnalyzer
 import app.handlive.android.feature.pairing.scan.QrScanner
+import app.handlive.android.ui.system.SystemPages
 import kotlinx.coroutines.launch
 
 /** Where the phone's part of PAIR-01 is before the coordinator takes over. */
@@ -89,6 +90,7 @@ fun PairingFlow(
                 },
                 onUsePin = startPin,
                 onClose = close,
+                onOpenSettings = { SystemPages.open(context, SystemPages.appDetails(context)) },
             )
         }
     }
