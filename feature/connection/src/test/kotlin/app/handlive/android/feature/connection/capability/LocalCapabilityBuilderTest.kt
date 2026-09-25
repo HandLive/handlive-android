@@ -20,7 +20,7 @@ class LocalCapabilityBuilderTest {
 
     @Test
     fun defaultsAdvertiseTheClipboardWithImagesAndTheRelay() {
-        val capability = LocalCapabilityBuilder.build(HandLiveSettings(), environment)
+        val capability = LocalCapabilityBuilder.build(HandLiveSettings(clipA11yConsentAt = CONSENTED_AT), environment)
         assertEquals(1, capability.protocol)
         assertEquals("android", capability.platform)
         assertEquals("1.0.0 (100)", capability.appVersion)
@@ -44,16 +44,23 @@ class LocalCapabilityBuilderTest {
     }
 
     @Test
-    fun autoSendNeedsTheSettingAndTheRunningAccessibilityService() {
+    fun autoSendNeedsTheSettingTheConsentAndTheRunningAccessibilityService() {
         val stopped = environment.copy(accessibilityServiceRunning = false)
         assertEquals(
             false,
             LocalCapabilityBuilder
-                .build(HandLiveSettings(), stopped)
+                .build(HandLiveSettings(clipA11yConsentAt = CONSENTED_AT), stopped)
                 .features.clipboard
                 ?.autoSend,
         )
-        val off = HandLiveSettings(clipAutoSend = false)
+        assertEquals(
+            false,
+            LocalCapabilityBuilder
+                .build(HandLiveSettings(), environment)
+                .features.clipboard
+                ?.autoSend,
+        )
+        val off = HandLiveSettings(clipAutoSend = false, clipA11yConsentAt = CONSENTED_AT)
         assertEquals(
             false,
             LocalCapabilityBuilder
@@ -71,5 +78,9 @@ class LocalCapabilityBuilderTest {
         assertEquals(listOf("text/plain"), capability.features.clipboard!!.mimes)
         assertEquals(false, capability.features.relay?.enabled)
         assertEquals(listOf("POST_NOTIFICATIONS"), capability.permissionsMissing)
+    }
+
+    private companion object {
+        const val CONSENTED_AT = 1_727_150_000_000L
     }
 }
