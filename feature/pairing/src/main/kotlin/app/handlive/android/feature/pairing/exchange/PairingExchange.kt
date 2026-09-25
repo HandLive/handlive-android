@@ -84,6 +84,9 @@ class PairingExchange(
 ) {
     private val wire = PairingWire(clock)
 
+    /** This connection took the window's claim (API 2 rule 4); only then may it give the claim back. */
+    private var holdsClaim = false
+
     /** Ends the exchange: [refusal] goes to the client as `pair/error`; [outcome] is what the phone reports. */
     private class Abort(
         val outcome: PairingOutcome.Failed,
@@ -98,7 +101,9 @@ class PairingExchange(
                 abort.refusal?.let { wire.refuse(socket, it) }
                 abort.outcome
             }
-        if (outcome is PairingOutcome.Failed && window is PairingWindow.Pin) window.release()
+        // The window goes on after a lost connection (QR and PIN) or a wrong PIN: the next connection may claim it.
+        // Any other failure closes the window (the coordinator), so the claim is kept until then.
+        if (holdsClaim && outcome is PairingOutcome.Failed && outcome.failure in WINDOW_GOES_ON) window.release()
         return outcome
     }
 
@@ -116,9 +121,15 @@ class PairingExchange(
             if (text != null) socket.close(WsCloseCode.BAD_REQUEST, "BAD_REQUEST")
             throw disconnected()
         }
-        val refusal = checkHello(hello) ?: if (window.claim()) null else ErrorCode.PAIRING_CLOSED
+        val refusal = checkHello(hello) ?: claimOrClosed()
         refusal?.let { throw refused(it) }
         return hello
+    }
+
+    /** One client per window (API 2 rule 4): a second connection gets `PAIRING_CLOSED`. */
+    private fun claimOrClosed(): ErrorCode? {
+        holdsClaim = window.claim()
+        return if (holdsClaim) null else ErrorCode.PAIRING_CLOSED
     }
 
     /** `pair/offer` with the MAC over `T_offer` under `K_pa` (API 3). */
@@ -302,6 +313,9 @@ class PairingExchange(
         /** The client answers the offer at once (its checks are fast); the user is not in this loop. */
         const val REPLY_TIMEOUT_MILLIS = 30_000L
         const val CLOSE_WAIT_MILLIS = 2_000L
+
+        /** Failures after which the coordinator keeps the window open (`Waiting`, `EnterPin`). */
+        val WINDOW_GOES_ON = setOf(PairingFailure.DISCONNECTED, PairingFailure.PIN_INVALID)
 
         fun disconnected() = Abort(PairingOutcome.Failed(PairingFailure.DISCONNECTED))
 

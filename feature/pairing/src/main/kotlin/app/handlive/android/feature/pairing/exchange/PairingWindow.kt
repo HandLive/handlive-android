@@ -17,7 +17,7 @@ sealed class PairingWindow(
     /** One client per window (API 2 rule 4); `false` when another connection already took it. */
     fun claim(): Boolean = claimed.compareAndSet(false, true)
 
-    /** A PIN window reopens for the next attempt after `PIN_INVALID`. */
+    /** The window takes a new client after a lost connection or, for a PIN window, after `PIN_INVALID`. */
     fun release() = claimed.set(false)
 
     fun isOpen(now: Long): Boolean = now < expiresAt
