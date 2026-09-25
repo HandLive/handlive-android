@@ -13,7 +13,7 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
-import io.ktor.server.websocket.webSocket
+import io.ktor.server.websocket.webSocketRaw
 import java.net.BindException
 import kotlin.time.Duration
 
@@ -35,6 +35,7 @@ class ControlServerOptions(
     val handshakeTimeout: Duration = TransportConstants.HANDSHAKE_TIMEOUT,
     val rekeyAfterEnvelopes: Long = TransportConstants.REKEY_AFTER_ENVELOPES,
     val clock: () -> Long = System::currentTimeMillis,
+    val limits: ControlServerLimits = ControlServerLimits(),
 )
 
 /**
@@ -46,6 +47,9 @@ class ControlServer(
 ) {
     val sessions = ActiveSessionRegistry()
     private val handler = ControlConnectionHandler(config, sessions)
+
+    /** Connections admitted but still in their handshake (CONN-01 API 3: at most 16). */
+    val pendingHandshakes: Int get() = handler.admission.pendingHandshakes
     private var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
 
     /** Lắng nghe trên cổng đầu tiên còn trống trong [ControlServerOptions.ports]; trả cổng thực (để quảng bá SRV). */
@@ -98,7 +102,8 @@ class ControlServer(
                 maxFrameSize = Envelope.MAX_BYTES.toLong()
             }
             routing {
-                webSocket(TransportConstants.CTL_PATH) { handler.handle(this) }
+                // Raw session: the handler sees every frame, pings included, to detect silent sessions (CONN-02).
+                webSocketRaw(TransportConstants.CTL_PATH) { handler.handle(this, call.request.local.remoteAddress) }
             }
         }
 

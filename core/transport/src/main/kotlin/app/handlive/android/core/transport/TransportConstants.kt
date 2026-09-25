@@ -2,6 +2,7 @@ package app.handlive.android.core.transport
 
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** Hằng số của kênh `/v1/ctl` (0.4.1, 0.6.3, 0.10). */
@@ -25,6 +26,17 @@ object TransportConstants {
 
     /** `nonce` và `eph` trong bắt tay và rekey: 32 byte. */
     const val NONCE_SIZE = 32
+
+    /** A session that receives no frame at all (not even a WebSocket ping) for this long is closed 4411 (CONN-02). */
+    val IDLE_TIMEOUT: Duration = 45.seconds
+
+    /** At most this many `/v1/ctl` connections may be waiting for their handshake; the next one is closed 4429. */
+    const val MAX_UNAUTHENTICATED_CONNECTIONS = 16
+
+    /** Wrong `mac` this many times within [AUTH_FAILURE_WINDOW] from one IP blocks that IP (CONN-01 API 4). */
+    const val AUTH_FAILURES_BEFORE_BLOCK = 5
+    val AUTH_FAILURE_WINDOW: Duration = 1.minutes
+    val IP_BLOCK_DURATION: Duration = 5.minutes
 }
 
 /** Mã đóng WebSocket (0.8.3). */
@@ -35,6 +47,18 @@ object WsCloseCode {
     const val PAIR_REVOKED: Short = 4403
     const val HANDSHAKE_TIMEOUT: Short = 4408
     const val REPLACED: Short = 4409
+
+    /** Rekey got no `ack` within 10 s, an error `ack` or invalid data (CONN-02 E4). */
+    const val REKEY_FAILED: Short = 4410
+
+    /** The session was silent for longer than [TransportConstants.IDLE_TIMEOUT] (CONN-02). */
+    const val IDLE_TIMEOUT: Short = 4411
     const val UNSUPPORTED_VERSION: Short = 4426
+
+    /** Too many connections waiting for a handshake, or the IP is blocked after repeated wrong `mac`. */
+    const val RATE_LIMITED: Short = 4429
     const val INTERNAL: Short = 4500
+
+    /** RFC 6455 "message too big": a reassembled text message exceeds 256 KiB (0.5.1 rule 4). */
+    const val MESSAGE_TOO_BIG: Short = 1009
 }

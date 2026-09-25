@@ -100,7 +100,7 @@ internal object ControlSessionDispatcher {
         if (ack.re != session.channel.rekey.pendingRequestId) return deliver(session, envelope, plaintext)
         val data = ack.data?.takeIf { ack.ok }
         val switched = data != null && session.channel.onRekeyAck(ack.re, decode(SessionRekeyData.serializer(), data))
-        return if (switched) null else CloseReason(WsCloseCode.INTERNAL, "rekey failed")
+        return if (switched) null else CloseReason(WsCloseCode.REKEY_FAILED, "REKEY_FAILED")
     }
 
     private suspend fun deliver(

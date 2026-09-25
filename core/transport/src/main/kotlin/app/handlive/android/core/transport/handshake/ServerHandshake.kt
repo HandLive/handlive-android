@@ -188,13 +188,16 @@ class ServerHandshake(
     }
 
     private companion object {
-        /** Câu chữ của `session/error.message` (CONN-01 API 6); không chứa dữ liệu của đối phương. */
+        /**
+         * `session/error.message` (CONN-01 API 6): an English diagnostic for logs, never shown to users — the client
+         * picks its UI text by `code` from the string catalog (0.8, 0.12.4). Carries no data of the peer.
+         */
         val ERROR_MESSAGES =
             mapOf(
-                ErrorCode.AUTH_FAILED to "Không xác thực được thiết bị",
-                ErrorCode.PAIR_UNKNOWN to "Thiết bị chưa được ghép nối",
-                ErrorCode.PAIR_REVOKED to "Cặp ghép nối đã bị thu hồi",
-                ErrorCode.UNSUPPORTED_VERSION to "Phiên bản giao thức không được hỗ trợ",
+                ErrorCode.AUTH_FAILED to "Device authentication failed",
+                ErrorCode.PAIR_UNKNOWN to "Device is not paired",
+                ErrorCode.PAIR_REVOKED to "Pairing has been revoked",
+                ErrorCode.UNSUPPORTED_VERSION to "Unsupported protocol version",
             )
     }
 }

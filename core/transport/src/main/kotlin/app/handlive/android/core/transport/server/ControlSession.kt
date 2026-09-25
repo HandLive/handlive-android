@@ -49,7 +49,7 @@ class ControlSession internal constructor(
                 cipher,
                 SessionRekeyCoordinator(config.localDeviceId, peerDeviceId, cipher),
                 config.options.clock,
-            ) { close(WsCloseCode.INTERNAL, "rekey timeout") }
+            ) { close(WsCloseCode.REKEY_FAILED, "REKEY_FAILED") }
         }
     private val inboundChannel = Channel<InboundEnvelope>(Channel.BUFFERED)
     private val stateFlow = MutableStateFlow(ControlConnectionState.AWAITING_CAPABILITY)
