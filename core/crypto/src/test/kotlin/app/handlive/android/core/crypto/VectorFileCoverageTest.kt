@@ -25,6 +25,8 @@ class VectorFileCoverageTest {
             "ack.json" to "MessageCipherVectorTest, EnvelopeCodecVectorTest",
             "clipboard-chunk.json" to "MessageCipherVectorTest, ClipboardChunkPlaintextVectorTest",
             "hl-frame.json" to "MessageCipherVectorTest, HlFrameVectorTest",
+            "ed25519.json" to "SignatureVectorTest",
+            "relay-auth.json" to "SignatureVectorTest",
             EnvelopeRoundtripTest.ANDROID_FILE to "EnvelopeRoundtripTest",
             EnvelopeRoundtripTest.APPLE_FILE to "EnvelopeRoundtripTest",
         )
