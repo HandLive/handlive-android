@@ -2,8 +2,6 @@ package app.handlive.android.core.transport
 
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
-import app.handlive.android.core.protocol.capability.CapabilityData
-import app.handlive.android.core.protocol.capability.CapabilityOp
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.Payload
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
@@ -14,15 +12,9 @@ import app.handlive.android.core.transport.server.ControlConnectionState
 import app.handlive.android.core.transport.session.RekeyRequestResult
 import app.handlive.android.core.transport.session.SessionRekeyCoordinator
 import app.handlive.android.core.transport.testing.LoopbackServerFixture
-import app.handlive.android.core.transport.testing.LoopbackServerFixture.Companion.MAC_CAPABILITY
-import app.handlive.android.core.transport.testing.TestClientChannel
-import app.handlive.android.core.transport.testing.TestClientPeer
+import app.handlive.android.core.transport.testing.connect
 import app.handlive.android.core.transport.testing.pinnedWebSocketClient
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.webSocketSession
-import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readText
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
@@ -49,7 +41,7 @@ class ControlChannelRekeyAndReplaceTest {
     fun clientInitiatedRekeySwitchesBothSidesToEpochOneKeys() =
         runBlocking {
             val peer = fixture.addPair()
-            val channel = connect(client, peer)
+            val channel = fixture.connect(client, peer)
             val session = fixture.awaitSession()
             val rekey = SessionRekeyCoordinator(peer.deviceId, peer.serverDeviceId, channel.cipher)
             val requestId = peer.ids.next()
@@ -82,7 +74,7 @@ class ControlChannelRekeyAndReplaceTest {
     fun serverInitiatesRekeyAfterEnvelopeThresholdAndSwitchesOnAck() =
         runBlocking {
             val peer = fixture.addPair()
-            val channel = connect(client, peer)
+            val channel = fixture.connect(client, peer)
             val session = fixture.awaitSession()
             // S đã nhận capability/hello (1); thêm 2 envelope → chạm ngưỡng 3 ở chiều nhận.
             repeat(REKEY_AFTER.toInt() - 1) { channel.sendPlaintext(MessageType.CLIPBOARD.wire, ping) }
@@ -112,9 +104,9 @@ class ControlChannelRekeyAndReplaceTest {
     fun newSessionOfSamePairReplacesOldOneWithByeAnd4409() =
         runBlocking {
             val peer = fixture.addPair()
-            val first = connect(client, peer)
+            val first = fixture.connect(client, peer)
             val firstSession = fixture.awaitSession()
-            val second = connect(client, peer)
+            val second = fixture.connect(client, peer)
             val secondSession = fixture.awaitSession()
 
             val (byeEnvelope, byePlaintext) = first.receive()
@@ -128,21 +120,6 @@ class ControlChannelRekeyAndReplaceTest {
             assertEquals(secondSession, fixture.server.sessions.get(peer.pairId))
             second.socket.close()
         }
-
-    /** Mở `/v1/ctl`, bắt tay và trao `capability/hello` hai chiều; trả kênh phía C. */
-    private suspend fun connect(
-        http: HttpClient,
-        peer: TestClientPeer,
-    ): TestClientChannel {
-        val socket = http.webSocketSession(fixture.url)
-        val (hello, state) = peer.hello()
-        socket.send(Frame.Text(hello))
-        val keys = peer.acceptWelcome((socket.incoming.receive() as Frame.Text).readText(), state)
-        val channel = TestClientChannel(socket, keys, peer.ids)
-        channel.receive()
-        channel.send(MessageType.CAPABILITY.wire, CapabilityOp.HELLO, CapabilityData.serializer(), MAC_CAPABILITY)
-        return channel
-    }
 
     private companion object {
         const val REKEY_AFTER = 3L
