@@ -78,6 +78,24 @@ class ClipNotifierTest {
     }
 
     @Test
+    fun refusalsAndSkippedSendsNameTheDevice() {
+        notifier.show(ClipMessage.WriteFailedOnDevice("MacBook của Lan"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("Couldn't update the clipboard on MacBook của Lan", ShadowToast.getTextOfLatestToast())
+        notifier.show(ClipMessage.SkippedJustReceived("MacBook của Lan"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("Not sent — this just came from MacBook của Lan.", ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    @Config(qualifiers = "vi")
+    fun refusalsAndSkippedSendsInVietnamese() {
+        notifier.show(ClipMessage.SkippedJustReceived("MacBook của Lan"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("Không gửi: nội dung này vừa nhận từ MacBook của Lan.", ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
     fun resultsAndErrorsAreToastsInPlace() {
         notifier.show(ClipMessage.NotConnected)
         shadowOf(Looper.getMainLooper()).idle()

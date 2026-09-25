@@ -117,12 +117,14 @@ class LocalClipSendTest {
         }
 
     @Test
-    fun textOverOneMebibyteIsTooLarge() =
+    fun textOverOneMebibyteIsTooLargeOnBothPaths() =
         test { h ->
             h.connect(h.mac)
-            h.readText("a".repeat(ClipLimits.MAX_TEXT_BYTES.toInt() + 1), source = ClipboardValues.SOURCE_MANUAL)
+            val tooLarge = "a".repeat(ClipLimits.MAX_TEXT_BYTES.toInt() + 1)
+            h.readText(tooLarge, source = ClipboardValues.SOURCE_MANUAL)
+            h.readText(tooLarge + "b")
             assertTrue(h.mac.pushes().isEmpty())
-            assertEquals(listOf(ClipMessage.TextTooLarge), h.notices.messages)
+            assertEquals(listOf(ClipMessage.TextTooLarge, ClipMessage.TextTooLarge), h.notices.messages)
         }
 
     @Test
@@ -193,12 +195,58 @@ class LocalClipSendTest {
         }
 
     @Test
-    fun theClipJustReceivedIsNotSentBack() =
+    fun theClipJustReceivedIsNotSentBackAndAManualSendSaysWhy() =
         test { h ->
             h.connect(h.mac)
             h.push(h.mac, h.macText("from the Mac"))
+            h.readText("from the Mac")
+            assertTrue(h.notices.messages.isEmpty())
             h.readText("from the Mac", source = ClipboardValues.SOURCE_MANUAL)
+            h.readText("from the Mac", source = ClipboardValues.SOURCE_SHARE)
             assertTrue(h.mac.pushes().isEmpty())
+            val expected = ClipMessage.SkippedJustReceived("MacBook của Lan")
+            assertEquals(listOf(expected, expected), h.notices.messages)
+        }
+
+    @Test
+    fun anImageJustReceivedIsNotSentBackEither() =
+        test { h ->
+            h.connect(h.mac)
+            val bytes = ByteArray(3) { (it + 1).toByte() }
+            val transferId = h.newId()
+            val image =
+                h.macText("x").copy(
+                    kind = ClipboardValues.KIND_IMAGE,
+                    mime = ClipboardValues.MIME_PNG,
+                    text = null,
+                    transfer =
+                        app.handlive.android.core.protocol.clipboard.ClipboardTransfer(
+                            transferId = transferId,
+                            size = 3,
+                            sha256 = "A5BYxvLAy0ksUzsKTRTvd8wPeKvMztUofYShogEc-4E",
+                            chunkSize = 65_536,
+                            chunkCount = 1,
+                        ),
+                )
+            h.push(h.mac, image)
+            h.chunk(h.mac, transferId, 0, bytes)
+            h.readImage(bytes, source = ClipboardValues.SOURCE_MANUAL)
+            assertTrue(h.mac.pushes().isEmpty())
+            assertEquals(listOf(ClipMessage.SkippedJustReceived("MacBook của Lan")), h.notices.messages)
+        }
+
+    @Test
+    fun aRefusedManualSendSaysTheClipboardWasNotUpdated() =
+        test { h ->
+            h.connect(h.mac)
+            h.readText("manual", source = ClipboardValues.SOURCE_MANUAL)
+            val (manualId, manual) = h.mac.pushes().single()
+            h.ackError(h.mac, manualId, manual.clipId, ErrorCode.INTERNAL)
+            assertEquals(listOf(ClipMessage.WriteFailedOnDevice("MacBook của Lan")), h.notices.messages)
+            h.readText("automatic")
+            val (autoId, automatic) = h.mac.pushes().last()
+            h.ackError(h.mac, autoId, automatic.clipId, ErrorCode.CLIP_UNSUPPORTED_MIME)
+            assertEquals(1, h.notices.messages.size)
         }
 
     @Test
