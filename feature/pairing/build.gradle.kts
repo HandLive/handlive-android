@@ -26,6 +26,15 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all { test ->
+                // PairingExchangeVectorTest runs the exchange against shared/test-vectors/pair-handshake.json.
+                val sharedDir = rootProject.layout.projectDirectory.dir("../shared")
+                test.inputs
+                    .file(sharedDir.file("test-vectors/pair-handshake.json"))
+                    .withPropertyName("pairHandshakeVector")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+                test.systemProperty("hl.shared.dir", sharedDir.asFile.absolutePath)
+            }
         }
     }
 }
@@ -52,4 +61,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.tink.android)
     testImplementation(libs.room.runtime)
+    testImplementation(testFixtures(project(":core:protocol")))
 }
