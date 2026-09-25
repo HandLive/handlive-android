@@ -12,6 +12,7 @@ import java.io.File
 class ClipFiles(
     private val dir: File,
     private val wall: () -> Long,
+    private val freeSpace: (File) -> Long = File::getUsableSpace,
 ) {
     fun part(transferId: String): File = File(ready(), "$transferId$PART")
 
@@ -26,7 +27,7 @@ class ClipFiles(
     ): File = File(ready(), "$clipId.${extension(mime)}")
 
     /** E9: room for [bytes] more in the cache directory. */
-    fun hasRoomFor(bytes: Long): Boolean = ready().usableSpace > bytes
+    fun hasRoomFor(bytes: Long): Boolean = freeSpace(ready()) > bytes
 
     /** At A-SVC start: no transfer survives a restart, and files older than 1 hour go (Android 13+ drops them too). */
     fun cleanUp() {
