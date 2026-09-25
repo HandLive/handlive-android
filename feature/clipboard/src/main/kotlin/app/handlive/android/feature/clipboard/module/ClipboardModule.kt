@@ -70,7 +70,8 @@ class ClipboardModule(
             .launchIn(scope)
         scope.launch(context.platform.io) {
             context.platform.files.cleanUp()
-            context.network.local()
+            // Loads the identity early so the first clip does not wait for the Keystore; a failure shows up later.
+            runCatching { context.network.local() }
         }
     }
 
