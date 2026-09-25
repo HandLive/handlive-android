@@ -31,7 +31,7 @@ object ScreenCatalog {
 
     val screens: Map<String, @Composable () -> Unit> =
         linkedMapOf(
-            "welcome" to { WelcomeScreen {} },
+            "welcome" to { WelcomeScreen(onGetStarted = {}, onPrivacy = {}) },
             "notifications primer" to { NotificationsPrimer {} },
             "background primer" to { BackgroundPrimer {} },
             "service failed" to { ServiceFailedScreen {} },
