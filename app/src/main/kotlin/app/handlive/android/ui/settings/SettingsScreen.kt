@@ -1,0 +1,172 @@
+package app.handlive.android.ui.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import app.handlive.android.core.design.component.HLGroupedList
+import app.handlive.android.core.design.component.HLGroupedListScope
+import app.handlive.android.core.design.component.HLNavigationRow
+import app.handlive.android.core.design.component.HLScreenHeader
+import app.handlive.android.core.design.component.HLSwitchRow
+import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.core.strings.R
+import app.handlive.android.ui.main.StatusBanners
+import app.handlive.android.ui.main.bannerLabels
+import app.handlive.android.ui.main.bannerSections
+import java.text.DateFormat
+
+/**
+ * SET-02 on the phone for Phase 1: the Clipboard group (fields 1–6, each switch with its one-line description),
+ * Internet Connection (field 21), Permissions & Background (field 23) and Language (field 32).
+ */
+@Composable
+fun SettingsScreen(
+    state: SettingsUiState,
+    banners: StatusBanners,
+    actions: SettingsActions,
+    languageValue: String,
+    modifier: Modifier = Modifier,
+) {
+    val labels = bannerLabels()
+    val clipboardTitle = stringResource(R.string.settings_clipboard)
+    val autoClearFooter = stringResource(R.string.settings_auto_clear_footer)
+    val settings = state.settings
+    Column(modifier = modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
+        HLScreenHeader(title = stringResource(R.string.settings_title))
+        HLGroupedList(modifier = Modifier.weight(1f)) {
+            bannerSections(banners, labels)
+            clipboardSection(clipboardTitle, autoClearFooter, state, actions)
+            section {
+                row {
+                    Switch(
+                        R.string.settings_internet_connection,
+                        settings.relayEnabled,
+                        actions::setInternet,
+                        R.string.settings_internet_connection_description,
+                    )
+                }
+            }
+            section {
+                row {
+                    Navigation(
+                        R.string.settings_permissions_background,
+                        null,
+                    ) { actions.open(SettingsPage.PERMISSIONS) }
+                }
+                row { Navigation(R.string.settings_language, languageValue) { actions.open(SettingsPage.LANGUAGE) } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Switch(
+    title: Int,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    description: Int,
+) = HLSwitchRow(
+    stringResource(title),
+    checked,
+    onChange,
+    unavailableReason = null,
+    description = stringResource(description),
+)
+
+@Composable
+private fun Navigation(
+    title: Int,
+    value: String?,
+    onClick: () -> Unit,
+) = HLNavigationRow(stringResource(title), value, onClick)
+
+/** Field 2 with its status: the description, "Auto-send isn't on yet" (E8), or field 3 "Agreed on …". */
+@Composable
+private fun AutoSendSwitch(
+    state: SettingsUiState,
+    onChange: (Boolean) -> Unit,
+) {
+    val consentAt = state.settings.clipA11yConsentAt
+    val description =
+        when {
+            state.autoSendStatus == AutoSendStatus.NEEDS_ACCESSIBILITY -> {
+                stringResource(R.string.settings_auto_send_not_on)
+            }
+
+            consentAt != null && state.autoSendStatus == AutoSendStatus.ON -> {
+                val locale = LocalConfiguration.current.locales[0]
+                stringResource(
+                    R.string.settings_auto_send_consented_at,
+                    DateFormat.getTimeInstance(DateFormat.SHORT, locale).format(consentAt),
+                    DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(consentAt),
+                )
+            }
+
+            else -> {
+                stringResource(R.string.settings_auto_send_description)
+            }
+        }
+    HLSwitchRow(
+        stringResource(R.string.settings_auto_send),
+        state.settings.clipAutoSend,
+        onChange,
+        unavailableReason = null,
+        description = description,
+    )
+}
+
+/** Field 6 choices: "Off", "After 1 Minute", "After 5 Minutes". */
+fun autoClearLabel(seconds: Int): Int =
+    when (seconds) {
+        0 -> R.string.common_off
+        AUTO_CLEAR_5_MIN -> R.string.settings_auto_clear_5_min
+        else -> R.string.settings_auto_clear_1_min
+    }
+
+const val AUTO_CLEAR_5_MIN = 300
+
+/** Fields 1–6: the Clipboard group with its footnote about auto-clear. */
+private fun HLGroupedListScope.clipboardSection(
+    title: String,
+    footer: String,
+    state: SettingsUiState,
+    actions: SettingsActions,
+) {
+    val settings = state.settings
+    section(title = title, footer = footer) {
+        row {
+            Switch(
+                R.string.settings_sync_clipboard,
+                settings.clipboardEnabled,
+                actions::setClipboard,
+                R.string.settings_sync_clipboard_description,
+            )
+        }
+        row { AutoSendSwitch(state, actions::setAutoSend) }
+        row {
+            Switch(
+                R.string.settings_sync_images,
+                settings.clipSendImages,
+                actions::setSendImages,
+                R.string.settings_sync_images_description,
+            )
+        }
+        row {
+            Switch(
+                R.string.settings_block_sensitive,
+                settings.clipBlockSensitive,
+                actions::setBlockSensitive,
+                R.string.settings_block_sensitive_description,
+            )
+        }
+        row {
+            Navigation(R.string.settings_auto_clear, stringResource(autoClearLabel(settings.clipAutoClearSeconds))) {
+                actions.open(SettingsPage.AUTO_CLEAR)
+            }
+        }
+    }
+}
