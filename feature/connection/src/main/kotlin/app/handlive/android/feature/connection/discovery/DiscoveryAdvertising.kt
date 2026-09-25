@@ -7,6 +7,8 @@ import android.net.Network
 import app.handlive.android.core.crypto.primitives.SecureRandomBytes
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.feature.connection.PairingAdvert
+import app.handlive.android.feature.connection.bench.BenchEvent
+import app.handlive.android.feature.connection.bench.BenchLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -80,10 +82,24 @@ class DiscoveryAdvertising(
             }
         }
 
+    /** Also writes the bench `net` events (`up`, `down`, `changed`) that start a reconnect measurement. */
     private fun watchNetwork() {
         val callback =
             object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = networkVersion.update { it + 1 }
+                private var current: Network? = null
+
+                override fun onAvailable(network: Network) {
+                    BenchLog.event(BenchEvent.NET, "change" to if (current == null) "up" else "changed")
+                    current = network
+                    networkVersion.update { it + 1 }
+                }
+
+                override fun onLost(network: Network) {
+                    if (network == current) {
+                        BenchLog.event(BenchEvent.NET, "change" to "down")
+                        current = null
+                    }
+                }
 
                 override fun onLinkPropertiesChanged(
                     network: Network,

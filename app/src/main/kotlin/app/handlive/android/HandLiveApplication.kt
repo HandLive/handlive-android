@@ -1,6 +1,7 @@
 package app.handlive.android
 
 import android.app.Application
+import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.notification.NotificationChannels
 
 /**
@@ -11,5 +12,6 @@ class HandLiveApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         NotificationChannels.createAll(this)
+        BenchLog.install(this)
     }
 }

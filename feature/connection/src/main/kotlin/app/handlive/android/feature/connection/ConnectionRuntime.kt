@@ -13,6 +13,7 @@ import app.handlive.android.core.transport.server.ControlSession
 import app.handlive.android.core.transport.server.PairingEndpoint
 import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
 import app.handlive.android.core.transport.tls.TlsIdentityProvider
+import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
 import app.handlive.android.feature.connection.discovery.DiscoveryAdvertising
@@ -141,6 +142,7 @@ class ConnectionRuntime private constructor(
                 data.identity to TlsIdentityProvider.loadOrCreate(AndroidTlsIdentityStorage.create(appContext))
             }
         certificateSha256 = tls.certificateSha256()
+        BenchLog.setDevice(identity.deviceId)
         val capabilityState =
             capability.state(
                 runtimeScope,
