@@ -9,6 +9,7 @@ import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.transport.server.InboundEnvelope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
@@ -71,6 +72,21 @@ class SessionRouterTest {
                     )
                 }
             }
+        }
+
+    @Test
+    fun theAckWaitStartsAfterTheWorkThatFollowsTheSend() =
+        runTest {
+            // CLIP-03 API 3 rule 3: chunks go out after the push; the 10 s start after the last one.
+            val reply =
+                async {
+                    session.request(MessageType.CLIPBOARD, op("push"), timeout = 10.seconds) { delay(15.seconds) }
+                }
+            testScheduler.advanceTimeBy(20.seconds)
+            testScheduler.runCurrent()
+            assertTrue(reply.isActive)
+            router.route(session, inbound(MessageType.ACK, PlaintextCodec.encodeAck(Ack.success(sent.single().id))))
+            assertTrue(reply.await().ok)
         }
 
     @Test
