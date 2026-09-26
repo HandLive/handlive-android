@@ -113,8 +113,10 @@ class RelayRegistrar(
     }
 
     /**
-     * PAIR-02 step 4–5 (at most once every 60 s unless [force]): a pair revoked on the relay is cleaned up (E3); a pair
-     * the relay forgot while it was registered means the peer removed itself (rule 3) → `relay_registered = 0`.
+     * PAIR-02 step 4–5 and API 1 logic 3 (at most once every 60 s unless [force]): a pair revoked on the relay is
+     * cleaned up (E3); a pair the relay forgot while it was registered means the peer removed itself →
+     * `relay_registered = 0`; a pair the relay lists without `revoked_at` while it is still at 0 was completed by the
+     * peer → `relay_registered = 1`, which also ends its 24 h wait.
      */
     suspend fun checkPairs(force: Boolean = false) {
         if (!force && clock() - lastPairsCheck < RelayConstants.PAIRS_CHECK_MIN_INTERVAL_MILLIS) return
@@ -123,8 +125,18 @@ class RelayRegistrar(
         for (local in pairs.observeActive().first()) {
             val entry = remote[local.pairId]
             when {
-                entry?.revokedAt != null -> verdict.revokedElsewhere(local.pairId)
-                entry == null && local.relayRegistered -> relayPairs.markRegistered(local.pairId, registered = false)
+                entry?.revokedAt != null -> {
+                    verdict.revokedElsewhere(local.pairId)
+                }
+
+                entry == null && local.relayRegistered -> {
+                    relayPairs.markRegistered(local.pairId, registered = false)
+                }
+
+                entry != null && !local.relayRegistered -> {
+                    relayPairs.markRegistered(local.pairId, registered = true)
+                    retryPairAfter.remove(local.pairId)
+                }
             }
         }
     }
