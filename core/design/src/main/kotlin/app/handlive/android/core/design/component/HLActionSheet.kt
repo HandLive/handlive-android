@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
@@ -24,8 +26,9 @@ import androidx.compose.ui.window.DialogProperties
 import app.handlive.android.core.design.theme.HandLiveTheme
 
 /**
- * An action sheet as on the iPhone (PAIR-03 field 3): the actions in a rounded group with the title and message
- * above them, and "Cancel" in a separate group at the bottom. Back and a tap outside cancel.
+ * An action sheet as on the iPhone (PAIR-03 field 3, SET-02 field 28): the actions in a rounded group with the title
+ * (a heading for TalkBack) and message above them, and "Cancel" in a separate group at the bottom. Back and a tap
+ * outside cancel.
  */
 @Composable
 fun HLActionSheet(
@@ -86,6 +89,8 @@ private fun SheetHeader(
         title?.let {
             BasicText(
                 it,
+                // TalkBack reads the question first, as the title of an alert (HLAlert).
+                modifier = Modifier.semantics { heading() },
                 style =
                     typography.footnote.copy(
                         color = colors.secondaryLabel,
