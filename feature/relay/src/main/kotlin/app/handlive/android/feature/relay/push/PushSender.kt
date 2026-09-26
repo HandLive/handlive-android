@@ -128,7 +128,7 @@ class PushSender(
         )
     }
 
-    /** The request again: what the outbox kept, with the time left before the push expires as `ttl_s`. */
+    /** The request again as the outbox kept it; `ttl_s` stays 86,400 for `sms_new` (SMS-02 API 2). */
     private fun requestOf(
         entry: PushOutboxEntity,
         target: PushTarget,
@@ -140,7 +140,7 @@ class PushSender(
             reason = RelayValues.REASON_SMS_NEW,
             envB64 = entry.bodyB64,
             collapseKey = entry.collapseKey,
-            ttlS = ((entry.expiresAt - clock()) / MILLIS_PER_SECOND).toInt().coerceAtLeast(1),
+            ttlS = PushEnvelopeBuilder.SMS_TTL_SECONDS,
         )
 
     /** 5 s, 15 s, 45 s… at most 5 minutes. */
@@ -164,6 +164,5 @@ class PushSender(
     private companion object {
         const val HTTP_TOO_MANY_REQUESTS = 429
         const val HTTP_SERVER_ERROR = 500
-        const val MILLIS_PER_SECOND = 1_000L
     }
 }
