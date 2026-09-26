@@ -2,11 +2,11 @@
 
 # handlive-android
 
-Ứng dụng trên điện thoại Android, viết bằng Kotlin (minSdk 29). Điện thoại là hub: nó gửi clipboard, SMS, cuộc gọi kèm âm thanh, camera và mic sang Mac, iPhone và iPad.
+Ứng dụng trên điện thoại Android, viết bằng Kotlin (minSdk 29). Ứng dụng thực thi các tính năng continuity, như Handoff, ngay trên Android. Điện thoại đồng bộ với Mac, iPhone và iPad. Các máy Apple đồng bộ ngược lại.
 
 Kotlin, Gradle KTS, AGP 9.4, Kotlin 2.4, compileSdk 37 / targetSdk 35, Compose. Giao diện đa ngôn ngữ: tiếng Anh mặc định, tiếng Việt là ngôn ngữ thứ hai (chuỗi từ `../shared/strings`, thiết kế chi tiết 0.12). Đặc tả: `../docs/detailed-design/` (kho hub). Kế hoạch: `../plans/20260925-implementation/`.
 
-Kho này là một phần của workspace HandLive: kho hub `handlive` (tài liệu, kế hoạch) là thư mục cha, `../shared` là kho `handlive-shared` (test vector, schema, design tokens); test `core/design` còn đọc `../docs/design-system` của hub. Clone cả bộ từ hub: `tools/workspace.sh clone <group-url>`. Xem `CLAUDE.md` của kho này.
+Kho này nằm trong workspace HandLive. Kho hub `handlive` (tài liệu, kế hoạch) là thư mục cha. `../shared` là kho `handlive-shared` (test vector, schema, design token). Test `core/design` còn đọc `../docs/design-system` trên hub. Clone cả bộ từ hub: `tools/workspace.sh clone <group-url>`. Xem `CLAUDE.md` trong kho này.
 
 ## Bố cục
 

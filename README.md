@@ -2,7 +2,7 @@ English | [Tiếng Việt](README.vi.md)
 
 # handlive-android
 
-The HandLive app for Android phones, written in Kotlin (minSdk 29). The phone is the hub: it sends the clipboard, SMS, calls with live audio, and its camera and microphone to Mac, iPhone and iPad.
+The HandLive app for Android phones, written in Kotlin (minSdk 29). The app runs continuity features, such as Handoff, on Android. The phone stays in sync with a Mac, iPhone and iPad, and those Apple devices sync back.
 
 Kotlin, Gradle KTS, AGP 9.4, Kotlin 2.4, compileSdk 37 / targetSdk 35, Jetpack Compose. The UI is multilingual: English by default, Vietnamese as the second language (strings come from `../shared/strings`, detailed design 0.12). Specification: `../docs/detailed-design/` (hub repository). Plan: `../plans/20260925-implementation/`.
 
