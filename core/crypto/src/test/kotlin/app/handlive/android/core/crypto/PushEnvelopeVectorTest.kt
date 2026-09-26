@@ -50,7 +50,7 @@ class PushEnvelopeVectorTest {
             assertEquals(name, v.str("env_b64"), PushEnvelopes.envB64(sealed))
             assertTrue(name, PushEnvelopes.envB64(sealed).length <= ENV_B64_MAX)
         }
-        assertEquals(3, envelopes.size)
+        assertEquals(8, envelopes.size)
     }
 
     @Test
