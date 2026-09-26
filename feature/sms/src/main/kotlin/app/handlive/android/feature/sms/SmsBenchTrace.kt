@@ -7,42 +7,39 @@ import app.handlive.android.feature.sms.module.SmsTrace
  * [SmsTrace] written as `HLBENCH/1` lines (debuggable builds only, [BenchLog]): message keys, `local_id`s, the first
  * 8 hex digits of the peer's `device_id`, boxes, states and codes — never text, numbers or names.
  */
-internal class SmsBenchTrace : SmsTrace {
+internal class SmsBenchTrace(
+    private val log: (event: String, fields: List<Pair<String, Any>>) -> Unit = BenchLog::event,
+) : SmsTrace {
     override fun detected(
         messageKey: String,
         box: String,
         onChangeAt: Long,
         providerDate: Long,
-    ) = BenchLog.event(
+    ) = log(
         SmsBenchEvent.SMS_DETECTED,
-        "msg" to messageKey,
-        "box" to box,
-        "onchange" to onChangeAt,
-        "provider" to providerDate,
+        listOf("msg" to messageKey, "box" to box, "onchange" to onChangeAt, "provider" to providerDate),
     )
 
     override fun newSent(
         messageKey: String,
         peerDeviceId: String,
         viaRelay: Boolean,
-    ) = BenchLog.event(
+    ) = log(
         SmsBenchEvent.SMS_NEW_SENT,
-        "msg" to messageKey,
-        "peer" to peerDeviceId.take(PEER_ID),
-        "via" to if (viaRelay) "relay" else "lan",
+        listOf("msg" to messageKey, "peer" to peerDeviceId.take(PEER_ID), "via" to if (viaRelay) "relay" else "lan"),
     )
 
     override fun sendReceived(
         localId: String,
         peerDeviceId: String,
-    ) = BenchLog.event(SmsBenchEvent.SMS_SEND_RECEIVED, "local" to localId, "peer" to peerDeviceId.take(PEER_ID))
+    ) = log(SmsBenchEvent.SMS_SEND_RECEIVED, listOf("local" to localId, "peer" to peerDeviceId.take(PEER_ID)))
 
     override fun sendAckSent(
         localId: String,
         peerDeviceId: String,
         ok: Boolean,
         code: String?,
-    ) = BenchLog.event(
+    ) = log(
         SmsBenchEvent.SMS_SEND_ACK_SENT,
         withCode(code, "local" to localId, "peer" to peerDeviceId.take(PEER_ID), "ok" to ok),
     )
@@ -51,7 +48,7 @@ internal class SmsBenchTrace : SmsTrace {
         localId: String,
         failed: Boolean,
         code: String?,
-    ) = BenchLog.event(
+    ) = log(
         SmsBenchEvent.SMS_RADIO_DONE,
         withCode(code, "local" to localId, "result" to if (failed) "failed" else "sent"),
     )
@@ -61,7 +58,7 @@ internal class SmsBenchTrace : SmsTrace {
         peerDeviceId: String,
         status: String,
         code: String?,
-    ) = BenchLog.event(
+    ) = log(
         SmsBenchEvent.SMS_STATUS_SENT,
         withCode(code, "local" to localId, "peer" to peerDeviceId.take(PEER_ID), "status" to status),
     )
