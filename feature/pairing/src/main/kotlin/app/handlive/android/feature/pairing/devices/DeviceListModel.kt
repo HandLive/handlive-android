@@ -32,6 +32,24 @@ enum class ClipboardAvailability {
     UNKNOWN,
 }
 
+/** The SMS row of the details (PAIR-02 field 8, SET-02 field 24). */
+enum class SmsAvailability {
+    /** Effective between the two devices. */
+    ON,
+
+    /** Turned off on the client ("Off on <device>"). */
+    OFF_ON_PEER,
+
+    /** Turned off on this phone, or no telephony. */
+    OFF_HERE,
+
+    /** On at both ends but `READ_SMS` is missing on this phone ("Missing SMS permission on the phone"). */
+    MISSING_PERMISSION,
+
+    /** Not connected, or the service is not running: nothing is effective right now. */
+    UNKNOWN,
+}
+
 /** One row and its details screen (PAIR-02 fields 1–10). No `pair_id`, keys or addresses are shown. */
 data class DeviceListItem(
     val pairId: String,
@@ -43,6 +61,7 @@ data class DeviceListItem(
     val appVersion: String?,
     val clipboard: ClipboardAvailability,
     val safetyCode: String,
+    val sms: SmsAvailability = SmsAvailability.UNKNOWN,
 )
 
 /**
@@ -51,12 +70,16 @@ data class DeviceListItem(
  * (`features_json`).
  */
 object DeviceListModel {
-    /** Rows update when a pair, a session, a session's capability or the local clipboard switch changes. */
+    /**
+     * Rows update when a pair, a session, a session's capability, the local clipboard switch or this phone's
+     * capability ([localCapability]: SMS on, `READ_SMS` granted) changes.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observe(
         devices: Flow<List<PairedDevice>>,
         sessions: StateFlow<Map<String, PeerSession>>,
         clipboardEnabledHere: Flow<Boolean>,
+        localCapability: Flow<CapabilityData?> = flowOf(null),
     ): Flow<List<DeviceListItem>> {
         val liveSessions =
             sessions.flatMapLatest { open ->
@@ -66,8 +89,13 @@ object DeviceListModel {
                     combine(open.values.map { combine(it.effectiveFeatures, it.peerCapability) { _, _ -> } }) { open }
                 }
             }
-        return combine(devices, liveSessions, clipboardEnabledHere) { stored, open, clipboardHere ->
-            stored.map { item(it, open[it.pairId], clipboardHere) }
+        return combine(
+            devices,
+            liveSessions,
+            clipboardEnabledHere,
+            localCapability,
+        ) { stored, open, clipboardHere, local ->
+            stored.map { item(it, open[it.pairId], clipboardHere, local) }
         }
     }
 
@@ -75,6 +103,7 @@ object DeviceListModel {
         device: PairedDevice,
         session: PeerSession?,
         clipboardEnabledHere: Boolean,
+        local: CapabilityData? = null,
     ): DeviceListItem {
         val capability = session?.peerCapability?.value ?: storedCapability(device.featuresJson)
         return DeviceListItem(
@@ -87,8 +116,40 @@ object DeviceListModel {
             appVersion = capability?.appVersion,
             clipboard = clipboardAvailability(session, capability, clipboardEnabledHere),
             safetyCode = device.safetyCode,
+            sms = smsAvailability(session, capability, local),
         )
     }
+
+    private fun smsAvailability(
+        session: PeerSession?,
+        peer: CapabilityData?,
+        local: CapabilityData?,
+    ): SmsAvailability =
+        when {
+            local == null -> {
+                SmsAvailability.UNKNOWN
+            }
+
+            local.features.sms?.enabled != true -> {
+                SmsAvailability.OFF_HERE
+            }
+
+            peer != null && peer.features.sms?.enabled != true -> {
+                SmsAvailability.OFF_ON_PEER
+            }
+
+            local.permissionsMissing.orEmpty().any { it.substringAfterLast('.') == READ_SMS } -> {
+                SmsAvailability.MISSING_PERMISSION
+            }
+
+            session?.isEffective(Feature.SMS) == true -> {
+                SmsAvailability.ON
+            }
+
+            else -> {
+                SmsAvailability.UNKNOWN
+            }
+        }
 
     private fun clipboardAvailability(
         session: PeerSession?,
@@ -110,6 +171,8 @@ object DeviceListModel {
         } catch (_: IllegalArgumentException) {
             null
         }
+
+    private const val READ_SMS = "READ_SMS"
 
     private fun PeerSession.Channel.toLink() =
         when (this) {

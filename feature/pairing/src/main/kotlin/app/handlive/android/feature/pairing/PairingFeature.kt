@@ -50,6 +50,7 @@ class PairingFeature private constructor(
             data.settings.settings.map {
                 it.clipboardEnabled
             },
+            runtime.localCapability,
         )
 
     private suspend fun localDevice(): LocalPairingDevice? {
