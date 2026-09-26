@@ -9,6 +9,8 @@ import app.handlive.android.core.protocol.envelope.EnvelopeHeader
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.relay.RelayOutbound
+import app.handlive.android.core.protocol.session.SessionByeData
+import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.transport.server.ControlConnectionState
 import app.handlive.android.core.transport.server.ControlSession
 import app.handlive.android.core.transport.server.SessionTransport
@@ -88,6 +90,25 @@ class RelayPeerMuxTest {
             waitUntil { first.state.value == ControlConnectionState.CLOSED }
             assertEquals(ControlConnectionState.ESTABLISHED, second.state.value)
             assertTrue(fixture.server.sessions.get(peer.pairId) === second)
+        }
+
+    @Test
+    fun switchingTheRelayOffSendsTheCapabilityThenByeShutdown() =
+        runBlocking {
+            val peer = fixture.addPair()
+            val (session, cipher) = handshake(peer)
+
+            fixture.server.closeRelayedSessions()
+
+            val capability = next(peer.deviceId)
+            assertEquals(MessageType.CAPABILITY.wire, capability.type)
+            assertEquals(CapabilityOp.UPDATE, PlaintextCodec.decodePayload(cipher.open(capability)).op)
+            val bye = next(peer.deviceId)
+            assertEquals(MessageType.SESSION.wire, bye.type)
+            val byeData = PlaintextCodec.decodeOp(cipher.open(bye), SessionByeData.serializer())
+            assertEquals(SessionOp.BYE, byeData.op)
+            assertEquals("shutdown", byeData.data.reason)
+            waitUntil { session.state.value == ControlConnectionState.CLOSED }
         }
 
     @Test
