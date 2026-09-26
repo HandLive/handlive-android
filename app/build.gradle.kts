@@ -163,7 +163,16 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 }
 
-// The UI tests are the same for both flavors; run them once, on the default flavor.
+// The flavor sources go through detekt too, and `check` compiles the gms flavor without any Firebase setting, as CI
+// does (the UI tests are the same for both flavors; they run once, on the default flavor).
+detekt {
+    source.from("src/foss/kotlin", "src/gms/kotlin")
+}
+
+tasks.named("check") {
+    dependsOn("compileGmsDebugKotlin")
+}
+
 androidComponents {
     beforeVariants(selector().withFlavor("distribution" to "gms")) { variant ->
         variant.hostTests.values.forEach { it.enable = false }
