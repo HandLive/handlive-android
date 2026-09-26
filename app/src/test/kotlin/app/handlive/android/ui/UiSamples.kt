@@ -14,6 +14,7 @@ import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
+import app.handlive.android.ui.settings.SmsAccessState
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.UnusedAppPause
@@ -56,6 +57,9 @@ object UiSamples {
 
     val settings = SettingsUiState(HandLiveSettings(clipA11yConsentAt = NOW), accessibilityServiceOn = true)
 
+    /** SMS on while `READ_CONTACTS` is missing: "Needs permission" with "Grant Permission". */
+    val smsNeedsPermission = settings.copy(sms = SmsAccessState(missing = setOf("READ_CONTACTS")))
+
     object NoActions : SettingsActions {
         override fun setClipboard(enabled: Boolean) = Unit
 
@@ -68,6 +72,10 @@ object UiSamples {
         override fun setAutoClear(seconds: Int) = Unit
 
         override fun setInternet(enabled: Boolean) = Unit
+
+        override fun setSms(enabled: Boolean) = Unit
+
+        override fun grantSms() = Unit
 
         override fun open(page: SettingsPage) = Unit
     }
