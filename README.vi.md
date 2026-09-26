@@ -12,23 +12,36 @@ Kho này nằm trong workspace HandLive. Kho hub `handlive` (tài liệu, kế h
 
 | Đường dẫn | Nội dung |
 |-----------|----------|
-| `app/` | Ứng dụng Compose, gói `app.handlive.android`: thiết lập lần đầu (SET-01), hai thẻ Thiết bị và Cài đặt cùng ghép nối, chi tiết thiết bị, lời công bố Hỗ trợ tiếp cận và Quyền và chạy nền; cài các tính năng khi tiến trình khởi động |
+| `app/` | Ứng dụng Compose, gói `app.handlive.android`: thiết lập lần đầu (SET-01), hai thẻ Thiết bị và Cài đặt cùng ghép nối, chi tiết thiết bị (bảng nhớ tạm và SMS theo từng máy), lời công bố Hỗ trợ tiếp cận, công tắc SMS kèm màn giải thích quyền, Quyền và chạy nền, Xóa thiết bị khỏi máy chủ / Xóa toàn bộ dữ liệu HandLive; cài các tính năng khi tiến trình khởi động. Hai flavor: `foss` (mặc định, không Play Services hay Firebase) và `gms` (đánh thức qua FCM, xem Thiết lập khi build) |
 | `buildSrc/` | Task `:core:design:generateHandLiveTheme` sinh `HandLiveTheme` từ `../shared/design-tokens/tokens.json`; `:core:strings:generateStringResources` sinh tài nguyên chuỗi từ `../shared/strings/ui-strings.json` |
-| `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), khung HL, chunk bảng nhớ tạm, UUIDv7, b64/b64u; test fixture đọc `../shared` |
-| `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, lịch khóa phiên/rekey/stream, kho khóa `hl_master` |
-| `core/transport` | Ktor/Netty WSS (TLS 1.3, chứng chỉ P-256 tự ký), bắt tay phía S, capability, rekey, thay phiên 4409, giới hạn nhận kết nối và đóng phiên im lặng (4410/4411/4429); smoke test instrumented Netty + TLS ở `src/androidTest` |
-| `core/data` | Room `handlive.db` (`paired_device`, lược đồ ở `core/data/schemas`), khóa cài đặt DataStore (0.9.5), bộ chứa `HandLiveData` |
+| `core/protocol` | Envelope, Payload, Ack, `ErrorCode` (0.8.1), khung HL, chunk bảng nhớ tạm, tin nhắn SMS, lớp bọc relay, op điều khiển, khung `HR` và thân REST, UUIDv7, b64/b64u; test fixture đọc `../shared` và kiểm theo JSON schema của nó |
+| `core/crypto` | Tink XChaCha20-Poly1305, X25519, Ed25519, HKDF, `device_id`, PRK, lịch khóa phiên/rekey/stream, `K_push` và envelope push, kho khóa `hl_master` |
+| `core/transport` | Ktor/Netty WSS (TLS 1.3, chứng chỉ P-256 tự ký), bắt tay phía S, capability, rekey, thay phiên 4409, giới hạn nhận kết nối và đóng phiên im lặng (4410/4411/4429); client relay trên OkHttp có ghim chứng chỉ (đăng ký, JWT, REST, `/v1/relay`) và phiên `/v1/ctl` đi qua relay; smoke test instrumented Netty + TLS ở `src/androidTest` |
+| `core/data` | Room `handlive.db` (`paired_device`, `sms_observer_state`, `push_outbox`; lược đồ ở `core/data/schemas`), khóa cài đặt DataStore (0.9.5), bộ chứa `HandLiveData` |
 | `core/strings` | Tài nguyên chuỗi sinh lúc build từ catalog (mặc định tiếng Anh, thêm tiếng Việt); test đối chiếu với catalog và cấm chữ giao diện viết cứng |
 | `core/design` | `HandLiveTheme` (4 giao diện, Inter / Be Vietnam Pro / Roboto Mono), `HLButton`, `HLSwitch`, `HLGroupedList`, `HLStatusIndicator`, `HLIcon` (Material Symbols Rounded) |
 | `feature/connection` | `HandLiveService` (dịch vụ nền trước kiểu `connectedDevice`), máy chủ TLS trên 47800–47809 kèm `/v1/pair`, mDNS với gợi ý theo giờ, cập nhật capability, định tuyến envelope, dòng `HLBENCH/1` ở bản debug |
 | `feature/pairing` | Ghép nối bằng mã QR (CameraX + ZXing core) hoặc PIN (Argon2id), danh sách thiết bị và Mã an toàn, hủy ghép nối |
 | `feature/clipboard` | Đồng bộ bảng nhớ tạm: nhận biết thao tác sao chép qua Trợ năng, `ClipboardReadActivity`, nút Gửi bảng nhớ tạm, ô Cài đặt nhanh và mục Chia sẻ, ghi và chuyển tiếp, ảnh gửi theo khối, tự xóa an toàn |
+| `feature/sms` | Cầu nối SMS: `ContentObserver` trên SMS provider (không cần `RECEIVE_SMS`), `sms/new`, `sms/sync` và `sms/history` theo trang, gửi bằng `SmsManager` (chọn SIM, nhiều phần, `SendRegistry`, trạng thái chỉ tiến), `sms/read_changed`, thông báo gợi ý cấp quyền, sự kiện SMS của `HLBENCH/1` |
+| `feature/relay` | Điện thoại trên relay: chỉ nối `/v1/relay` khi có client có thể đang chờ ở đó (tự rời sau 5 phút rảnh, `RECONNECT_BACKOFF`), đăng ký thiết bị, cặp và push token, thu hồi từ xa, ghép nối qua rendezvous, push cảnh báo cho iPhone và iPad niêm phong bằng `K_push` kèm hàng đợi thử lại `push_outbox`, và xóa thiết bị theo SET-02 |
 | `config/` | ktlint, detekt |
+
+## Thiết lập khi build
+
+Không có gì bí mật trong git; mọi thiết lập là Gradle property (`~/.gradle/gradle.properties` hoặc `-P`) hoặc biến môi trường, và thiếu chúng vẫn build được (CI không đặt gì):
+
+| Gradle property | Biến môi trường | Dùng cho |
+|-----------------|-----------------|----------|
+| `handlive.relayHost` | `HANDLIVE_RELAY_HOST` | Máy chủ relay (CONN-03); để trống = bản build không có relay |
+| `handlive.relayExtraPins` | `HANDLIVE_RELAY_EXTRA_PINS` | Thêm ghim chứng chỉ `sha256/<base64>`, cách nhau bằng dấu phẩy, bên cạnh ISRG Root X1 và X2 trong mã |
+| `handlive.fcm.applicationId`, `.apiKey`, `.projectId`, `.senderId` | `HANDLIVE_FCM_APPLICATION_ID`, `_API_KEY`, `_PROJECT_ID`, `_SENDER_ID` | Chỉ flavor `gms`: tùy chọn Firebase để đánh thức qua FCM (không dùng `google-services.json`); để trống = không có push |
 
 ## Lệnh
 
 ```sh
-./gradlew check            # test JVM + Android Lint + ktlint + detekt (JDK 21, platforms;android-37.0)
+./gradlew check            # test JVM (foss) + Android Lint + ktlint + detekt (JDK 21, platforms;android-37.0)
+./gradlew assembleFossDebug assembleGmsDebug   # flavor mặc định và flavor có FCM
 ./gradlew :core:transport:connectedDebugAndroidTest   # smoke test instrumented, cần máy thật
 HL_WRITE_ROUNDTRIP=1 ./gradlew :core:crypto:test   # ghi lại ../shared/test-vectors/envelope-roundtrip.json
 adb logcat -s HLBENCH      # bản debug: dòng đo hiệu năng cho ../shared/tools/bench
