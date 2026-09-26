@@ -20,6 +20,9 @@ import app.handlive.android.ui.pairing.PinEntryScreen
 import app.handlive.android.ui.pairing.ScannerFrame
 import app.handlive.android.ui.settings.AutoClearScreen
 import app.handlive.android.ui.settings.ConsentScreen
+import app.handlive.android.ui.settings.DataAction
+import app.handlive.android.ui.settings.DataActionDialogs
+import app.handlive.android.ui.settings.DataStep
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
 import app.handlive.android.ui.settings.PermissionsScreen
@@ -57,6 +60,11 @@ object ScreenCatalog {
             "settings relay certificate" to {
                 SettingsScreen(UiSamples.relayPinMismatch, StatusBanners(), UiSamples.NoActions, "English")
             },
+            "remove from server sheet" to {
+                DataActionDialogs(DataStep.Confirm(DataAction.REMOVE_FROM_SERVER), {}, {}, {})
+            },
+            "delete all sheet" to { DataActionDialogs(DataStep.Confirm(DataAction.DELETE_ALL), {}, {}, {}) },
+            "delete offline alert" to { DataActionDialogs(DataStep.DeleteOffline, {}, {}, {}) },
             "auto-clear" to { AutoClearScreen(60, {}, {}) },
             "language" to { LanguageScreen(AppLanguage.Vietnamese, {}, {}) },
             "permissions" to {
