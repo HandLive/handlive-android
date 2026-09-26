@@ -3,6 +3,7 @@ package app.handlive.android.core.transport.server
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.transport.TransportConstants
+import app.handlive.android.core.transport.WsCloseCode
 import app.handlive.android.core.transport.handshake.PairRegistry
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.tls.TlsIdentity
@@ -15,6 +16,7 @@ import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocketRaw
+import kotlinx.coroutines.CancellationException
 import java.net.BindException
 import kotlin.time.Duration
 
@@ -92,6 +94,26 @@ class ControlServer(
         peerDeviceId: String,
     ) = handler.handle(link.socket, "$RELAY_ADDRESS_PREFIX$peerDeviceId", SessionTransport.RELAY)
 
+    /**
+     * `relay.enabled` turned off (SET-02 API 1 step 6): each session through the relay gets the current capability,
+     * then `session/bye {reason: shutdown}` and close 1000; LAN sessions stay. A session that fails on the way is
+     * closed anyway.
+     */
+    suspend fun closeRelayedSessions() {
+        sessions.all().filter { it.transport == SessionTransport.RELAY }.forEach { session ->
+            try {
+                session.sendCapabilityUpdate()
+                session.bye(BYE_SHUTDOWN)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") _: Exception,
+            ) {
+                session.close(WsCloseCode.NORMAL, BYE_SHUTDOWN)
+            }
+        }
+    }
+
     private fun create(port: Int) =
         embeddedServer(
             Netty,
@@ -130,6 +152,7 @@ class ControlServer(
     private companion object {
         /** Admission limits count relay peers by `device_id`, as LAN clients by IP address. */
         const val RELAY_ADDRESS_PREFIX = "relay:"
+        const val BYE_SHUTDOWN = "shutdown"
         const val TLS_1_3 = "TLSv1.3"
         const val STOP_GRACE_MILLIS = 500L
         const val STOP_TIMEOUT_MILLIS = 2_000L

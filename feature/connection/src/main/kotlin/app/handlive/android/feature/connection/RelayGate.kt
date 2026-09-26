@@ -24,20 +24,9 @@ class RelayGate internal constructor(
      * `session/bye {shutdown}`; LAN sessions stay.
      */
     suspend fun closeSessions() {
-        server()
-            ?.sessions
-            ?.all()
-            ?.filter { it.transport == SessionTransport.RELAY }
-            ?.forEach { session ->
-                runCatching { session.sendCapabilityUpdate() }
-                runCatching { session.bye(BYE_SHUTDOWN) }
-            }
+        server()?.closeRelayedSessions()
     }
 
     /** The number of sessions that currently run through the relay. */
     fun sessionCount(): Int = server()?.sessions?.all()?.count { it.transport == SessionTransport.RELAY } ?: 0
-
-    private companion object {
-        const val BYE_SHUTDOWN = "shutdown"
-    }
 }
