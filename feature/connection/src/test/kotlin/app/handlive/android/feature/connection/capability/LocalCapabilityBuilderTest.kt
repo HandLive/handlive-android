@@ -1,6 +1,7 @@
 package app.handlive.android.feature.connection.capability
 
 import app.handlive.android.core.data.settings.HandLiveSettings
+import app.handlive.android.core.protocol.capability.SimInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -35,12 +36,54 @@ class LocalCapabilityBuilderTest {
     }
 
     @Test
-    fun featuresPhaseOneDoesNotImplementAreAbsent() {
+    fun featuresThePhoneDoesNotImplementYetAreAbsent() {
         val features = LocalCapabilityBuilder.build(HandLiveSettings(), environment).features
-        assertNull(features.sms)
         assertNull(features.call)
         assertNull(features.callAudio)
         assertNull(features.camera)
+    }
+
+    @Test
+    fun smsFollowsTheSettingTelephonyPermissionsAndSims() {
+        val sims = listOf(SimInfo(1, 0, "SIM 1"), SimInfo(2, 1, "Viettel"))
+        val phone = environment.copy(telephony = true, sims = sims, defaultSmsSubId = 1)
+        val sms = LocalCapabilityBuilder.build(HandLiveSettings(), phone).features.sms!!
+        assertTrue(sms.enabled)
+        assertEquals(true, sms.canSend)
+        assertEquals(sims, sms.sims)
+        assertEquals(1, sms.defaultSubId)
+
+        val noSend = phone.copy(missingPermissions = setOf("SEND_SMS"), defaultSmsSubId = null)
+        val limited = LocalCapabilityBuilder.build(HandLiveSettings(), noSend).features.sms!!
+        assertEquals(false, limited.canSend)
+        assertNull(limited.defaultSubId)
+
+        val off = LocalCapabilityBuilder.build(HandLiveSettings(smsEnabled = false), phone).features.sms!!
+        assertFalse(off.enabled)
+        val tablet = LocalCapabilityBuilder.build(HandLiveSettings(), environment).features.sms!!
+        assertFalse("no FEATURE_TELEPHONY (SET-01 step 8)", tablet.enabled)
+    }
+
+    @Test
+    fun missingSmsPermissionsCountOnlyWhileSmsIsOn() {
+        val missing = setOf("READ_PHONE_STATE", "READ_CONTACTS", "READ_SMS", "SEND_SMS")
+        val phone = environment.copy(telephony = true, notificationsMissing = true, missingPermissions = missing)
+        assertEquals(
+            listOf("POST_NOTIFICATIONS", "READ_SMS", "SEND_SMS", "READ_CONTACTS", "READ_PHONE_STATE"),
+            LocalCapabilityBuilder.build(HandLiveSettings(), phone).permissionsMissing,
+        )
+        assertEquals(
+            listOf("POST_NOTIFICATIONS"),
+            LocalCapabilityBuilder.build(HandLiveSettings(smsEnabled = false), phone).permissionsMissing,
+        )
+        assertEquals(
+            listOf("READ_CONTACTS"),
+            LocalCapabilityBuilder
+                .build(
+                    HandLiveSettings(),
+                    phone.copy(notificationsMissing = false, missingPermissions = setOf("READ_CONTACTS")),
+                ).permissionsMissing,
+        )
     }
 
     @Test
