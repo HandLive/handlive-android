@@ -37,6 +37,9 @@ class RelayAuth(
     private var token: String? = null
     private var expiresAt = 0L
 
+    /** This phone's `device_id`, the `device_a` of the pairs it registers (PAIR-01 API 8). */
+    val deviceId: String get() = identity.deviceId
+
     /** The device was registered by this process (CONN-03 step 3: once, then only after E2). */
     @Volatile
     var registered = false

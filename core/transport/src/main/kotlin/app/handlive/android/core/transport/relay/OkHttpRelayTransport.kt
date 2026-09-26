@@ -101,3 +101,16 @@ object OkHttpRelayTransport {
     private val JSON = "application/json; charset=utf-8".toMediaType()
     private const val EMPTY = ""
 }
+
+/** The relay REST client and the `/v1/relay` socket factory on one pinned client (CONN-03, 0.4.3). */
+class RelayTransport(
+    val http: RelayHttp,
+    val links: RelayLinkFactory,
+) {
+    companion object {
+        fun create(config: RelayConfig): RelayTransport {
+            val client = OkHttpRelayTransport.client(config)
+            return RelayTransport(OkHttpRelayTransport.http(client, config), OkHttpRelayLinkFactory(client, config))
+        }
+    }
+}

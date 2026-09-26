@@ -30,7 +30,10 @@ class RelayRendezvous(
     override suspend fun close(
         code: Short,
         message: String,
-    ) {
+    ) = end()
+
+    /** The window closed or the link dropped: the exchange reading this rendezvous sees it end. */
+    fun end() {
         incoming.close()
     }
 
