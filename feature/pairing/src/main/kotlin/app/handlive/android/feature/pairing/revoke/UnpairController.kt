@@ -20,10 +20,23 @@ import kotlinx.coroutines.flow.asStateFlow
 /** PAIR-03 field 4: both devices cleaned up, or the other one will when it reconnects. */
 enum class UnpairResult { DONE, DONE_PENDING_REMOTE }
 
-/** A client unpaired this phone (PAIR-03 field 5): "<name> unpaired this device". */
+/**
+ * A pair ended from the other side: "<name> unpaired this device" (PAIR-03 field 5), or, when the relay reported it
+ * revoked ([elsewhere], PAIR-02 E3), "<name> was unpaired from another device".
+ */
 data class UnpairedByPeer(
     val peerName: String,
+    val elsewhere: Boolean = false,
 )
+
+/** Revokes a pair on the relay (PAIR-03 step 8); the relay feature's. */
+fun interface RemoteRevoker {
+    /** [reason] ∈ {`user`, `lost_device`}; runs in the background, the tombstone goes when the relay confirms. */
+    fun revoke(
+        pairId: String,
+        reason: String,
+    )
+}
 
 /** Closes the `/v1/ctl` session of a pair with `session/bye {reason}` (the connection runtime). */
 fun interface SessionCloser {
@@ -34,10 +47,11 @@ fun interface SessionCloser {
 }
 
 /**
- * PAIR-03 on the phone, flow A (flow B needs the relay, Phase 2). Initiator: `pair/revoke` on the open session,
- * `ack` within 10 s, then the key is wiped and the session closes — without a session or an `ack` (E2) the phone
- * cleans up alone and the client does so when it next connects (`PAIR_UNKNOWN`). Receiver: `ack` first (the keys
- * are still needed to encrypt it), then clean up, `session/bye {reason: revoked}` and close 1000 (API 1).
+ * PAIR-03 on the phone. Initiator (flow A): `pair/revoke` on the open session, `ack` within 10 s, then the key is
+ * wiped and the session closes — without a session or an `ack` (E2, flow B) the phone cleans up alone, revokes the
+ * pair on the relay ([remote]) and the client cleans up when it next connects. Receiver: `ack` first (the keys are
+ * still needed to encrypt it), then clean up, `session/bye {reason: revoked}` and close 1000 (API 1); a revocation
+ * the relay reports ([onRevokedByRelay]) is cleaned up the same way.
  */
 class UnpairController(
     private val pairs: PairStore,
@@ -45,6 +59,10 @@ class UnpairController(
     private val closer: SessionCloser,
 ) {
     private val notice = MutableStateFlow<UnpairedByPeer?>(null)
+
+    /** PAIR-03 step 8 through the relay; `null` while the relay is not available. */
+    @Volatile
+    var remote: RemoteRevoker? = null
 
     /** The latest "<name> unpaired this device" not yet shown; the UI calls [noticeShown] after showing it. */
     val unpairedByPeer: StateFlow<UnpairedByPeer?> = notice.asStateFlow()
@@ -65,7 +83,22 @@ class UnpairController(
         // The PRK is wiped before the result is reported (PAIR-03 special requirements).
         pairs.revoke(pairId)
         closer.close(pairId, BYE_REVOKED)
+        // Step 8: the relay stops forwarding and pushing; `lost_device` when the peer could not be told (flow B).
+        remote?.revoke(pairId, if (confirmed) REASON_USER else REASON_LOST_DEVICE)
         return if (confirmed) UnpairResult.DONE else UnpairResult.DONE_PENDING_REMOTE
+    }
+
+    /**
+     * The relay says the pair is revoked: `pair_revoked` (PAIR-03 API 4, [elsewhere] false) or a revoked pair in
+     * `GET /v1/pairs` (PAIR-02 E3, [elsewhere] true). Cleaned up as a receiver; repeats are ignored.
+     */
+    suspend fun onRevokedByRelay(
+        pairId: String,
+        elsewhere: Boolean,
+    ) {
+        val device = pairs.find(pairId) ?: return
+        if (pairs.revoke(pairId)) notice.value = UnpairedByPeer(device.peerName, elsewhere)
+        closer.close(pairId, BYE_REVOKED)
     }
 
     /** `pair/revoke` from the client (API 1, receiver side). */
@@ -119,5 +152,7 @@ class UnpairController(
 
     private companion object {
         const val BYE_REVOKED = "revoked"
+        const val REASON_USER = "user"
+        const val REASON_LOST_DEVICE = "lost_device"
     }
 }

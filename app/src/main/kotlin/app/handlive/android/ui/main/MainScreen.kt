@@ -93,12 +93,21 @@ fun MainScreen(
     }
 }
 
-/** PAIR-03 field 5 on this phone: "<name> unpaired this device", shown once. */
+/**
+ * PAIR-03 field 5 on this phone: "<name> unpaired this device", or PAIR-02 E3 "<name> was unpaired from another
+ * device" when the relay reported the revocation; shown once.
+ */
 @Composable
 private fun UnpairedByPeerNotice(main: MainContext) {
     val unpair = main.dependencies.pairing.unpair
     val notice by unpair.unpairedByPeer.collectAsStateWithLifecycle()
-    val text = notice?.let { stringResource(R.string.pairing_unpaired_by_peer, it.peerName) }
+    val text =
+        notice?.let {
+            stringResource(
+                if (it.elsewhere) R.string.pairing_revoked_elsewhere else R.string.pairing_unpaired_by_peer,
+                it.peerName,
+            )
+        }
     LaunchedEffect(text) {
         if (text != null) {
             main.feedback.show(HLFeedback(text, HLSymbol.Info))

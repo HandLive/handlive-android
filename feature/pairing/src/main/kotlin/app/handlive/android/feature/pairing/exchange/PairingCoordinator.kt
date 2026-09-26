@@ -2,6 +2,7 @@ package app.handlive.android.feature.pairing.exchange
 
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.protocol.ErrorCode
+import app.handlive.android.core.protocol.encoding.Base64Codecs
 import app.handlive.android.core.transport.server.PairingEndpoint
 import app.handlive.android.core.transport.server.TextMessageSocket
 import app.handlive.android.feature.connection.PairingAdvert
@@ -46,6 +47,16 @@ sealed interface PairingState {
     ) : PairingState
 }
 
+/** Joins and leaves the relay rendezvous of a QR code with `rv` (PAIR-01 step 6, API 7); the relay feature's. */
+interface RendezvousConnector {
+    fun join(
+        rvId: String,
+        endpoint: PairingEndpoint,
+    )
+
+    fun leave(rvId: String)
+}
+
 /**
  * Drives PAIR-01 on the phone: validates the scanned code (E1, E6), opens a 120 s window on confirmation (step 6,
  * TXT `pr`) or for a PIN (A4, TXT `pm = 1`), serves `/v1/pair` through [PairingExchange], and closes the window on
@@ -67,6 +78,15 @@ class PairingCoordinator(
     @Volatile
     private var window: PairingWindow? = null
     private var expiry: Job? = null
+    private var rendezvousId: String? = null
+
+    /** The relay rendezvous, when the relay is available (Phase 2); without it a code with `rv` pairs on the LAN. */
+    @Volatile
+    var rendezvous: RendezvousConnector? = null
+
+    /** A pair was stored (step 11): the relay feature registers it (`POST /v1/pairs`, PAIR-01 API 8). */
+    @Volatile
+    var onPaired: (pairId: String) -> Unit = {}
 
     val state: StateFlow<PairingState> = stateFlow.asStateFlow()
 
@@ -88,6 +108,12 @@ class PairingCoordinator(
             PairingWindow.Qr(invite, clock() + PairingWindow.DURATION_MILLIS),
             PairingAdvert(invite.pairingRequestHint),
         )
+        // Step 6: with `rv`, the phone also waits for the client in the relay rendezvous; the LAN wins if both work.
+        invite.rendezvous?.let { rv ->
+            val id = Base64Codecs.encodeB64u(rv)
+            rendezvousId = id
+            rendezvous?.join(id, this)
+        }
         stateFlow.value = PairingState.Waiting(pinMode = false)
     }
 
@@ -138,6 +164,7 @@ class PairingCoordinator(
             when {
                 outcome is PairingOutcome.Paired -> {
                     closeWindow()
+                    onPaired(outcome.pairId)
                     PairingState.Paired(outcome.peerName, outcome.safetyCode)
                 }
 
@@ -181,6 +208,8 @@ class PairingCoordinator(
         expiry = null
         window = null
         scanned = null
+        rendezvousId?.let { rendezvous?.leave(it) }
+        rendezvousId = null
         advertise(PairingAdvert.NONE)
     }
 }
