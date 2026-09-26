@@ -41,7 +41,10 @@ class RelayConnector(
         scope.launch { demandNow() }
     }
 
-    /** The network changed: a waiting reconnect goes now (CONN-02 backoff rule). */
+    /**
+     * The network changed: a waiting reconnect goes now (CONN-02 backoff rule, CONN-03 step 2) — while a demand is
+     * recent, or a relayed session or a rendezvous is open.
+     */
     fun networkChanged() {
         scope.launch {
             if (stateFlow.value == RelayLinkState.BACKOFF) {
@@ -49,7 +52,7 @@ class RelayConnector(
                 runner = null
                 attempt = 0
             }
-            if (demandUntil > clock()) ensureRunning()
+            if (wanted()) ensureRunning()
         }
     }
 
