@@ -22,6 +22,15 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all { test ->
+                // The emitted sms messages are checked against shared/schemas (sms-*.schema.json).
+                val sharedDir = rootProject.layout.projectDirectory.dir("../shared")
+                test.inputs
+                    .dir(sharedDir.dir("schemas"))
+                    .withPropertyName("sharedSchemas")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+                test.systemProperty("hl.shared.dir", sharedDir.asFile.absolutePath)
+            }
         }
     }
 }
@@ -42,4 +51,6 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.room.runtime)
+    testImplementation(libs.json.schema.validator)
+    testImplementation(testFixtures(project(":core:protocol")))
 }
