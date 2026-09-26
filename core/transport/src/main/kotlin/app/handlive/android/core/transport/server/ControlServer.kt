@@ -14,6 +14,7 @@ import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocketRaw
+import io.ktor.websocket.WebSocketSession
 import java.net.BindException
 import kotlin.time.Duration
 
@@ -81,6 +82,16 @@ class ControlServer(
         server = null
     }
 
+    /**
+     * Runs one `/v1/ctl` session with [peerDeviceId] over the relay (CONN-03 step 9): [socket] carries the envelopes
+     * the relay delivers from that peer and wraps what this phone answers. The handshake, admission limits, rekey and
+     * idle close are those of the LAN; a new session of the pair, on either path, replaces the old one (4409).
+     */
+    suspend fun serveRelayPeer(
+        socket: WebSocketSession,
+        peerDeviceId: String,
+    ) = handler.handle(socket, "$RELAY_ADDRESS_PREFIX$peerDeviceId", SessionTransport.RELAY)
+
     private fun create(port: Int) =
         embeddedServer(
             Netty,
@@ -117,6 +128,8 @@ class ControlServer(
         }
 
     private companion object {
+        /** Admission limits count relay peers by `device_id`, as LAN clients by IP address. */
+        const val RELAY_ADDRESS_PREFIX = "relay:"
         const val TLS_1_3 = "TLSv1.3"
         const val STOP_GRACE_MILLIS = 500L
         const val STOP_TIMEOUT_MILLIS = 2_000L

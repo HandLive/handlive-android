@@ -30,6 +30,15 @@ class InboundEnvelope(
     val plaintext: ByteArray,
 )
 
+/** How a `/v1/ctl` session reaches the client (0.11 channel, PAIR-02 field 5). */
+enum class SessionTransport {
+    /** TLS WebSocket on the LAN (CONN-01). */
+    LAN,
+
+    /** Envelopes wrapped `{to, env}` / `{from, env}` through `/v1/relay` (CONN-03). */
+    RELAY,
+}
+
 /**
  * Một phiên `/v1/ctl` với một client đã ghép nối. Mọi envelope mã hóa bằng khóa theo chiều gửi; `session` và
  * `capability` xử lý trong tầng này, các `type` khác chuyển qua [inbound]. Rekey tự khởi tạo khi đạt `REKEY_AFTER`.
@@ -40,6 +49,8 @@ class ControlSession internal constructor(
     private val socket: WebSocketSession,
     keys: SessionKeys,
     private val config: ControlServerConfig,
+    /** Over the LAN or through the relay: the same handshake, keys and envelopes either way (CONN-03 step 9). */
+    val transport: SessionTransport = SessionTransport.LAN,
 ) {
     internal val channel: EncryptedEnvelopeChannel =
         SessionCipher(keys, PeerRole.SERVER, config.options.clock, config.options.rekeyAfterEnvelopes).let { cipher ->

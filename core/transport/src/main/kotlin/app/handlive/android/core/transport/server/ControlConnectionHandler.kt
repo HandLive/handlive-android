@@ -33,6 +33,7 @@ internal class ControlConnectionHandler(
     suspend fun handle(
         socket: WebSocketSession,
         remoteAddress: String,
+        transport: SessionTransport = SessionTransport.LAN,
     ) {
         val ticket = admission.admit(remoteAddress)
         if (ticket == null) {
@@ -42,7 +43,9 @@ internal class ControlConnectionHandler(
         val frames = InboundFrames(socket, Envelope.MAX_BYTES, clock)
         val result =
             try {
-                withTimeoutOrNull(config.options.handshakeTimeout) { establish(socket, frames, remoteAddress) }
+                withTimeoutOrNull(
+                    config.options.handshakeTimeout,
+                ) { establish(socket, frames, remoteAddress, transport) }
             } finally {
                 ticket.release()
             }
@@ -114,6 +117,7 @@ internal class ControlConnectionHandler(
         socket: WebSocketSession,
         frames: InboundFrames,
         remoteAddress: String,
+        transport: SessionTransport,
     ): Result {
         val hello = frames.receive()
         if (hello !is InboundMessage.Text) return Result.Closed(hello.handshakeCloseReason())
@@ -127,7 +131,14 @@ internal class ControlConnectionHandler(
             is HandshakeOutcome.Accepted -> {
                 socket.send(Frame.Text(EnvelopeCodec.encode(outcome.welcome)))
                 val session =
-                    ControlSession(outcome.pair.pairId, outcome.pair.peerDeviceId, socket, outcome.keys, config)
+                    ControlSession(
+                        outcome.pair.pairId,
+                        outcome.pair.peerDeviceId,
+                        socket,
+                        outcome.keys,
+                        config,
+                        transport,
+                    )
                 session.sendCapabilityHello()
                 confirmKeys(frames, session)
             }
