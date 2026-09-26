@@ -115,7 +115,28 @@ class RelayConnectorTest {
             connector.demand()
             advanceTimeBy(MINUTE)
             assertEquals(2, links.opened.size)
+            assertEquals(1, owner.pinMismatch)
             assertEquals(RelayLinkState.OFF, connector.state.value)
+        }
+
+    @Test
+    fun aCertificateOutsideThePinsOnTheRestCallsStopsBeforeTheLink() =
+        runTest {
+            val http = FakeRelayHttp { currentTime }
+            val connector = connector(http)
+            http.pinMismatch = true
+            connector.demand()
+            advanceTimeBy(MINUTE)
+            assertEquals(1, owner.pinMismatch)
+            assertTrue(links.opened.isEmpty())
+            assertEquals(RelayLinkState.OFF, connector.state.value)
+
+            // A new demand tries once more: the relay may have fixed its certificate.
+            http.pinMismatch = false
+            connector.demand()
+            runCurrent()
+            assertEquals(1, links.opened.size)
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
         }
 
     @Test

@@ -18,6 +18,7 @@ import app.handlive.android.core.transport.relay.RelayApi
 import app.handlive.android.core.transport.relay.RelayAuth
 import app.handlive.android.core.transport.relay.RelayHttp
 import app.handlive.android.core.transport.relay.RelayIdentity
+import app.handlive.android.core.transport.relay.RelayPinMismatchException
 import app.handlive.android.core.transport.relay.RelayResponse
 import app.handlive.android.core.transport.relay.RelayUnreachableException
 import java.util.UUID
@@ -64,6 +65,9 @@ class FakeRelayHttp(
     /** No response at all (CONN-03 E1). */
     var unreachable = false
 
+    /** The relay's certificate matches none of the pins (CONN-03 E7). */
+    var pinMismatch = false
+
     fun enqueue(
         method: String,
         path: String,
@@ -88,6 +92,7 @@ class FakeRelayHttp(
         body: String?,
         bearer: String?,
     ): RelayResponse {
+        if (pinMismatch) throw RelayPinMismatchException()
         if (unreachable) throw RelayUnreachableException("offline")
         calls += Call(method, path, body, bearer)
         scripted["$method $path"]?.removeFirstOrNull()?.let { return it }

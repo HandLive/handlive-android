@@ -74,6 +74,7 @@ class FakeOwner : RelayOwner {
     val revokedPairs = mutableListOf<Pair<String, String>>()
     var notPaired = 0
     var deviceRevoked = 0
+    var pinMismatch = 0
     var connected = 0
 
     override fun allowed(): Boolean = allowed
@@ -99,6 +100,10 @@ class FakeOwner : RelayOwner {
 
     override fun deviceRevoked() {
         deviceRevoked++
+    }
+
+    override fun pinMismatch() {
+        pinMismatch++
     }
 
     override fun connected() {
