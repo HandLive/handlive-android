@@ -3,6 +3,23 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+/**
+ * Build-time settings that are not in git: a Gradle property (`~/.gradle/gradle.properties`, `-P`) or an environment
+ * variable; empty when neither is set, and the build still succeeds (CI builds without secrets).
+ */
+fun buildSetting(
+    property: String,
+    environment: String,
+): String =
+    providers
+        .gradleProperty(property)
+        .orElse(providers.environmentVariable(environment))
+        .orElse("")
+        .get()
+
+/** A Kotlin string literal for `buildConfigField`. */
+fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 android {
     namespace = "app.handlive.android"
     compileSdk = 37
@@ -13,6 +30,49 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.0.1"
+
+        // CONN-03: `{RELAY_HOST}` is configured at build time (0.4.3); without it the build has no relay. The pins are
+        // ISRG Root X1 and X2 (in the code) plus the project's backup key, `sha256/<base64>` values separated by commas.
+        buildConfigField("String", "RELAY_HOST", quoted(buildSetting("handlive.relayHost", "HANDLIVE_RELAY_HOST")))
+        buildConfigField(
+            "String",
+            "RELAY_EXTRA_PINS",
+            quoted(buildSetting("handlive.relayExtraPins", "HANDLIVE_RELAY_EXTRA_PINS")),
+        )
+    }
+
+    // Plan decision I8: the default flavor ships no Play Services and no Firebase (F-Droid and direct APK); `gms` adds
+    // FCM wake-ups (CONN-04). Firebase options come from Gradle properties or the environment, never from a
+    // google-services.json in git; without them the gms build runs without push.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("foss") {
+            dimension = "distribution"
+            isDefault = true
+        }
+        create("gms") {
+            dimension = "distribution"
+            buildConfigField(
+                "String",
+                "FCM_APPLICATION_ID",
+                quoted(buildSetting("handlive.fcm.applicationId", "HANDLIVE_FCM_APPLICATION_ID")),
+            )
+            buildConfigField(
+                "String",
+                "FCM_API_KEY",
+                quoted(buildSetting("handlive.fcm.apiKey", "HANDLIVE_FCM_API_KEY")),
+            )
+            buildConfigField(
+                "String",
+                "FCM_PROJECT_ID",
+                quoted(buildSetting("handlive.fcm.projectId", "HANDLIVE_FCM_PROJECT_ID")),
+            )
+            buildConfigField(
+                "String",
+                "FCM_SENDER_ID",
+                quoted(buildSetting("handlive.fcm.senderId", "HANDLIVE_FCM_SENDER_ID")),
+            )
+        }
     }
 
     buildTypes {
@@ -52,6 +112,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -81,6 +142,7 @@ dependencies {
     implementation(project(":feature:pairing"))
     implementation(project(":feature:clipboard"))
     implementation(project(":feature:sms"))
+    implementation(project(":feature:relay"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
@@ -91,6 +153,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+    "gmsImplementation"(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
@@ -98,4 +161,11 @@ dependencies {
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
+}
+
+// The UI tests are the same for both flavors; run them once, on the default flavor.
+androidComponents {
+    beforeVariants(selector().withFlavor("distribution" to "gms")) { variant ->
+        variant.hostTests.values.forEach { it.enable = false }
+    }
 }
