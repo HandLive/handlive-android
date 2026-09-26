@@ -11,6 +11,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- SET-01 part B: requested with the SMS feature (and calls in Phase 3); the capability lists the active SIMs
+         (`features.sms.sims`) only while it is granted. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <application>
         <service
             android:name=".HandLiveService"

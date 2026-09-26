@@ -16,6 +16,7 @@ import app.handlive.android.core.transport.tls.TlsIdentityProvider
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
+import app.handlive.android.feature.connection.capability.SimChangeWatcher
 import app.handlive.android.feature.connection.discovery.DiscoveryAdvertising
 import app.handlive.android.feature.connection.session.PeerSession
 import app.handlive.android.feature.connection.session.SessionRouter
@@ -61,6 +62,8 @@ class ConnectionRuntime private constructor(
     private val environmentVersion = MutableStateFlow(0)
     private val pairingAdvert = MutableStateFlow(PairingAdvert.NONE)
     private val capability = CapabilityPublisher(LocalEnvironmentReader(appContext))
+    private val localCapabilityFlow = MutableStateFlow<CapabilityData?>(null)
+    private val simWatcher = SimChangeWatcher(appContext, ::refreshEnvironment)
     private val discovery = DiscoveryAdvertising(appContext, data.pairs, clock)
     private var scope: CoroutineScope? = null
     private var server: ControlServer? = null
@@ -77,6 +80,12 @@ class ConnectionRuntime private constructor(
             .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<ServiceState> = stateFlow.asStateFlow()
+
+    /**
+     * This phone's current capability (0.7.2) while the service runs, `null` otherwise: feature modules start and
+     * stop their work from it (SMS registers its observer only while `features.sms` is on with `READ_SMS`).
+     */
+    val localCapability: StateFlow<CapabilityData?> = localCapabilityFlow.asStateFlow()
 
     private val endedFlow = MutableSharedFlow<SessionEnded>(extraBufferCapacity = ENDED_BUFFER)
 
@@ -181,11 +190,15 @@ class ConnectionRuntime private constructor(
             )
         val port = controlServer.start()
         server = controlServer
+        capabilityState.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
         capability.publishUpdates(runtimeScope, capabilityState) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
+        simWatcher.start()
     }
 
     private suspend fun stopLocked() {
+        simWatcher.stop()
+        localCapabilityFlow.value = null
         server?.sessions?.all()?.forEach { runCatching { it.bye(BYE_SHUTDOWN) } }
         server?.stop()
         server = null
