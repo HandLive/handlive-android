@@ -59,6 +59,7 @@ class RelayFeature private constructor(
     private val worker = Dispatchers.IO.limitedParallelism(1)
     private val scope = CoroutineScope(SupervisorJob() + worker)
     private val deviceRevoked = MutableStateFlow(false)
+    private val certificateRejected = MutableStateFlow(false)
     private val owner = Owner()
 
     private val settings: StateFlow<HandLiveSettings> =
@@ -94,6 +95,9 @@ class RelayFeature private constructor(
         MutableStateFlow(RelayStatus(available = config.available)).also { status ->
             if (config.available) {
                 deviceRevoked.onEach { revoked -> status.update { it.copy(deviceRevoked = revoked) } }.launchIn(scope)
+                certificateRejected
+                    .onEach { rejected -> status.update { it.copy(pinMismatch = rejected) } }
+                    .launchIn(scope)
                 scope.launch { connector.state.collect { link -> status.update { it.copy(link = link) } } }
             }
         }
@@ -169,6 +173,7 @@ class RelayFeature private constructor(
     private fun onRelaySwitched(enabled: Boolean) {
         if (enabled) {
             deviceRevoked.value = false
+            certificateRejected.value = false
             onServiceRunning()
         } else {
             scope.launch {
@@ -236,7 +241,12 @@ class RelayFeature private constructor(
             connector.stop()
         }
 
+        override fun pinMismatch() {
+            certificateRejected.value = true
+        }
+
         override fun connected() {
+            certificateRejected.value = false
             onWorker {
                 registrar.registerEverything()
                 attempt { registrar.checkPairs() }

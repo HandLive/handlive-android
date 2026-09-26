@@ -9,6 +9,7 @@ import app.handlive.android.core.transport.relay.RelayLink
 import app.handlive.android.core.transport.relay.RelayLinkEvent
 import app.handlive.android.core.transport.relay.RelayLinkFactory
 import app.handlive.android.core.transport.relay.RelayPeerMux
+import app.handlive.android.core.transport.relay.RelayPinMismatchException
 import app.handlive.android.core.transport.relay.RelayRequestException
 import app.handlive.android.core.transport.relay.RelayUnreachableException
 import kotlinx.coroutines.CancellationException
@@ -27,7 +28,10 @@ internal enum class RelayOutcome {
     /** Nothing used it for `RELAY_IDLE_DISCONNECT`: no reconnect until a new demand. */
     IDLE,
 
-    /** Refused for good — the device revoked (E3) or a certificate outside the pins (E7): no reconnect. */
+    /**
+     * Refused — the device revoked (E3) or a certificate outside the pins (E7): no reconnect; after E7 a new demand
+     * tries once more (the relay may have fixed its certificate).
+     */
     STOP,
 }
 
@@ -91,6 +95,10 @@ internal class RelayConnection(
             } else {
                 RelayOutcome.FAILED
             }
+        } catch (_: RelayPinMismatchException) {
+            // CONN-03 E7 on the REST calls before the link (registration, token).
+            owner.pinMismatch()
+            RelayOutcome.STOP
         } catch (_: RelayUnreachableException) {
             RelayOutcome.FAILED
         }
@@ -122,6 +130,7 @@ internal class RelayConnection(
 
             // CONN-03 E7: never connect to a relay whose certificate matches none of the pins.
             closed.pinMismatch -> {
+                owner.pinMismatch()
                 RelayOutcome.STOP
             }
 

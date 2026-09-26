@@ -28,6 +28,9 @@ interface RelayOwner {
     /** 410 `DEVICE_REVOKED` (CONN-03 E3): the relay refuses this device. */
     fun deviceRevoked()
 
+    /** CONN-03 E7: the relay's certificate matches none of the pins; the phone does not connect. */
+    fun pinMismatch()
+
     /** The link is open: registrations and checks may run now. */
     fun connected()
 }
