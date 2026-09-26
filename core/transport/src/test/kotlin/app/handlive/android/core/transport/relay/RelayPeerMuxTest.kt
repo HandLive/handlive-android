@@ -33,7 +33,7 @@ class RelayPeerMuxTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val wrapped = LinkedBlockingQueue<String>()
     private val mux =
-        RelayPeerMux(scope, { wrapped.add(it) }) { socket, peer -> fixture.server.serveRelayPeer(socket, peer) }
+        RelayPeerMux(scope, { wrapped.add(it) }) { link, peer -> fixture.server.serveRelayPeer(link, peer) }
 
     @After
     fun tearDown() {

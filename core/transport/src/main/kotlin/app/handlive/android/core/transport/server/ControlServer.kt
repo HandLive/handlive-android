@@ -4,6 +4,7 @@ import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.handshake.PairRegistry
+import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.tls.TlsIdentity
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
@@ -14,7 +15,6 @@ import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocketRaw
-import io.ktor.websocket.WebSocketSession
 import java.net.BindException
 import kotlin.time.Duration
 
@@ -83,14 +83,14 @@ class ControlServer(
     }
 
     /**
-     * Runs one `/v1/ctl` session with [peerDeviceId] over the relay (CONN-03 step 9): [socket] carries the envelopes
+     * Runs one `/v1/ctl` session with [peerDeviceId] over the relay (CONN-03 step 9): [link] carries the envelopes
      * the relay delivers from that peer and wraps what this phone answers. The handshake, admission limits, rekey and
      * idle close are those of the LAN; a new session of the pair, on either path, replaces the old one (4409).
      */
     suspend fun serveRelayPeer(
-        socket: WebSocketSession,
+        link: RelayPeerLink,
         peerDeviceId: String,
-    ) = handler.handle(socket, "$RELAY_ADDRESS_PREFIX$peerDeviceId", SessionTransport.RELAY)
+    ) = handler.handle(link.socket, "$RELAY_ADDRESS_PREFIX$peerDeviceId", SessionTransport.RELAY)
 
     private fun create(port: Int) =
         embeddedServer(

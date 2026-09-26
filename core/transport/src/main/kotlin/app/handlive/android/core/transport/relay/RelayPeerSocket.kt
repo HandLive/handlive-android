@@ -16,6 +16,16 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
 /**
+ * A peer's relayed session as the modules outside the transport pass it along: they hand it to
+ * `ControlServer.serveRelayPeer` without touching the WebSocket underneath.
+ */
+class RelayPeerLink internal constructor(
+    internal val socket: RelayPeerSocket,
+) {
+    val peerDeviceId: String get() = socket.peerDeviceId
+}
+
+/**
  * One peer's `/v1/ctl` session as the control server sees it, carried by the relay (CONN-03 step 9): envelopes the
  * relay delivers `{from: peer, env}` arrive as text frames, and every text frame the session sends leaves as
  * `{to: peer, env}` — byte for byte the envelope JSON of the LAN. There is no per-peer close on the relay: a close

@@ -5,7 +5,6 @@ import app.handlive.android.core.protocol.envelope.EnvelopeCodec
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.UnencryptedEnvelopes
 import app.handlive.android.core.protocol.session.SessionOp
-import io.ktor.websocket.WebSocketSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -19,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RelayPeerMux(
     private val scope: CoroutineScope,
     private val send: (String) -> Boolean,
-    private val serve: suspend (WebSocketSession, String) -> Unit,
+    private val serve: suspend (RelayPeerLink, String) -> Unit,
 ) {
     private val peers = ConcurrentHashMap<String, RelayPeerSocket>()
 
@@ -37,7 +36,7 @@ class RelayPeerMux(
             socket.deliver(text)
             scope.launch {
                 try {
-                    serve(socket, from)
+                    serve(RelayPeerLink(socket), from)
                 } finally {
                     socket.end()
                 }
