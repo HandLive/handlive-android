@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The SMS feature of this process (A-SMS): builds [SmsModule] with the Android pieces, registers it for
@@ -79,8 +80,16 @@ class SmsFeature private constructor(
             registry,
             clock,
         )
-    private val broadcaster = SmsBroadcaster(runtime.sessions)
-    private val observer = SmsContentObserver(appContext.contentResolver) { signals.trySend(Unit) }
+    private val trace = SmsBenchTrace()
+    private val broadcaster = SmsBroadcaster(runtime.sessions, trace)
+
+    /** Wall clock of the first `onChange` of the batch not yet processed; 0 = none. */
+    private val firstChangeAt = AtomicLong()
+    private val observer =
+        SmsContentObserver(appContext.contentResolver) {
+            firstChangeAt.compareAndSet(0, clock())
+            signals.trySend(Unit)
+        }
 
     /** Clients without a session (CONN-03, CONN-04): installed by the relay feature. */
     @Volatile
@@ -90,20 +99,22 @@ class SmsFeature private constructor(
     @Volatile
     var permissionMissing: PermissionMissingListener = PermissionMissingListener { _, _ -> }
 
+    private val services =
+        SmsServices(
+            SmsRequests(access),
+            SmsSyncEngine(provider, ::objects),
+            SmsHistoryEngine(provider, ::objects),
+            sender,
+            broadcaster,
+            trace,
+        )
+
     val module =
         SmsModule(
             worker = worker,
             reads = Dispatchers.IO,
             sessions = runtime.sessions,
-            services =
-                SmsServices(
-                    SmsRequests(access),
-                    SmsSyncEngine(provider, ::objects),
-                    SmsHistoryEngine(provider, ::objects),
-                    sender,
-                    registry,
-                    broadcaster,
-                ),
+            services = services,
             permissionMissing = { session, permission -> permissionMissing.onPermissionMissing(session, permission) },
         )
 
@@ -112,8 +123,7 @@ class SmsFeature private constructor(
             NewMessageScanner(provider, RoomObserverState(data.smsObserverState, clock), clock),
             ReadStateTracker(clock),
             ::objects,
-            registry,
-            broadcaster,
+            services,
         ) { message, reached -> offline.newMessage(message, reached) }
 
     @Volatile
@@ -141,7 +151,8 @@ class SmsFeature private constructor(
                 // SMS-02 API 3 logic 2: calls within 100 ms are coalesced and processed one round at a time.
                 delay(SmsConstants.OBSERVER_DEBOUNCE_MILLIS)
                 signals.tryReceive()
-                if (observing) safely { events.round() }
+                val changedAt = firstChangeAt.getAndSet(0)
+                if (observing) safely { events.round(changedAt) }
             }.launchIn(scope)
     }
 

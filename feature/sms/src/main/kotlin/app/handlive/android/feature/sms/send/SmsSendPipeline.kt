@@ -36,7 +36,8 @@ class SmsSendPipeline(
     private val sims: SimChoices,
     private val numbers: AddressNormalizer,
     private val radio: SmsRadio,
-    private val registry: SendRegistry,
+    /** The messages sent for clients, by `local_id` (SMS-04 step 5). */
+    val registry: SendRegistry,
     private val clock: () -> Long,
 ) {
     /** Checks and records [data] from [pairId]; the caller sends the `ack`, then calls [dispatch] when accepted. */

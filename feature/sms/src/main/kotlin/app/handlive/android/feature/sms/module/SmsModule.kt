@@ -15,6 +15,7 @@ import app.handlive.android.feature.connection.session.PeerSession
 import app.handlive.android.feature.sms.send.DeliveryReport
 import app.handlive.android.feature.sms.send.SendOutcome
 import app.handlive.android.feature.sms.send.SendRegistry
+import app.handlive.android.feature.sms.send.SentResult
 import app.handlive.android.feature.sms.send.SmsSendPipeline
 import app.handlive.android.feature.sms.sync.SmsHistoryEngine
 import app.handlive.android.feature.sms.sync.SmsSyncEngine
@@ -32,6 +33,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
 /** What [SmsModule] works with: the request checks, the two page engines, sending and its registry, the events out. */
@@ -40,9 +43,11 @@ class SmsServices(
     val sync: SmsSyncEngine,
     val history: SmsHistoryEngine,
     val sender: SmsSendPipeline,
-    val registry: SendRegistry,
     val broadcaster: SmsBroadcaster,
-)
+    val trace: SmsTrace = SmsTrace.NONE,
+) {
+    val registry: SendRegistry get() = sender.registry
+}
 
 /**
  * A-SMS (`SmsModule` of 05-sms): answers `sms/sync`, `sms/history` and `sms/send` from the clients ([handler]),
@@ -99,6 +104,8 @@ class SmsModule(
         index: Int,
         resultCode: Int,
     ) {
+        val error = SentResult.errorOf(resultCode)
+        services.trace.radioDone(localId, failed = error != null, code = error?.name)
         scope.launch { services.sender.onSent(localId, index, resultCode)?.let { status(it) } }
     }
 
@@ -140,15 +147,19 @@ class SmsModule(
         envelope: InboundEnvelope,
         data: JsonObject,
     ) {
+        val localId = (data[LOCAL_ID] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        services.trace.sendReceived(localId, session.peerDeviceId)
         when (val outcome = services.sender.accept(session.pairId, data)) {
             is SendOutcome.Refused -> {
                 replies.refuse(session, envelope.id, outcome.error)
+                services.trace.sendAckSent(localId, session.peerDeviceId, ok = false, code = outcome.error.code.name)
             }
 
             is SendOutcome.Accepted -> {
                 val entry = outcome.entry
                 val ack = SmsSendAckData(accepted = true, parts = entry.parts)
                 replies.send(session, Ack.success(envelope.id, json(SmsSendAckData.serializer(), ack)))
+                services.trace.sendAckSent(localId, session.peerDeviceId, ok = true, code = null)
                 if (outcome.duplicate) {
                     // Logic 4: a retry is not sent again; the client gets the current status once more.
                     entry.statusData?.let { services.broadcaster.status(session, it) }
@@ -177,6 +188,8 @@ class SmsModule(
     }
 
     private companion object {
+        const val LOCAL_ID = "local_id"
+
         fun <T> json(
             serializer: KSerializer<T>,
             value: T,

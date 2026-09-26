@@ -5,7 +5,6 @@ import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ReadStateTracker
 import app.handlive.android.feature.sms.provider.SmsObjects
 import app.handlive.android.feature.sms.provider.SmsType
-import app.handlive.android.feature.sms.send.SendRegistry
 
 /** Where the SMS events go for clients without a session (the relay module: CONN-03 wake-up, CONN-04 push). */
 fun interface OfflineSmsDelivery {
@@ -26,10 +25,13 @@ class SmsEvents(
     private val scanner: NewMessageScanner,
     private val readState: ReadStateTracker,
     private val objects: () -> SmsObjects,
-    private val registry: SendRegistry,
-    private val broadcaster: SmsBroadcaster,
+    private val services: SmsServices,
     private val offline: OfflineSmsDelivery,
 ) {
+    private val registry = services.registry
+    private val broadcaster = services.broadcaster
+    private val trace = services.trace
+
     /** The observer starts: the first unread snapshot emits nothing (SMS-05 step 4), then one round. */
     suspend fun start() {
         readState.reset(objects().unreadEntries)
@@ -38,7 +40,11 @@ class SmsEvents(
 
     fun stop() = readState.forget()
 
-    suspend fun round() {
+    /**
+     * [onChangeAt] = wall clock of the first `onChange` of the coalesced batch, the start of the bench's notification
+     * latency; 0 for the round at start, which no `onChange` triggered and which the bench does not time.
+     */
+    suspend fun round(onChangeAt: Long = 0) {
         val rows = scanner.scan()
         val scope = objects()
         val announced = HashMap<Long, Int>()
@@ -50,6 +56,7 @@ class SmsEvents(
             }
         for ((row, new) in news) {
             val message = new.message
+            if (onChangeAt > 0) trace.detected(message.messageKey, message.box, onChangeAt, row.date)
             val sentFor =
                 if (row.type == SmsType.SENT || row.type == SmsType.FAILED) {
                     registry.match(message.address, message.body, message.messageKey)

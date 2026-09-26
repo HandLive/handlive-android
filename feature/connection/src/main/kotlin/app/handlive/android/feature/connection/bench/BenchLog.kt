@@ -32,12 +32,14 @@ object BenchLog {
     fun event(
         event: String,
         vararg fields: Pair<String, Any>,
+    ) = event(event, fields.asList())
+
+    fun event(
+        event: String,
+        fields: List<Pair<String, Any>>,
     ) {
         if (!enabled) return
-        Log.i(
-            TAG,
-            format(System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos(), device, event, fields.toList()),
-        )
+        Log.i(TAG, format(System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos(), device, event, fields))
     }
 
     /** `HLBENCH/1 wall=<ms> mono=<ns> dev=<id8> role=android ev=<event> [key=value …]`; values lose their spaces. */

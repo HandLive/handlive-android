@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class SmsBroadcaster(
     private val sessions: StateFlow<Map<String, PeerSession>>,
+    private val trace: SmsTrace = SmsTrace.NONE,
 ) {
     /** Sessions with SMS active, by `pair_id`. */
     fun active(): Map<String, PeerSession> = sessions.value.filterValues { it.isEffective(Feature.SMS) }
@@ -36,6 +37,11 @@ class SmsBroadcaster(
             val data = if (pairId == creatorPairId && withLocalId != null) withLocalId else message
             if (send(session, PlaintextCodec.encodeOp(SmsOp.NEW, SmsNewData.serializer(), data))) {
                 reached += pairId
+                trace.newSent(
+                    message.message.messageKey,
+                    session.peerDeviceId,
+                    session.channel == PeerSession.Channel.RELAY,
+                )
             }
         }
         return reached
@@ -52,13 +58,16 @@ class SmsBroadcaster(
         status: SmsStatusData,
     ): Boolean {
         val session = active()[pairId] ?: return false
-        return send(session, PlaintextCodec.encodeOp(SmsOp.STATUS, SmsStatusData.serializer(), status))
+        return status(session, status)
     }
 
     suspend fun status(
         session: PeerSession,
         status: SmsStatusData,
-    ): Boolean = send(session, PlaintextCodec.encodeOp(SmsOp.STATUS, SmsStatusData.serializer(), status))
+    ): Boolean =
+        send(session, PlaintextCodec.encodeOp(SmsOp.STATUS, SmsStatusData.serializer(), status)).also { sent ->
+            if (sent) trace.statusSent(status.localId, session.peerDeviceId, status.status, status.errorCode)
+        }
 
     private suspend fun send(
         session: PeerSession,

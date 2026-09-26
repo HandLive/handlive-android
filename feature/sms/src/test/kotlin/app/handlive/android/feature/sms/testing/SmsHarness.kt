@@ -180,7 +180,6 @@ class SmsHarness(
             SmsSyncEngine(provider, objects),
             SmsHistoryEngine(provider, objects),
             sender,
-            registry,
             broadcaster,
         )
     val module =
@@ -192,8 +191,7 @@ class SmsHarness(
             NewMessageScanner(provider, state, wall),
             ReadStateTracker(wall),
             objects,
-            registry,
-            broadcaster,
+            services,
             OfflineSmsDelivery { message, reached -> offline += message to reached },
         )
     private val router = SessionRouter(wall).apply { register(MessageType.SMS, module.handler) }
