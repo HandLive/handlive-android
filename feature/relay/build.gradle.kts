@@ -51,6 +51,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.room.runtime)
     testImplementation(libs.json.schema.validator)
     testImplementation(testFixtures(project(":core:protocol")))
 }
