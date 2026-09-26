@@ -6,7 +6,7 @@ import app.handlive.android.core.protocol.testing.str
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** push-envelope.json `push_request`: the `POST /v1/push` body as this phone writes it, byte for byte (CONN-04 API 2). */
+/** push-envelope.json `push_request`: the `POST /v1/push` body as this phone writes it, byte for byte (CONN-04). */
 class PushRequestVectorTest {
     @Test
     fun pushRequestsRoundTripByteForByte() {

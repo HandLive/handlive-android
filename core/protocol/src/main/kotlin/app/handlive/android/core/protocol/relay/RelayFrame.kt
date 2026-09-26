@@ -21,6 +21,9 @@ class RelayFrame(
         const val VERSION: Byte = 0x01
         const val OP_FORWARD: Byte = 0x01
         const val HEADER_SIZE = 20
+        private const val VERSION_INDEX = 2
+        private const val OP_INDEX = 3
+        private const val DEVICE_ID_INDEX = 4
 
         fun header(deviceId: String): ByteArray =
             byteArrayOf(MAGIC_0, MAGIC_1, VERSION, OP_FORWARD) + UuidBytes.toBytes(deviceId)
@@ -29,9 +32,9 @@ class RelayFrame(
         fun decode(frame: ByteArray): RelayFrame {
             protocolRequire(frame.size > HEADER_SIZE, ErrorCode.BAD_REQUEST, "HR frame too short")
             protocolRequire(frame[0] == MAGIC_0 && frame[1] == MAGIC_1, ErrorCode.BAD_REQUEST, "bad HR magic")
-            protocolRequire(frame[2] == VERSION, ErrorCode.BAD_REQUEST, "unsupported HR version")
-            protocolRequire(frame[3] == OP_FORWARD, ErrorCode.BAD_REQUEST, "unknown HR op")
-            val deviceId = UuidBytes.fromBytes(frame.copyOfRange(4, HEADER_SIZE))
+            protocolRequire(frame[VERSION_INDEX] == VERSION, ErrorCode.BAD_REQUEST, "unsupported HR version")
+            protocolRequire(frame[OP_INDEX] == OP_FORWARD, ErrorCode.BAD_REQUEST, "unknown HR op")
+            val deviceId = UuidBytes.fromBytes(frame.copyOfRange(DEVICE_ID_INDEX, HEADER_SIZE))
             return RelayFrame(deviceId, frame.copyOfRange(HEADER_SIZE, frame.size))
         }
     }
