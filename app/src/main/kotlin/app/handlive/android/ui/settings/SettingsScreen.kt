@@ -32,10 +32,12 @@ fun SettingsScreen(
     actions: SettingsActions,
     languageValue: String,
     modifier: Modifier = Modifier,
+    onDataAction: (DataAction) -> Unit = {},
 ) {
     val labels = bannerLabels()
     val clipboardTitle = stringResource(R.string.settings_clipboard)
     val autoClearFooter = stringResource(R.string.settings_auto_clear_footer)
+    val dataTitle = stringResource(R.string.settings_data)
     val settings = state.settings
     Column(modifier = modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         HLScreenHeader(title = stringResource(R.string.settings_title))
@@ -49,7 +51,11 @@ fun SettingsScreen(
                         R.string.settings_internet_connection,
                         settings.relayEnabled,
                         actions::setInternet,
-                        R.string.settings_internet_connection_description,
+                        if (state.relayDeviceRevoked) {
+                            R.string.error_relay_device_revoked
+                        } else {
+                            R.string.settings_internet_connection_description
+                        },
                     )
                 }
             }
@@ -62,6 +68,7 @@ fun SettingsScreen(
                 }
                 row { Navigation(R.string.settings_language, languageValue) { actions.open(SettingsPage.LANGUAGE) } }
             }
+            dataSection(dataTitle, state.relayAvailable, onDataAction)
         }
     }
 }
@@ -165,6 +172,28 @@ fun smsPermissionAction(status: FeatureStatus): Int? =
 
 private val FeatureStatus.needsAction: Boolean
     get() = this == FeatureStatus.NEEDS_PERMISSION || this == FeatureStatus.PERMISSION_DENIED
+
+/** Fields 26–27, each behind its confirmation (field 28); "Remove Device from Server" only in a build with a relay. */
+private fun HLGroupedListScope.dataSection(
+    title: String,
+    relayAvailable: Boolean,
+    onAction: (DataAction) -> Unit,
+) {
+    section(title = title) {
+        if (relayAvailable) {
+            row {
+                HLActionRow(stringResource(R.string.settings_remove_from_server), destructive = true) {
+                    onAction(DataAction.REMOVE_FROM_SERVER)
+                }
+            }
+        }
+        row {
+            HLActionRow(stringResource(R.string.settings_delete_all_data), destructive = true) {
+                onAction(DataAction.DELETE_ALL)
+            }
+        }
+    }
+}
 
 /** Field 6 choices: "Off", "After 1 Minute", "After 5 Minutes". */
 fun autoClearLabel(seconds: Int): Int =
