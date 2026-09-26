@@ -23,6 +23,7 @@ import app.handlive.android.feature.sms.module.SmsEvents
 import app.handlive.android.feature.sms.module.SmsModule
 import app.handlive.android.feature.sms.module.SmsRequests
 import app.handlive.android.feature.sms.module.SmsServices
+import app.handlive.android.feature.sms.module.SmsTrace
 import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ObserverState
 import app.handlive.android.feature.sms.observe.ReadStateTracker
@@ -158,6 +159,7 @@ class FakeClient(
 /** The SMS module on the test scheduler with the fake provider, radio and SIMs, reached through a router. */
 class SmsHarness(
     private val scope: TestScope,
+    trace: SmsTrace = SmsTrace.NONE,
 ) {
     val wall = { BASE_TS + scope.testScheduler.currentTime }
     val provider = FakeSmsProvider()
@@ -173,7 +175,7 @@ class SmsHarness(
     private val objects = objectsOf(provider)
     val registry = SendRegistry(wall)
     val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, wall)
-    private val broadcaster = SmsBroadcaster(sessions)
+    private val broadcaster = SmsBroadcaster(sessions, trace)
     private val services =
         SmsServices(
             SmsRequests(access),
@@ -181,6 +183,7 @@ class SmsHarness(
             SmsHistoryEngine(provider, objects),
             sender,
             broadcaster,
+            trace,
         )
     val module =
         SmsModule(dispatcher, dispatcher, sessions, services) { session, permission ->
@@ -230,8 +233,8 @@ class SmsHarness(
 
     fun newLocalId(): String = ids.next()
 
-    suspend fun round() {
-        events.round()
+    suspend fun round(onChangeAt: Long = 0) {
+        events.round(onChangeAt)
         run()
     }
 
