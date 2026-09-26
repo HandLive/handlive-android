@@ -7,6 +7,7 @@ import app.handlive.android.core.crypto.keystore.AndroidKeystoreSecretStore
 import app.handlive.android.core.crypto.keystore.SecretStore
 import app.handlive.android.core.data.db.HandLiveDatabase
 import app.handlive.android.core.data.pairing.PairStore
+import app.handlive.android.core.data.pairing.RelayPairs
 import app.handlive.android.core.data.settings.SettingsStore
 
 /**
@@ -21,6 +22,9 @@ class HandLiveData private constructor(
     val settings: SettingsStore = SettingsStore.create(context)
     val secrets: SecretStore by lazy { AndroidKeystoreSecretStore.create(context) }
     val pairs: PairStore = PairStore(database.pairedDevices(), { AndroidKeystoreSecretStore.sealer(context) })
+
+    /** The same pairs as the relay sees them: registration, tombstones, push targets (Phase 2). */
+    val relayPairs: RelayPairs = RelayPairs(database.pairedDevices(), { AndroidKeystoreSecretStore.sealer(context) })
 
     /** `ik_sig`, `ik_dh` and `device_id` (SET-01 step 2); loads or creates the keys on first access. */
     val identity: DeviceIdentity by lazy { DeviceIdentityStore.loadOrCreate(secrets) }
