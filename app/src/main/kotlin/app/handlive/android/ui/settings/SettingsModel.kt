@@ -1,6 +1,7 @@
 package app.handlive.android.ui.settings
 
 import app.handlive.android.core.data.settings.HandLiveSettings
+import app.handlive.android.core.strings.R
 
 /** SET-01 field 15: the state of automatic clipboard sending. */
 enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
@@ -14,7 +15,18 @@ data class SettingsUiState(
     val relayAvailable: Boolean = false,
     /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */
     val relayDeviceRevoked: Boolean = false,
+    /** CONN-03 E7: the relay's certificate matched none of the pins; field 21 says so. */
+    val relayPinMismatch: Boolean = false,
 ) {
+    /** SET-02 field 21: the relay error of CONN-03 E3 or E7 in place of the description, else the description. */
+    val internetDescription: Int
+        get() =
+            when {
+                relayDeviceRevoked -> R.string.error_relay_device_revoked
+                relayPinMismatch -> R.string.error_relay_pin_mismatch
+                else -> R.string.settings_internet_connection_description
+            }
+
     /** SET-02 field 7 with SET-01 field 10: the SMS switch and its feature card. */
     val smsStatus: FeatureStatus get() = sms.status(settings.smsEnabled)
 

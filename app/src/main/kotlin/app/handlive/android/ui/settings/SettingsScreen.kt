@@ -51,11 +51,7 @@ fun SettingsScreen(
                         R.string.settings_internet_connection,
                         settings.relayEnabled,
                         actions::setInternet,
-                        if (state.relayDeviceRevoked) {
-                            R.string.error_relay_device_revoked
-                        } else {
-                            R.string.settings_internet_connection_description
-                        },
+                        state.internetDescription,
                     )
                 }
             }

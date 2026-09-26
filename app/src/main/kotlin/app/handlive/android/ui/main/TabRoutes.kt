@@ -52,6 +52,7 @@ fun SettingsTab(main: MainContext) {
             rememberSmsAccess(settings.permissionsRequested),
             relayAvailable = relay.available,
             relayDeviceRevoked = relay.deviceRevoked,
+            relayPinMismatch = relay.pinMismatch,
         )
     SettingsScreen(
         state = state,
