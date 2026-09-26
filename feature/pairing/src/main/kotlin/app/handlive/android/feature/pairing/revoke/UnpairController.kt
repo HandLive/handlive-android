@@ -13,6 +13,10 @@ import app.handlive.android.feature.connection.SessionEnded
 import app.handlive.android.feature.connection.session.AckTimeoutException
 import app.handlive.android.feature.connection.session.EnvelopeHandler
 import app.handlive.android.feature.connection.session.PeerSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -89,6 +93,35 @@ class UnpairController(
     }
 
     /**
+     * SET-02 A4, "Delete All HandLive Data": every client with a LAN or USB session gets `pair/revoke`
+     * (`reason = reinstall`) in parallel, each waiting up to 10 s for its `ack`; then every pair is deleted without a
+     * tombstone (the relay has already dropped them). Relayed sessions were closed by the relay (A3).
+     */
+    suspend fun revokeAllForReinstall() {
+        coroutineScope {
+            sessions()
+                .values
+                .filter { it.channel != PeerSession.Channel.RELAY }
+                .map { session ->
+                    async {
+                        try {
+                            session.request(MessageType.PAIR, revokePlaintext(session.pairId, REINSTALL))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") _: Exception,
+                        ) {
+                            // No ack in 10 s or the session closed: the client learns it from the relay's
+                            // pair_revoked or, on its next connection, from PAIR_UNKNOWN.
+                        }
+                        closer.close(session.pairId, BYE_REVOKED)
+                    }
+                }.awaitAll()
+        }
+        pairs.deleteAll()
+    }
+
+    /**
      * The relay says the pair is revoked: `pair_revoked` (PAIR-03 API 4, [elsewhere] false) or a revoked pair in
      * `GET /v1/pairs` (PAIR-02 E3, [elsewhere] true). Cleaned up as a receiver; repeats are ignored.
      */
@@ -143,16 +176,15 @@ class UnpairController(
             ProtocolJson.decodeFromJsonElement(PairRevokeData.serializer(), payload.data)
         }.getOrNull()
 
-    private fun revokePlaintext(pairId: String) =
-        PlaintextCodec.encodeOp(
-            PairOp.REVOKE,
-            PairRevokeData.serializer(),
-            PairRevokeData(pairId, PairRevokeData.REASON_USER),
-        )
+    private fun revokePlaintext(
+        pairId: String,
+        reason: String = PairRevokeData.REASON_USER,
+    ) = PlaintextCodec.encodeOp(PairOp.REVOKE, PairRevokeData.serializer(), PairRevokeData(pairId, reason))
 
     private companion object {
         const val BYE_REVOKED = "revoked"
         const val REASON_USER = "user"
         const val REASON_LOST_DEVICE = "lost_device"
+        const val REINSTALL = PairRevokeData.REASON_REINSTALL
     }
 }
