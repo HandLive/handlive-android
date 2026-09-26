@@ -6,6 +6,8 @@ import app.handlive.android.core.crypto.identity.DeviceIdentityStore
 import app.handlive.android.core.crypto.keystore.AndroidKeystoreSecretStore
 import app.handlive.android.core.crypto.keystore.SecretStore
 import app.handlive.android.core.data.db.HandLiveDatabase
+import app.handlive.android.core.data.db.PushOutboxDao
+import app.handlive.android.core.data.db.SmsObserverStateDao
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.data.pairing.RelayPairs
 import app.handlive.android.core.data.settings.SettingsStore
@@ -22,6 +24,12 @@ class HandLiveData private constructor(
     val settings: SettingsStore = SettingsStore.create(context)
     val secrets: SecretStore by lazy { AndroidKeystoreSecretStore.create(context) }
     val pairs: PairStore = PairStore(database.pairedDevices(), { AndroidKeystoreSecretStore.sealer(context) })
+
+    /** `sms_observer_state` (SMS-02): the last SMS `_id` the observer processed. */
+    val smsObserverState: SmsObserverStateDao get() = database.smsObserverState()
+
+    /** `push_outbox` (CONN-04): pushes waiting for a retry. */
+    val pushOutbox: PushOutboxDao get() = database.pushOutbox()
 
     /** The same pairs as the relay sees them: registration, tombstones, push targets (Phase 2). */
     val relayPairs: RelayPairs = RelayPairs(database.pairedDevices(), { AndroidKeystoreSecretStore.sealer(context) })

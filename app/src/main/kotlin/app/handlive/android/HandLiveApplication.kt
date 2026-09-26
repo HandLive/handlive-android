@@ -5,6 +5,7 @@ import app.handlive.android.feature.clipboard.ClipboardFeature
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.notification.NotificationChannels
 import app.handlive.android.feature.pairing.PairingFeature
+import app.handlive.android.feature.sms.SmsFeature
 
 /**
  * Process start: notification channels exist before anything posts, and feature modules register with the
@@ -17,5 +18,6 @@ class HandLiveApplication : Application() {
         BenchLog.install(this)
         PairingFeature.install(this)
         ClipboardFeature.install(this)
+        SmsFeature.install(this)
     }
 }

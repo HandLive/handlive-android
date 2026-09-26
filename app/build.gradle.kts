@@ -80,6 +80,7 @@ dependencies {
     implementation(project(":feature:connection"))
     implementation(project(":feature:pairing"))
     implementation(project(":feature:clipboard"))
+    implementation(project(":feature:sms"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.activity.compose)
