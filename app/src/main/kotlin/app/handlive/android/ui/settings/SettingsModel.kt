@@ -9,7 +9,11 @@ enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
 data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
     val accessibilityServiceOn: Boolean = false,
+    val sms: SmsAccessState = SmsAccessState(),
 ) {
+    /** SET-02 field 7 with SET-01 field 10: the SMS switch and its feature card. */
+    val smsStatus: FeatureStatus get() = sms.status(settings.smsEnabled)
+
     /** Field 15: on only with the setting, the recorded consent and the service turned on. */
     val autoSendStatus: AutoSendStatus
         get() =
@@ -35,6 +39,12 @@ interface SettingsActions {
 
     fun setInternet(enabled: Boolean)
 
+    /** SET-02 field 7: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
+    fun setSms(enabled: Boolean)
+
+    /** SET-01 fields 11 and 16: the SMS primer and its request, or the App info page once denied for good. */
+    fun grantSms()
+
     fun open(page: SettingsPage)
 }
 
@@ -42,4 +52,4 @@ interface SettingsActions {
 enum class SettingsPage { AUTO_CLEAR, PERMISSIONS, LANGUAGE }
 
 /** The system pages the Permissions & Background screen leads to. */
-enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND }
+enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS }

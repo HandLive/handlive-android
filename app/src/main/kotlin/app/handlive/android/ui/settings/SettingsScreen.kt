@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import app.handlive.android.core.design.component.HLActionRow
 import app.handlive.android.core.design.component.HLGroupedList
 import app.handlive.android.core.design.component.HLGroupedListScope
 import app.handlive.android.core.design.component.HLNavigationRow
@@ -20,8 +21,9 @@ import app.handlive.android.ui.main.bannerSections
 import java.text.DateFormat
 
 /**
- * SET-02 on the phone for Phase 1: the Clipboard group (fields 1–6, each switch with its one-line description),
- * Internet Connection (field 21), Permissions & Background (field 23) and Language (field 32).
+ * SET-02 on the phone: the Clipboard group (fields 1–6, each switch with its one-line description), SMS Messages
+ * (field 7, with its permission status and action, SET-01 fields 10, 11 and 16), Internet Connection (field 21),
+ * Permissions & Background (field 23) and Language (field 32).
  */
 @Composable
 fun SettingsScreen(
@@ -40,6 +42,7 @@ fun SettingsScreen(
         HLGroupedList(modifier = Modifier.weight(1f)) {
             bannerSections(banners, labels)
             clipboardSection(clipboardTitle, autoClearFooter, state, actions)
+            smsSection(state, actions)
             section {
                 row {
                     Switch(
@@ -118,6 +121,50 @@ private fun AutoSendSwitch(
         description = description,
     )
 }
+
+/**
+ * Field 7: the switch, disabled with "Not supported on this phone" without telephony; while it is on with a
+ * permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
+ */
+private fun HLGroupedListScope.smsSection(
+    state: SettingsUiState,
+    actions: SettingsActions,
+) {
+    val status = state.smsStatus
+    section {
+        row { SmsSwitch(state.settings.smsEnabled, status, actions::setSms) }
+        smsPermissionAction(status)?.let { label ->
+            row { HLActionRow(stringResource(label), false, actions::grantSms) }
+        }
+    }
+}
+
+@Composable
+private fun SmsSwitch(
+    enabled: Boolean,
+    status: FeatureStatus,
+    onChange: (Boolean) -> Unit,
+) {
+    val unsupported = status == FeatureStatus.UNSUPPORTED
+    HLSwitchRow(
+        stringResource(R.string.settings_sms_messages),
+        enabled && !unsupported,
+        onChange,
+        unavailableReason = if (unsupported) stringResource(status.label) else null,
+        description = status.takeIf { it.needsAction }?.let { stringResource(it.label) },
+    )
+}
+
+/** The button a feature card shows for [status]: field 11 "Grant Permission" or field 16 "Open Settings". */
+fun smsPermissionAction(status: FeatureStatus): Int? =
+    when (status) {
+        FeatureStatus.NEEDS_PERMISSION -> R.string.permission_grant
+        FeatureStatus.PERMISSION_DENIED -> R.string.common_open_settings
+        else -> null
+    }
+
+private val FeatureStatus.needsAction: Boolean
+    get() = this == FeatureStatus.NEEDS_PERMISSION || this == FeatureStatus.PERMISSION_DENIED
 
 /** Field 6 choices: "Off", "After 1 Minute", "After 5 Minutes". */
 fun autoClearLabel(seconds: Int): Int =

@@ -16,6 +16,7 @@ import app.handlive.android.ui.devices.DeviceDetailsScreen
 import app.handlive.android.ui.pairing.PairingFlow
 import app.handlive.android.ui.settings.AutoClearScreen
 import app.handlive.android.ui.settings.ConsentScreen
+import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
 import app.handlive.android.ui.settings.PermissionTarget
 import app.handlive.android.ui.settings.PermissionsScreen
@@ -63,6 +64,10 @@ fun RouteContent(
                 main.pop()
                 openAccessibility(context, main)
             }
+        }
+
+        Route.SmsPermission -> {
+            SmsPermissionRoute(main)
         }
     }
 }
@@ -136,10 +141,11 @@ private fun PermissionsRoute(
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
-    val state = SettingsUiState(settings, serviceOn)
+    val state = SettingsUiState(settings, serviceOn, rememberSmsAccess(settings.permissionsRequested))
     PermissionsScreen(
         environment = environment,
         autoSend = state.autoSendStatus,
+        sms = state.smsStatus,
         onOpen = { target -> openPermissionTarget(context, main, environment, state, target) },
         onBack = main::pop,
     )
@@ -175,6 +181,14 @@ private fun openPermissionTarget(
 
         PermissionTarget.AUTO_SEND -> {
             if (state.settings.clipA11yConsentAt == null) main.push(Route.Consent) else openAccessibility(context, main)
+        }
+
+        PermissionTarget.SMS -> {
+            if (state.smsStatus == FeatureStatus.PERMISSION_DENIED) {
+                SystemPages.open(context, SystemPages.appDetails(context))
+            } else {
+                main.push(Route.SmsPermission)
+            }
         }
     }
 }

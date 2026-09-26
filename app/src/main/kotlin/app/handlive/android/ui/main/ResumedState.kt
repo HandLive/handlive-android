@@ -6,8 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.handlive.android.ui.settings.SmsAccessState
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.PhoneEnvironmentReader
+import app.handlive.android.ui.system.SmsAccessReader
 
 /** A value read from Android again on every resume (the user may have changed it in the system settings). */
 @Composable
@@ -34,4 +36,16 @@ fun rememberPhoneEnvironment(): PhoneEnvironment {
         onPauseOrDispose {}
     }
     return environment.value
+}
+
+/** The SMS permissions, read again on every resume and whenever `perm.requested` ([requested]) changes. */
+@Composable
+fun rememberSmsAccess(requested: Set<String>): SmsAccessState {
+    val context = LocalContext.current
+    val state = remember { mutableStateOf(SmsAccessReader.read(context, requested)) }
+    LifecycleResumeEffect(requested) {
+        state.value = SmsAccessReader.read(context, requested)
+        onPauseOrDispose {}
+    }
+    return state.value
 }

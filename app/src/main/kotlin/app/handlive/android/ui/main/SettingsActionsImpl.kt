@@ -4,6 +4,7 @@ import android.content.Context
 import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.settings.AutoSendStatus
+import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
@@ -57,6 +58,24 @@ class SettingsActionsImpl(
     override fun setAutoClear(seconds: Int) = save { store.set(SettingsKeys.CLIP_AUTO_CLEAR_S, seconds) }
 
     override fun setInternet(enabled: Boolean) = save { store.set(SettingsKeys.RELAY_ENABLED, enabled) }
+
+    override fun setSms(enabled: Boolean) {
+        save { store.set(SettingsKeys.FEATURE_SMS, enabled) }
+        // SET-02 step 3: the key is saved as true even when the permissions end up denied.
+        if (enabled &&
+            state.sms.status(enabled = true) == FeatureStatus.NEEDS_PERMISSION
+        ) {
+            main.push(Route.SmsPermission)
+        }
+    }
+
+    override fun grantSms() {
+        if (state.smsStatus == FeatureStatus.PERMISSION_DENIED) {
+            SystemPages.open(context, SystemPages.appDetails(context))
+        } else {
+            main.push(Route.SmsPermission)
+        }
+    }
 
     override fun open(page: SettingsPage) {
         when (page) {

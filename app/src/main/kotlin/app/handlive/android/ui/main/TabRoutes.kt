@@ -34,7 +34,7 @@ fun SettingsTab(main: MainContext) {
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
-    val state = SettingsUiState(settings, serviceOn)
+    val state = SettingsUiState(settings, serviceOn, rememberSmsAccess(settings.permissionsRequested))
     SettingsScreen(
         state = state,
         banners = main.banners,
