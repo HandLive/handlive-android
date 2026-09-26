@@ -5,6 +5,7 @@ import app.handlive.android.core.data.pairing.PairedDevice
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.capability.CapabilityFeatures
 import app.handlive.android.core.protocol.capability.ClipboardFeature
+import app.handlive.android.core.protocol.capability.SmsFeature
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.connection.session.PeerSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,9 +57,43 @@ class DeviceListModelTest {
         )
     }
 
+    @Test
+    fun smsFollowsBothSwitchesAndTheReadSmsPermissionOfThisPhone() {
+        val on = session(setOf(Feature.SMS), clipboardOnPeer = true, smsOnPeer = true)
+        val offOnPeer = session(emptySet(), clipboardOnPeer = true, smsOnPeer = false)
+
+        assertEquals(SmsAvailability.ON, DeviceListModel.item(device, on, true, local(sms = true)).sms)
+        assertEquals(SmsAvailability.OFF_HERE, DeviceListModel.item(device, on, true, local(sms = false)).sms)
+        assertEquals(SmsAvailability.OFF_ON_PEER, DeviceListModel.item(device, offOnPeer, true, local(sms = true)).sms)
+        assertEquals(
+            SmsAvailability.MISSING_PERMISSION,
+            DeviceListModel.item(device, on, true, local(sms = true, missing = listOf("READ_SMS"))).sms,
+        )
+        // Without the service (no local capability) or a session nothing is known; a stored capability without SMS
+        // (an older client) still explains why.
+        val smsClient = device.copy(featuresJson = device.featuresJson.replace("}}}", """},"sms":{"enabled":true}}}"""))
+        assertEquals(SmsAvailability.UNKNOWN, DeviceListModel.item(device, on, true, local = null).sms)
+        assertEquals(SmsAvailability.UNKNOWN, DeviceListModel.item(smsClient, null, true, local(sms = true)).sms)
+        assertEquals(SmsAvailability.OFF_ON_PEER, DeviceListModel.item(device, null, true, local(sms = true)).sms)
+    }
+
+    private fun local(
+        sms: Boolean,
+        missing: List<String>? = null,
+    ) = CapabilityData(
+        protocol = 1,
+        appVersion = "0.0.1 (1)",
+        platform = "android",
+        osVersion = "16",
+        model = "Pixel 9",
+        features = CapabilityFeatures(sms = SmsFeature(enabled = sms)),
+        permissionsMissing = missing,
+    )
+
     private fun session(
         effective: Set<Feature>,
         clipboardOnPeer: Boolean,
+        smsOnPeer: Boolean = false,
     ) = PeerSession(
         peer = PeerSession.PeerInfo(device.pairId, device.peerDeviceId, device.peerName, device.peerPlatform),
         channel = PeerSession.Channel.LAN,
@@ -71,7 +106,11 @@ class DeviceListModelTest {
                     platform = "macos",
                     osVersion = "15.1",
                     model = "Mac15,3",
-                    features = CapabilityFeatures(clipboard = ClipboardFeature(enabled = clipboardOnPeer)),
+                    features =
+                        CapabilityFeatures(
+                            clipboard = ClipboardFeature(enabled = clipboardOnPeer),
+                            sms = SmsFeature(enabled = smsOnPeer),
+                        ),
                 ),
             ),
         sender = { _, _, _ -> },

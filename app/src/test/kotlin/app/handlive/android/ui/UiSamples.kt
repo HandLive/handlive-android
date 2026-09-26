@@ -11,6 +11,7 @@ import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
+import app.handlive.android.feature.pairing.devices.SmsAvailability
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
@@ -34,6 +35,7 @@ object UiSamples {
             appVersion = "1.0.0 (100)",
             clipboard = ClipboardAvailability.OFF_ON_PEER,
             safetyCode = "fc647e0b",
+            sms = SmsAvailability.MISSING_PERMISSION,
         )
 
     val ipad =
