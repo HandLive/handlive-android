@@ -29,6 +29,8 @@ class VectorFileCoverageTest {
             "relay-auth.json" to "SignatureVectorTest",
             "pair-handshake.json" to "PairHandshakeVectorTest, PairingExchangeVectorTest",
             "discovery-hint.json" to "DiscoveryHintVectorTest",
+            "push-envelope.json" to "PushEnvelopeVectorTest, PushRequestVectorTest",
+            "relay-frame.json" to "RelayFrameVectorTest",
             EnvelopeRoundtripTest.ANDROID_FILE to "EnvelopeRoundtripTest",
             EnvelopeRoundtripTest.APPLE_FILE to "EnvelopeRoundtripTest",
         )
