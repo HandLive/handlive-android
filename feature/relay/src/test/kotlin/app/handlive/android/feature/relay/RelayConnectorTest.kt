@@ -200,6 +200,25 @@ class RelayConnectorTest {
         }
 
     @Test
+    fun aNetworkChangeReconnectsAtOnceWhileARendezvousIsOpen() =
+        runTest {
+            val connector = connector()
+            connector.joinRendezvous(RV, RecordingEndpoint())
+            runCurrent()
+            // Past the demand of the join: only the open rendezvous keeps the phone on the relay.
+            advanceTimeBy(6 * MINUTE)
+            links.opened.single().end()
+            runCurrent()
+            assertEquals(RelayLinkState.BACKOFF, connector.state.value)
+
+            connector.networkChanged()
+            runCurrent()
+
+            assertEquals(2, links.opened.size)
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+        }
+
+    @Test
     fun theRelaySwitchedOffClosesTheLinkAtOnce() =
         runTest {
             val connector = connector()
