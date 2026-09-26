@@ -23,7 +23,8 @@ fun DataActionDialogs(
             val remove = step.action == DataAction.REMOVE_FROM_SERVER
             val warning =
                 if (remove) R.string.settings_remove_from_server_warning else R.string.settings_delete_all_data_warning
-            val confirm = if (remove) R.string.settings_remove_from_server else R.string.settings_delete_all_data
+            val confirm =
+                if (remove) R.string.settings_remove_from_server_confirm else R.string.settings_delete_all_confirm
             HLActionSheet(
                 title = null,
                 message = stringResource(warning),
