@@ -54,6 +54,9 @@ object ScreenCatalog {
             "settings sms needs permission" to {
                 SettingsScreen(UiSamples.smsNeedsPermission, StatusBanners(), UiSamples.NoActions, "English")
             },
+            "settings relay certificate" to {
+                SettingsScreen(UiSamples.relayPinMismatch, StatusBanners(), UiSamples.NoActions, "English")
+            },
             "auto-clear" to { AutoClearScreen(60, {}, {}) },
             "language" to { LanguageScreen(AppLanguage.Vietnamese, {}, {}) },
             "permissions" to {

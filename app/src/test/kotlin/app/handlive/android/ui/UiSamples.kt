@@ -70,6 +70,9 @@ object UiSamples {
             relayDeviceRevoked = true,
         )
 
+    /** CONN-03 E7 under Internet Connection: the longest text field 21 shows. */
+    val relayPinMismatch = settings.copy(relayAvailable = true, relayPinMismatch = true)
+
     object NoActions : SettingsActions {
         override fun setClipboard(enabled: Boolean) = Unit
 

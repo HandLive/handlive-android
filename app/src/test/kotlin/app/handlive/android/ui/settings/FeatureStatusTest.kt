@@ -19,6 +19,17 @@ class FeatureStatusTest {
     }
 
     @Test
+    fun theRelayErrorsReplaceTheInternetConnectionDescription() {
+        val ui = SettingsUiState()
+        assertEquals(R.string.settings_internet_connection_description, ui.internetDescription)
+        assertEquals(R.string.error_relay_pin_mismatch, ui.copy(relayPinMismatch = true).internetDescription)
+        assertEquals(
+            R.string.error_relay_device_revoked,
+            ui.copy(relayDeviceRevoked = true, relayPinMismatch = true).internetDescription,
+        )
+    }
+
+    @Test
     fun onlyWhenEveryMissingPermissionIsDeniedForGoodDoesTheCardSendToSettings() {
         val partly = SmsAccessState(missing = setOf("READ_SMS", "READ_CONTACTS"), deniedForGood = setOf("READ_SMS"))
         val all = partly.copy(deniedForGood = setOf("READ_SMS", "READ_CONTACTS"))
