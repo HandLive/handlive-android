@@ -88,8 +88,15 @@ class PushSenderTest {
             val retried = fixture.http.pushes().last()
             assertEquals(first.envB64, retried.envB64)
             assertEquals(first.collapseKey, retried.collapseKey)
-            // `ttl_s` is what is left of the 24 hours.
-            assertEquals(86_400 - 5, retried.ttlS)
+            // SMS-02 API 2: the phone always sends 86,400 with sms_new; the outbox itself stops after 24 hours.
+            assertEquals(86_400, retried.ttlS)
+            JsonSchemaValidation.assertValid(
+                "relay-rest.schema.json#/\$defs/push-request",
+                fixture.http
+                    .calls("POST", "/v1/push")
+                    .last()
+                    .body!!,
+            )
             assertNull(outbox.nextAttemptAt(fixture.now))
         }
 
