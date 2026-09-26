@@ -12,9 +12,10 @@ import app.handlive.android.feature.sms.module.PermissionMissingListener
 import app.handlive.android.core.design.R as DesignR
 
 /**
- * SET-01 field 17: when a client got `PERMISSION_MISSING` for SMS, "<device> needs permission to read SMS on this
- * phone — tap to allow" on the `permission` channel, at most once per 24 hours; tapping it opens HandLive on the SMS
- * primer (SET-01 part B). Nothing is posted while notifications are off (E1).
+ * SET-01 field 17: when a client got `PERMISSION_MISSING` for SMS, "<device> needs SMS permission on this phone — tap
+ * to allow" (the same text whichever SMS permission is missing) on the `permission` channel, at most once per 24
+ * hours; tapping it opens HandLive on the SMS primer (SET-01 part B). Nothing is posted while notifications are off
+ * (E1).
  */
 class SmsPermissionNotifier(
     context: Context,
