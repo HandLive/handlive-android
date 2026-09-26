@@ -13,15 +13,15 @@ import app.handlive.android.core.protocol.sms.SmsOp
 /**
  * The `POST /v1/push` body of a new SMS for an iPhone or iPad without a session (SMS-02 API 2, CONN-04 step 5b): the
  * `sms/new` envelope without `local_id`, sealed with `K_push` of the pair and carried as `env_b64` (standard base64
- * with padding). The text is cut to 1,000 characters; while `env_b64` is still over 3,000 characters, the body, then
- * the snippet, is shortened further at a code point boundary with "…" appended. `collapse_key` is the `message_key`,
- * so repeated sends of one message collapse (one notification per message).
+ * with padding). The body is cut to at most 1,000 code points ending with "…"; while `env_b64` is still over 3,000
+ * characters, the body, then the snippet, is shortened further at a code point boundary, again ending with "…" —
+ * the longest cut that fits. `collapse_key` is the `message_key`, so repeated sends of one message collapse.
  */
 class PushEnvelopeBuilder(
     private val clock: () -> Long,
     private val ids: UuidV7Generator = UuidV7Generator(clock),
 ) {
-    /** `null` when not even an empty text fits (a pathological name list); the message then waits for SMS-01. */
+    /** `null` when not even "…" for both texts fits (a pathological address list); the message waits for SMS-01. */
     fun smsNew(
         pairId: String,
         to: String,
@@ -43,7 +43,7 @@ class PushEnvelopeBuilder(
         )
     }
 
-    /** The envelope as it is, else the longest cut of the body, else an empty body and the longest cut snippet. */
+    /** The envelope as it is, else the longest cut body that fits, else the body "…" and the longest cut snippet. */
     private fun fit(
         new: SmsNewData,
         prk: ByteArray,
@@ -51,7 +51,7 @@ class PushEnvelopeBuilder(
     ): String? =
         seal(new, prk, header).takeIf { it.length <= ENV_B64_MAX }
             ?: fitBody(new, prk, header)
-            ?: fitSnippet(new.withBody(""), prk, header)
+            ?: fitSnippet(new.withBody(new.message.body.cut(1)), prk, header)
 
     private fun fitBody(
         new: SmsNewData,
@@ -59,8 +59,8 @@ class PushEnvelopeBuilder(
         header: EnvelopeHeader,
     ): String? {
         val body = new.message.body
-        return longestFitting(body.codePointCount(0, body.length)) { keep ->
-            seal(new.withBody(body.cut(keep)), prk, header)
+        return longestFitting(body.codePointCount(0, body.length)) { max ->
+            seal(new.withBody(body.cut(max)), prk, header)
         }
     }
 
@@ -70,17 +70,17 @@ class PushEnvelopeBuilder(
         header: EnvelopeHeader,
     ): String? {
         val snippet = new.thread.snippet
-        return longestFitting(snippet.codePointCount(0, snippet.length)) { keep ->
-            seal(new.copy(thread = new.thread.copy(snippet = snippet.cut(keep))), prk, header)
+        return longestFitting(snippet.codePointCount(0, snippet.length)) { max ->
+            seal(new.copy(thread = new.thread.copy(snippet = snippet.cut(max))), prk, header)
         }
     }
 
-    /** The largest `keep` in `0 until total` whose [seal] fits; its `env_b64`. */
+    /** The largest `max` in `1 until total` whose [seal] fits; its `env_b64`. */
     private fun longestFitting(
         total: Int,
         seal: (Int) -> String,
     ): String? {
-        var low = 0
+        var low = 1
         var high = total - 1
         var best: String? = null
         while (low <= high) {
@@ -116,10 +116,16 @@ class PushEnvelopeBuilder(
         const val SMS_TTL_SECONDS = 86_400
         const val ELLIPSIS = "…"
 
-        /** The first [keep] code points, with "…" when anything was cut. */
-        fun String.cut(keep: Int): String {
+        /** At most [max] code points: unchanged when it fits, else the first `max - 1` and "…". */
+        fun String.cut(max: Int): String {
             val total = codePointCount(0, length)
-            return if (total <= keep) this else substring(0, offsetByCodePoints(0, keep.coerceAtLeast(0))) + ELLIPSIS
+            return if (total <=
+                max
+            ) {
+                this
+            } else {
+                substring(0, offsetByCodePoints(0, (max - 1).coerceAtLeast(0))) + ELLIPSIS
+            }
         }
 
         private fun SmsNewData.withBody(body: String) = copy(message = message.copy(body = body))
