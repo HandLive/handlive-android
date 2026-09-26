@@ -8,6 +8,8 @@ import app.handlive.android.core.protocol.relay.RelayErrorCode
 import app.handlive.android.core.protocol.relay.RelayValues
 import app.handlive.android.core.transport.relay.RelayApi
 import app.handlive.android.core.transport.relay.RelayAuth
+import app.handlive.android.core.transport.relay.RelayRequestException
+import app.handlive.android.core.transport.relay.RelayUnreachableException
 import kotlinx.coroutines.flow.first
 
 /** What the relay's list of pairs says about a pair of this phone (PAIR-02 API 1). */
@@ -65,6 +67,33 @@ class RelayRegistrar(
         }
     }
 
+    /** Both at every occasion (service start, network, new link); each runs even when the other failed. */
+    suspend fun registerEverything() {
+        attempt { registerAll() }
+        attempt { revokeTombstones() }
+    }
+
+    /**
+     * SET-02 A2: `DELETE /v1/devices/me` (the JWT's own device). Done also when the relay no longer has the device
+     * (404 `DEVICE_NOT_FOUND` while authenticating, E6, or 410); afterwards any use registers it again.
+     */
+    suspend fun deleteDevice(revokePairs: Boolean): ServerDeletion {
+        val outcome =
+            try {
+                val response = api.deleteThisDevice(revokePairs)
+                if (response.ok || response.errorCode in GONE) ServerDeletion.DONE else ServerDeletion.UNREACHABLE
+            } catch (e: RelayRequestException) {
+                if (e.code in GONE) ServerDeletion.DONE else ServerDeletion.UNREACHABLE
+            } catch (_: RelayUnreachableException) {
+                ServerDeletion.UNREACHABLE
+            }
+        if (outcome == ServerDeletion.DONE) {
+            auth.reset()
+            pushToken = null
+        }
+        return outcome
+    }
+
     /** PAIR-03 step 8 again for every tombstone (E3); 204 or 404 (never registered) both mean done. */
     suspend fun revokeTombstones() {
         relayPairs.tombstonesToRevoke().forEach { pairId -> revoke(pairId, RelayValues.REVOKE_USER) }
@@ -113,5 +142,8 @@ class RelayRegistrar(
 
     private companion object {
         val CLIENT_ERRORS = 400..499
+
+        /** The relay no longer has the device: deleted earlier (E6) or refused for good. */
+        val GONE = setOf(RelayErrorCode.DEVICE_NOT_FOUND, RelayErrorCode.DEVICE_REVOKED)
     }
 }

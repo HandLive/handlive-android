@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The relay on the phone (CONN-03, CONN-04, PAIR-01 over the relay, PAIR-03 flow B): wires the relay client into the
@@ -55,7 +56,8 @@ class RelayFeature private constructor(
     private val data = HandLiveData.get(appContext)
     private val runtime = ConnectionRuntime.get(appContext)
     private val clock: () -> Long = System::currentTimeMillis
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private val worker = Dispatchers.IO.limitedParallelism(1)
+    private val scope = CoroutineScope(SupervisorJob() + worker)
     private val deviceRevoked = MutableStateFlow(false)
     private val owner = Owner()
 
@@ -103,6 +105,22 @@ class RelayFeature private constructor(
         onWorker { connector.demand() }
     }
 
+    /**
+     * SET-02 A2–A4 on the relay's side: `DELETE /v1/devices/me` with [revokePairs] (`false` = "Remove Device from
+     * Server", `true` = "Delete All HandLive Data", whose local part the caller runs). Removing only keeps every pair
+     * but forgets its registration and writes `relay.enabled = false`, which sends `capability/update` and closes the
+     * relayed sessions and the link. A build without a relay has nothing to delete there.
+     */
+    suspend fun deleteFromServer(revokePairs: Boolean): ServerDeletion =
+        withContext(worker) {
+            val outcome = if (config.available) registrar.deleteDevice(revokePairs) else ServerDeletion.DONE
+            if (outcome == ServerDeletion.DONE && !revokePairs) {
+                data.relayPairs.forgetRegistrations()
+                data.settings.set(SettingsKeys.RELAY_ENABLED, false)
+            }
+            outcome
+        }
+
     /** FCM `onNewToken`, or the token read at start (CONN-04 step 2, `gms` flavor). */
     fun onPushToken(token: String) {
         onWorker { registrar.registerPushToken(token) }
@@ -129,7 +147,7 @@ class RelayFeature private constructor(
         appContext.watchDefaultNetwork {
             onWorker {
                 connector.networkChanged()
-                registerEverything()
+                registrar.registerEverything()
             }
             outbox.wake()
         }
@@ -137,7 +155,7 @@ class RelayFeature private constructor(
 
     private fun onServiceRunning() {
         onWorker {
-            registerEverything()
+            registrar.registerEverything()
             // Clients outside the LAN may be waiting for the phone since before the service started.
             if (hasRelayPairWithoutSession()) connector.demand()
         }
@@ -176,11 +194,6 @@ class RelayFeature private constructor(
             if (hasRelayPairWithoutSession()) connector.demand()
             outbox.wake()
         }
-    }
-
-    private suspend fun registerEverything() {
-        attempt { registrar.registerAll() }
-        attempt { registrar.revokeTombstones() }
     }
 
     private suspend fun hasRelayPairWithoutSession(): Boolean {
@@ -225,7 +238,7 @@ class RelayFeature private constructor(
 
         override fun connected() {
             onWorker {
-                registerEverything()
+                registrar.registerEverything()
                 attempt { registrar.checkPairs() }
             }
             outbox.wake()
