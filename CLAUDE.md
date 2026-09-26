@@ -1,6 +1,6 @@
 # CLAUDE.md — handlive-android
 
-Android hub app of HandLive (Kotlin, Gradle KTS, minSdk 29 / targetSdk 35). One part of the HandLive **workspace**: the hub repository `handlive` is this directory's parent, holds the documents that are the contract for all code, and its `CLAUDE.md` applies here in full.
+Android app of HandLive (Kotlin, Gradle KTS, minSdk 29 / targetSdk 35). It runs Handoff and the other continuity features on Android: the phone stays in sync with a Mac, iPhone and iPad, and those Apple devices sync back. One part of the HandLive **workspace**: the hub repository `handlive` is this directory's parent, holds the specification that all code implements, and its `CLAUDE.md` applies here in full.
 
 ## Workspace layout (mandatory)
 
