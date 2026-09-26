@@ -87,6 +87,12 @@ class RelayAuth(
         token = null
     }
 
+    /** The device left the relay (SET-02 A2): the next use registers it again (CONN-03 step 3). */
+    fun reset() {
+        token = null
+        registered = false
+    }
+
     private suspend fun fetch(registerIfUnknown: Boolean): String {
         val challengeResponse =
             http.send(POST, CHALLENGE, json(ChallengeRequest.serializer(), ChallengeRequest(identity.deviceId)), null)

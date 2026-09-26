@@ -18,7 +18,7 @@ import app.handlive.android.core.data.settings.SettingsStore
  * [pairs]) are created on first use, which must happen off the main thread.
  */
 class HandLiveData private constructor(
-    context: Context,
+    private val context: Context,
 ) {
     val database: HandLiveDatabase = HandLiveDatabase.open(context)
     val settings: SettingsStore = SettingsStore.create(context)
@@ -36,6 +36,16 @@ class HandLiveData private constructor(
 
     /** `ik_sig`, `ik_dh` and `device_id` (SET-01 step 2); loads or creates the keys on first access. */
     val identity: DeviceIdentity by lazy { DeviceIdentityStore.loadOrCreate(secrets) }
+
+    /**
+     * SET-02 API 7: empties every table, then deletes `handlive.db`. Off the main thread; the database is closed for
+     * good, so the process must start again afterwards.
+     */
+    fun deleteDatabase() {
+        database.clearAllTables()
+        database.close()
+        context.deleteDatabase(HandLiveDatabase.FILE_NAME)
+    }
 
     companion object {
         @Volatile
