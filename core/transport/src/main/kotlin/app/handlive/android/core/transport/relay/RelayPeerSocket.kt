@@ -29,7 +29,8 @@ class RelayPeerLink internal constructor(
  * One peer's `/v1/ctl` session as the control server sees it, carried by the relay (CONN-03 step 9): envelopes the
  * relay delivers `{from: peer, env}` arrive as text frames, and every text frame the session sends leaves as
  * `{to: peer, env}` — byte for byte the envelope JSON of the LAN. There is no per-peer close on the relay: a close
- * only ends the virtual session here (the client notices through its E2E pings, CONN-02).
+ * only ends the virtual session here, so the session tells the peer with `session/bye` first (CONN-02 API 4); a
+ * socket ended because the peer left or the link dropped has nobody to tell.
  */
 internal class RelayPeerSocket(
     val peerDeviceId: String,

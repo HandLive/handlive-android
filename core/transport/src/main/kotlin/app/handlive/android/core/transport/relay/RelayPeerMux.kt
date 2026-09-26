@@ -13,7 +13,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Runs the `/v1/ctl` sessions of the peers that reach this phone through the relay (CONN-03 step 9). A
  * `session/hello` from a peer starts a new virtual session with [serve] (the control server's handshake, exactly as
  * on the LAN); later envelopes go to that peer's current session. Envelopes of a peer without a session are dropped:
- * the client sees no answer and starts over with a new handshake.
+ * the client sees no answer and starts over with a new handshake. A peer that starts over on the relay has left its
+ * previous relayed session: that one ends at once, without the `session/bye` it would otherwise send — sealed with
+ * keys the peer already dropped, it could only fail there as `DECRYPT_FAILED` (CONN-02 E5).
  */
 class RelayPeerMux(
     private val scope: CoroutineScope,
@@ -32,7 +34,7 @@ class RelayPeerMux(
         val text = EnvelopeCodec.encode(env)
         if (isSessionHello(env)) {
             val socket = RelayPeerSocket(from, scope, send) { peers.remove(it.peerDeviceId, it) }
-            peers[from] = socket
+            peers.put(from, socket)?.end()
             socket.deliver(text)
             scope.launch {
                 try {
