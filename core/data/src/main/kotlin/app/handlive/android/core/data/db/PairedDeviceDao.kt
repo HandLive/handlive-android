@@ -69,4 +69,33 @@ interface PairedDeviceDao {
     /** SET-02 A4/A5: remove every pair (no tombstones, the relay already dropped them). */
     @Query("DELETE FROM paired_device")
     suspend fun deleteAll()
+
+    /** CONN-03 step 3, SET-02 API 6: active pairs not yet registered with the relay (PAIR-01 API 8). */
+    @Query("SELECT * FROM paired_device WHERE revoked_at IS NULL AND relay_registered = 0")
+    suspend fun unregisteredWithRelay(): List<PairedDeviceEntity>
+
+    /** PAIR-01 API 8 rule 5, PAIR-02 API 1 rule 3: the relay knows the pair, or no longer does. */
+    @Query("UPDATE paired_device SET relay_registered = :registered WHERE pair_id = :pairId")
+    suspend fun setRelayRegistered(
+        pairId: String,
+        registered: Boolean,
+    )
+
+    /** SET-02 A4 "Remove Device from Server": the relay forgot every pair of this phone. */
+    @Query("UPDATE paired_device SET relay_registered = 0")
+    suspend fun clearRelayRegistration()
+
+    /** PAIR-03 E3: tombstones whose revocation the relay has not confirmed yet. */
+    @Query("SELECT pair_id FROM paired_device WHERE revoked_at IS NOT NULL AND relay_registered = 1")
+    suspend fun tombstonesToRevoke(): List<String>
+
+    /**
+     * SMS-02 step 10, CONN-04: iPhone and iPad pairs registered with the relay, which may need an alert push (further
+     * filtered by session and `features_json` in memory).
+     */
+    @Query(
+        "SELECT * FROM paired_device WHERE revoked_at IS NULL AND relay_registered = 1 " +
+            "AND peer_platform IN ('ios', 'ipados')",
+    )
+    suspend fun pushTargets(): List<PairedDeviceEntity>
 }
