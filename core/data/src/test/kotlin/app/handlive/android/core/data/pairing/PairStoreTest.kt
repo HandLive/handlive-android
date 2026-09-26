@@ -38,6 +38,7 @@ class PairStoreTest {
     private var now = 1_727_150_000_000L
     private val sealer = AeadSecretSealer(newAead())
     private val store = PairStore(database.pairedDevices(), { sealer }, clock = { now })
+    private val relay = RelayPairs(database.pairedDevices()) { sealer }
 
     @After
     fun tearDown() = database.close()
@@ -139,21 +140,76 @@ class PairStoreTest {
             assertEquals("""{"protocol":1}""", device.featuresJson)
         }
 
-    private fun newPair(peerDeviceId: String = UUID.randomUUID().toString()) =
-        NewPair(
-            pairId = UUID.randomUUID().toString(),
-            peer = PeerKeys(peerDeviceId, ikSigPub = ByteArray(32) { 3 }, ikDhPub = ByteArray(32) { 4 }),
-            peerName = "MacBook của Lan",
-            peerPlatform = PeerPlatform.MACOS,
-            peerModel = "Mac15,3",
-            attestation =
-                SignedAttestation(
-                    bytes = UUID.randomUUID().toString().toByteArray(),
-                    sigSelf = ByteArray(64) { 5 },
-                    sigPeer = ByteArray(64) { 6 },
-                    createdAt = now,
-                ),
-        )
+    @Test
+    fun relayRegistrationFollowsPostPairsAndRemoveFromServer() =
+        runTest {
+            val first = newPair()
+            val second = newPair()
+            store.save(first, ByteArray(32))
+            store.save(second, ByteArray(32))
+            val pending = relay.unregistered()
+            assertEquals(setOf(first.pairId, second.pairId), pending.map { it.pairId }.toSet())
+            val registration = pending.first { it.pairId == first.pairId }
+            assertArrayEquals(first.attestation.bytes, registration.attestation)
+            assertArrayEquals(first.attestation.sigSelf, registration.sigSelf)
+            assertArrayEquals(first.attestation.sigPeer, registration.sigPeer)
+
+            relay.markRegistered(first.pairId, registered = true)
+            assertEquals(listOf(second.pairId), relay.unregistered().map { it.pairId })
+            assertTrue(store.find(first.pairId)!!.relayRegistered)
+
+            relay.forgetRegistrations()
+            assertEquals(2, relay.unregistered().size)
+        }
+
+    @Test
+    fun aRevokedRelayPairWaitsForTheRelayThenGoes() =
+        runTest {
+            val pair = newPair()
+            store.save(pair, ByteArray(32))
+            relay.markRegistered(pair.pairId, registered = true)
+            store.revoke(pair.pairId)
+            assertEquals(listOf(pair.pairId), relay.tombstonesToRevoke())
+            assertTrue(relay.deleteTombstone(pair.pairId))
+            assertEquals(emptyList<String>(), relay.tombstonesToRevoke())
+        }
+
+    @Test
+    fun pushTargetsAreRegisteredIphoneAndIpadPairsWithTheirPrk() =
+        runTest {
+            val mac = newPair()
+            val iphone = newPair(platform = PeerPlatform.IOS)
+            val ipad = newPair(platform = PeerPlatform.IPADOS)
+            val unregistered = newPair(platform = PeerPlatform.IOS)
+            store.save(mac, ByteArray(32) { 1 })
+            store.save(iphone, ByteArray(32) { 2 })
+            store.save(ipad, ByteArray(32) { 3 })
+            store.save(unregistered, ByteArray(32) { 4 })
+            listOf(mac, iphone, ipad).forEach { relay.markRegistered(it.pairId, registered = true) }
+
+            val targets = relay.pushTargets().associateBy { it.pairId }
+            assertEquals(setOf(iphone.pairId, ipad.pairId), targets.keys)
+            assertArrayEquals(ByteArray(32) { 2 }, targets.getValue(iphone.pairId).prk)
+            assertEquals(PeerPlatform.IPADOS, targets.getValue(ipad.pairId).peerPlatform)
+        }
+
+    private fun newPair(
+        peerDeviceId: String = UUID.randomUUID().toString(),
+        platform: PeerPlatform = PeerPlatform.MACOS,
+    ) = NewPair(
+        pairId = UUID.randomUUID().toString(),
+        peer = PeerKeys(peerDeviceId, ikSigPub = ByteArray(32) { 3 }, ikDhPub = ByteArray(32) { 4 }),
+        peerName = "MacBook của Lan",
+        peerPlatform = platform,
+        peerModel = "Mac15,3",
+        attestation =
+            SignedAttestation(
+                bytes = UUID.randomUUID().toString().toByteArray(),
+                sigSelf = ByteArray(64) { 5 },
+                sigPeer = ByteArray(64) { 6 },
+                createdAt = now,
+            ),
+    )
 
     private fun entity(
         pair: NewPair,
