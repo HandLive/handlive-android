@@ -5,10 +5,13 @@ import app.handlive.android.core.crypto.derivation.SessionHandshakeDerivation
 import app.handlive.android.core.crypto.derivation.SessionKeys
 import app.handlive.android.core.crypto.primitives.SecureRandomBytes
 import app.handlive.android.core.crypto.primitives.X25519Keys
+import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.protocol.capability.CapabilityOp
 import app.handlive.android.core.protocol.encoding.Base64Codecs
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.protocol.envelope.EnvelopeCodec
 import app.handlive.android.core.protocol.envelope.EnvelopeHeader
+import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.protocol.session.PROTOCOL_VERSION
@@ -17,6 +20,8 @@ import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.protocol.session.SessionWelcomeData
 import app.handlive.android.core.transport.handshake.HandshakeEnvelopes
 import app.handlive.android.core.transport.session.SessionCipher
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.DefaultWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
@@ -127,4 +132,24 @@ class TestClientChannel(
         val envelope = EnvelopeCodec.decode((socket.incoming.receive() as Frame.Text).readText())
         return envelope to cipher.open(envelope)
     }
+}
+
+/** Opens `/v1/ctl`, completes the handshake and exchanges `capability/hello` both ways; returns the C side. */
+suspend fun LoopbackServerFixture.connect(
+    http: HttpClient,
+    peer: TestClientPeer,
+): TestClientChannel {
+    val socket = http.webSocketSession(url)
+    val (hello, state) = peer.hello()
+    socket.send(Frame.Text(hello))
+    val keys = peer.acceptWelcome((socket.incoming.receive() as Frame.Text).readText(), state)
+    val channel = TestClientChannel(socket, keys, peer.ids)
+    channel.receive()
+    channel.send(
+        MessageType.CAPABILITY.wire,
+        CapabilityOp.HELLO,
+        CapabilityData.serializer(),
+        LoopbackServerFixture.MAC_CAPABILITY,
+    )
+    return channel
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CLIP-03 API 6: the only directory the clipfiles provider exposes. -->
+<paths>
+    <cache-path
+        name="clip"
+        path="clip/" />
+</paths>

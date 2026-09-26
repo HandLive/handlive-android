@@ -25,9 +25,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import app.handlive.android.core.design.R
 import app.handlive.android.core.design.theme.HandLiveDurations
 import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.core.strings.R
 
 private val TrackWidth = 51.dp
 private val TrackHeight = 31.dp
@@ -67,7 +67,7 @@ fun HLSwitch(
 /** "Bật" hoặc "Tắt" cho TalkBack (08-kha-nang-tiep-can.md, 03-android.md). */
 @Composable
 internal fun switchStateDescription(checked: Boolean): String =
-    stringResource(if (checked) R.string.hl_switch_state_on else R.string.hl_switch_state_off)
+    stringResource(if (checked) R.string.common_on else R.string.common_off)
 
 @Composable
 private fun HLSwitchTrack(

@@ -2,92 +2,71 @@ package app.handlive.android.core.design.component
 
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
-import app.handlive.android.core.design.R
 import app.handlive.android.core.design.theme.HandLiveColors
+import app.handlive.android.core.strings.R
 
-/** Trạng thái liên kết giữa hai máy, theo bảng của `components/StatusIndicator/README.md`. */
-sealed interface HLConnectionStatus {
-    data object ConnectedWiFi : HLConnectionStatus
+/**
+ * Link state between the phone and a paired client, as the phone can see it (`components/StatusIndicator/README.md`,
+ * 0.11). The phone is the server: it never shows "Điện thoại ngoại tuyến" or "Cần ghép nối lại" — those states
+ * belong to the Mac and iPhone — and the camera state arrives with Phase 5.
+ */
+enum class HLConnectionStatus {
+    ConnectedWiFi,
+    ConnectedInternet,
+    Usb,
+    Connecting,
 
-    data object ConnectedInternet : HLConnectionStatus
-
-    data object Usb : HLConnectionStatus
-
-    data object Connecting : HLConnectionStatus
-
-    /** @param lastSeen giờ đã định dạng theo locale, ví dụ "14:05"; `null` khi chưa biết. */
-    data class PhoneOffline(
-        val lastSeen: String?,
-    ) : HLConnectionStatus
-
-    data object NetworkLost : HLConnectionStatus
-
-    data object NeedsRepair : HLConnectionStatus
-
-    data object CameraStreaming : HLConnectionStatus
+    /** Not connected ("Mất kết nối" / "Disconnected"). */
+    Disconnected,
 }
 
-/** Chữ hiển thị đầy đủ (không gồm tham số `lastSeen`). */
+/** Full status text (`status.*`). */
 @get:StringRes
 internal val HLConnectionStatus.textRes: Int
     get() =
         when (this) {
-            HLConnectionStatus.ConnectedWiFi -> {
-                R.string.hl_status_connected_wifi
-            }
-
-            HLConnectionStatus.ConnectedInternet -> {
-                R.string.hl_status_connected_internet
-            }
-
-            HLConnectionStatus.Usb -> {
-                R.string.hl_status_usb
-            }
-
-            HLConnectionStatus.Connecting -> {
-                R.string.hl_status_connecting
-            }
-
-            is HLConnectionStatus.PhoneOffline -> {
-                if (lastSeen == null) R.string.hl_status_phone_offline else R.string.hl_status_phone_offline_last_seen
-            }
-
-            HLConnectionStatus.NetworkLost -> {
-                R.string.hl_status_network_lost
-            }
-
-            HLConnectionStatus.NeedsRepair -> {
-                R.string.hl_status_needs_repair
-            }
-
-            HLConnectionStatus.CameraStreaming -> {
-                R.string.hl_status_camera_streaming
-            }
+            HLConnectionStatus.ConnectedWiFi -> R.string.status_connected_wifi
+            HLConnectionStatus.ConnectedInternet -> R.string.status_connected_internet
+            HLConnectionStatus.Usb -> R.string.status_connected_usb
+            HLConnectionStatus.Connecting -> R.string.status_connecting
+            HLConnectionStatus.Disconnected -> R.string.status_disconnected
         }
 
-/** Chỉ ba trạng thái đã kết nối mới đọc kèm tên thiết bị ("… với Pixel 8 của Lan"). */
-internal val HLConnectionStatus.readsDeviceName: Boolean
+/** TalkBack sentence with the peer's name (`status.*_to`), only for the connected states. */
+@get:StringRes
+internal val HLConnectionStatus.withDeviceRes: Int?
     get() =
-        this == HLConnectionStatus.ConnectedWiFi ||
-            this == HLConnectionStatus.ConnectedInternet ||
-            this == HLConnectionStatus.Usb
+        when (this) {
+            HLConnectionStatus.ConnectedWiFi -> R.string.status_connected_wifi_to
+            HLConnectionStatus.ConnectedInternet -> R.string.status_connected_internet_to
+            HLConnectionStatus.Usb -> R.string.status_connected_usb_to
+            HLConnectionStatus.Connecting, HLConnectionStatus.Disconnected -> null
+        }
 
-/** Chấm nhấp nháy theo `duration-pulse` chỉ cho "Đang kết nối…" và "Đang phát camera". */
+/** The pulsing dot (`duration-pulse`) belongs to "Đang kết nối…" only on the phone. */
 internal val HLConnectionStatus.pulses: Boolean
-    get() = this == HLConnectionStatus.Connecting || this == HLConnectionStatus.CameraStreaming
+    get() = this == HLConnectionStatus.Connecting
 
-/** Ngoại tuyến là xám; đỏ chỉ khi người dùng phải làm gì đó. */
+/** Symbol of the states that do not pulse (StatusIndicator README): `wifi`, `public`, `usb`, `wifi_off`. */
+internal val HLConnectionStatus.symbol: HLSymbol?
+    get() =
+        when (this) {
+            HLConnectionStatus.ConnectedWiFi -> HLSymbol.Wifi
+            HLConnectionStatus.ConnectedInternet -> HLSymbol.Public
+            HLConnectionStatus.Usb -> HLSymbol.Usb
+            HLConnectionStatus.Disconnected -> HLSymbol.WifiOff
+            HLConnectionStatus.Connecting -> null
+        }
+
+/** Connected is green, connecting orange, disconnected grey — never red for an ordinary disconnection. */
 internal fun HLConnectionStatus.tint(colors: HandLiveColors): Color =
     when (this) {
         HLConnectionStatus.ConnectedWiFi,
         HLConnectionStatus.ConnectedInternet,
         HLConnectionStatus.Usb,
-        HLConnectionStatus.CameraStreaming,
         -> colors.statusConnected
 
         HLConnectionStatus.Connecting -> colors.statusConnecting
 
-        is HLConnectionStatus.PhoneOffline, HLConnectionStatus.NetworkLost -> colors.statusOffline
-
-        HLConnectionStatus.NeedsRepair -> colors.statusError
+        HLConnectionStatus.Disconnected -> colors.statusOffline
     }

@@ -1,34 +1,34 @@
 package app.handlive.android
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
+import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.feature.clipboard.ClipboardFeature
+import app.handlive.android.ui.AppDependencies
+import app.handlive.android.ui.HandLiveApp
 
-/** Màn hình giữ chỗ của Phase 0: chưa có tính năng, chỉ để ứng dụng dựng và chạy được. */
-class MainActivity : ComponentActivity() {
+/**
+ * A-UI's single activity: edge-to-edge (required with targetSdk 35), the HandLive theme, and the clipboard focus
+ * hooks. An [AppCompatActivity], so the in-app language chosen on Android 10–12 (SET-02 field 32) applies to it.
+ */
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { PlaceholderScreen() }
+        val dependencies = AppDependencies(applicationContext)
+        setContent { HandLiveTheme { HandLiveApp(dependencies) } }
     }
-}
 
-@Composable
-private fun PlaceholderScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        BasicText(text = stringResource(R.string.app_name))
+    // CLIP-01 API 2 logic 6 and CLIP-05 E3: with focus HandLive reads the clipboard directly and verifies its clip.
+    override fun onResume() {
+        super.onResume()
+        ClipboardFeature.get(this).onAppResumed()
     }
-}
 
-@Preview(showBackground = true)
-@Composable
-private fun PlaceholderScreenPreview() {
-    PlaceholderScreen()
+    override fun onPause() {
+        ClipboardFeature.get(this).onAppPaused()
+        super.onPause()
+    }
 }

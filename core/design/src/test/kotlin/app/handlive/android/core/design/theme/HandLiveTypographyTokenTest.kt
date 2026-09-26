@@ -1,6 +1,7 @@
 package app.handlive.android.core.design.theme
 
 import androidx.compose.ui.text.font.FontListFontFamily
+import androidx.compose.ui.text.font.FontWeight
 import app.handlive.android.core.design.theme.TokensJsonOracle.int
 import app.handlive.android.core.design.theme.TokensJsonOracle.number
 import org.junit.Assert.assertEquals
@@ -68,7 +69,9 @@ class HandLiveTypographyTokenTest {
             listOf(HandLiveFontFamilies.inter, HandLiveFontFamilies.beVietnamPro, HandLiveFontFamilies.robotoMono)
                 .map { it as FontListFontFamily }
         val bundled = families.flatMap { family -> family.fonts.map { font -> family to font.weight.weight } }.toSet()
-        assertEquals("Mỗi weight token dùng có font thật, không đóng gói thừa", used, bundled)
+        // Inter Bold answers the system Bold Text setting (fontWeightAdjustment), not a token.
+        val boldText = setOf(HandLiveFontFamilies.inter as FontListFontFamily to FontWeight.Bold.weight)
+        assertEquals("Mỗi weight token dùng có font thật, không đóng gói thừa", used + boldText, bundled)
         val fontFiles = mainSourceDir().resolve("res/font").list()!!.toSet()
         assertEquals(bundled.size, fontFiles.size)
     }

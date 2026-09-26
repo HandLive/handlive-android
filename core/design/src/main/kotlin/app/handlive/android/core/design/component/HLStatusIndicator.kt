@@ -23,24 +23,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
-import app.handlive.android.core.design.R
+import androidx.compose.ui.unit.sp
 import app.handlive.android.core.design.theme.HandLiveDurations
 import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.core.strings.R
 
 /** Độ mờ thấp nhất của nhịp chấm (1 → 0.35 → 1 trong một chu kỳ `duration-pulse`), giống bản Apple. */
 private const val PULSE_MIN_ALPHA = 0.35f
+
+/** Status symbol height relative to the subheadline font size. */
+private const val ICON_TO_TEXT = 1.2f
 
 /**
  * Chỉ báo liên kết (`components/StatusIndicator/README.md`): chấm tô màu trạng thái luôn đi kèm chữ.
  * TalkBack đọc cả câu ("Đã kết nối qua Wi-Fi với Pixel 8 của Lan"); là live region lịch sự nên đổi trạng thái
  * được đọc mà không dời focus.
  *
- * Material Symbols chưa có ở Phase 0 nên mọi trạng thái dùng chấm; biểu tượng (`wifi`, `public`…) thêm sau.
+ * States that do not pulse show their Material Symbol (`wifi`, `public`, `usb`, `wifi_off`); "Connecting…" keeps
+ * the pulsing dot. Texts come from the string catalog (`status.*`).
  */
 @Composable
 fun HLStatusIndicator(
@@ -51,17 +57,16 @@ fun HLStatusIndicator(
 ) {
     val colors = HandLiveTheme.colors
     val spacing = HandLiveTheme.spacing
-    val fullText = statusText(status)
+    val subheadlineSize = HandLiveTheme.typography.subheadline.fontSize
+    val fullText = stringResource(status.textRes)
+    val withDevice = status.withDeviceRes
     val spoken =
-        if (deviceName.isNullOrBlank() || !status.readsDeviceName) {
-            fullText
-        } else {
-            stringResource(R.string.hl_status_with_device, fullText, deviceName)
-        }
+        if (deviceName.isNullOrBlank() || withDevice == null) fullText else stringResource(withDevice, deviceName)
     val isPill = variant == HLStatusIndicatorVariant.Pill
+    // The pill shows the short channel label "LAN" for the same-Wi-Fi state; TalkBack still reads the sentence.
     val shownText =
         if (isPill && status == HLConnectionStatus.ConnectedWiFi) {
-            stringResource(R.string.hl_status_connected_wifi_short)
+            stringResource(R.string.status_channel_lan)
         } else {
             fullText
         }
@@ -84,7 +89,19 @@ fun HLStatusIndicator(
         horizontalArrangement = Arrangement.spacedBy(if (isPill) spacing.space4 else spacing.space8),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatusDot(color = status.tint(colors), pulses = status.pulses)
+        val symbol = status.symbol
+        if (symbol == null) {
+            StatusDot(color = status.tint(colors), pulses = status.pulses)
+        } else {
+            // The symbol follows the text size, so it grows with the font scale like an SF Symbol.
+            val iconSize = with(LocalDensity.current) { (subheadlineSize.value * ICON_TO_TEXT).sp.toDp() }
+            HLIcon(
+                symbol = symbol,
+                contentDescription = null,
+                tint = status.tint(colors),
+                size = iconSize,
+            )
+        }
         BasicText(
             text = shownText,
             style =
@@ -94,14 +111,6 @@ fun HLStatusIndicator(
         )
     }
 }
-
-@Composable
-private fun statusText(status: HLConnectionStatus): String =
-    if (status is HLConnectionStatus.PhoneOffline && status.lastSeen != null) {
-        stringResource(status.textRes, status.lastSeen)
-    } else {
-        stringResource(status.textRes)
-    }
 
 @Composable
 private fun StatusDot(

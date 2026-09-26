@@ -12,6 +12,7 @@ import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.transport.handshake.PairRecord
 import app.handlive.android.core.transport.server.ControlServer
 import app.handlive.android.core.transport.server.ControlServerConfig
+import app.handlive.android.core.transport.server.ControlServerLimits
 import app.handlive.android.core.transport.server.ControlServerOptions
 import app.handlive.android.core.transport.server.ControlSession
 import app.handlive.android.core.transport.tls.TlsIdentity
@@ -26,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 class LoopbackServerFixture(
     handshakeTimeout: Duration = 5.seconds,
     rekeyAfterEnvelopes: Long = 10_000,
+    limits: ControlServerLimits = ControlServerLimits(),
 ) : AutoCloseable {
     val serverDeviceId = "39f713d0-a644-853f-8452-9421b9f51b9b"
     val tls: TlsIdentity = sharedIdentity
@@ -48,6 +50,7 @@ class LoopbackServerFixture(
                         ports = listOf(0),
                         handshakeTimeout = handshakeTimeout,
                         rekeyAfterEnvelopes = rekeyAfterEnvelopes,
+                        limits = limits,
                     ),
             )
         server = ControlServer(config)

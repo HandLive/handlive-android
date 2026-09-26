@@ -9,6 +9,7 @@ import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.session.PROTOCOL_VERSION
+import app.handlive.android.core.protocol.session.SessionByeData
 import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.protocol.session.SessionRekeyData
 import app.handlive.android.core.transport.WsCloseCode
@@ -64,7 +65,7 @@ internal object ControlSessionDispatcher {
         plaintext: ByteArray,
     ): CloseReason? {
         val (capability, close) = capabilityOrClose(plaintext)
-        capability?.let(session::applyPeerCapability)
+        capability?.let(session.capabilities::apply)
         return close
     }
 
@@ -81,6 +82,8 @@ internal object ControlSessionDispatcher {
             }
 
             SessionOp.BYE -> {
+                // The app needs the reason: `revoked` cleans up a pair whose `pair/revoke` got lost (PAIR-03 API 2).
+                session.recordBye(decode(SessionByeData.serializer(), payload.data).reason)
                 CloseReason(WsCloseCode.NORMAL, "bye")
             }
 
@@ -100,7 +103,7 @@ internal object ControlSessionDispatcher {
         if (ack.re != session.channel.rekey.pendingRequestId) return deliver(session, envelope, plaintext)
         val data = ack.data?.takeIf { ack.ok }
         val switched = data != null && session.channel.onRekeyAck(ack.re, decode(SessionRekeyData.serializer(), data))
-        return if (switched) null else CloseReason(WsCloseCode.INTERNAL, "rekey failed")
+        return if (switched) null else CloseReason(WsCloseCode.REKEY_FAILED, "REKEY_FAILED")
     }
 
     private suspend fun deliver(

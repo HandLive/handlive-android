@@ -9,7 +9,6 @@ import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.session.SessionByeData
 import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.transport.WsCloseCode
-import app.handlive.android.core.transport.capability.EffectiveFeatures
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.core.transport.session.SessionCipher
 import app.handlive.android.core.transport.session.SessionRekeyCoordinator
@@ -49,32 +48,39 @@ class ControlSession internal constructor(
                 cipher,
                 SessionRekeyCoordinator(config.localDeviceId, peerDeviceId, cipher),
                 config.options.clock,
-            ) { close(WsCloseCode.INTERNAL, "rekey timeout") }
+            ) { close(WsCloseCode.REKEY_FAILED, "REKEY_FAILED") }
         }
     private val inboundChannel = Channel<InboundEnvelope>(Channel.BUFFERED)
     private val stateFlow = MutableStateFlow(ControlConnectionState.AWAITING_CAPABILITY)
-    private val peerCapabilityFlow = MutableStateFlow<CapabilityData?>(null)
-    private val effectiveFlow = MutableStateFlow<Set<Feature>>(emptySet())
+    internal val capabilities = PeerCapabilityState(config.localCapability)
+    private val byeReasonFlow = MutableStateFlow<String?>(null)
     private val closing = AtomicBoolean(false)
 
     val state: StateFlow<ControlConnectionState> = stateFlow.asStateFlow()
-    val peerCapability: StateFlow<CapabilityData?> = peerCapabilityFlow.asStateFlow()
+    val peerCapability: StateFlow<CapabilityData?> = capabilities.peer
 
     /** Tính năng hiệu lực hiện tại (0.7.2); mô-đun tính năng chỉ chạy khi có tên mình trong tập này. */
-    val effectiveFeatures: StateFlow<Set<Feature>> = effectiveFlow.asStateFlow()
+    val effectiveFeatures: StateFlow<Set<Feature>> = capabilities.effective
     val inbound: ReceiveChannel<InboundEnvelope> = inboundChannel
 
-    /** Gửi một envelope ứng dụng đã mã hóa; trả `id` của envelope. */
+    /** `reason` of the peer's `session/bye` (`shutdown`, `revoked`, `update`…), once one arrived (CONN-02 API 4). */
+    val byeReason: StateFlow<String?> = byeReasonFlow.asStateFlow()
+
+    /**
+     * Gửi một envelope ứng dụng đã mã hóa; trả `id` của envelope. A caller-chosen UUIDv7 [id] lets a request's `ack`
+     * waiter exist before the envelope leaves.
+     */
     suspend fun send(
         type: MessageType,
         plaintext: ByteArray,
-    ): String = channel.send(type.wire, plaintext)
+        id: String? = null,
+    ): String = if (id == null) channel.send(type.wire, plaintext) else channel.send(type.wire, plaintext, id)
 
     /** Gửi `capability/update` (ảnh chụp đầy đủ) khi cấu hình Android đổi, và tính lại tính năng hiệu lực. */
     suspend fun sendCapabilityUpdate() {
         val local = config.localCapability()
         channel.send(MessageType.CAPABILITY.wire, capabilityPlaintext(CapabilityOp.UPDATE, local))
-        peerCapabilityFlow.value?.let { effectiveFlow.value = EffectiveFeatures.compute(local, it) }
+        capabilities.recompute(local)
     }
 
     /** `session/bye` rồi đóng 1000 (CONN-02 API 4). */
@@ -102,9 +108,8 @@ class ControlSession internal constructor(
         channel.send(MessageType.CAPABILITY.wire, capabilityPlaintext(CapabilityOp.HELLO, config.localCapability()))
     }
 
-    internal fun applyPeerCapability(peer: CapabilityData) {
-        peerCapabilityFlow.value = peer
-        effectiveFlow.value = EffectiveFeatures.compute(config.localCapability(), peer)
+    internal fun recordBye(reason: String) {
+        byeReasonFlow.value = reason
     }
 
     internal fun markEstablished() {

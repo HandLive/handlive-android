@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -47,7 +48,7 @@ fun HLGroupedRow(
 }
 
 @Composable
-internal fun HLNavigationRow(
+fun HLNavigationRow(
     title: String,
     value: String?,
     onClick: () -> Unit,
@@ -55,18 +56,26 @@ internal fun HLNavigationRow(
     val colors = HandLiveTheme.colors
     val typography = HandLiveTheme.typography
     HLGroupedRow(modifier = Modifier.clickable(role = Role.Button, onClick = onClick)) {
-        BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
-        if (value != null) BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel))
+        if (value == null) {
+            BasicText(text = title, style = typography.body.copy(color = colors.label), modifier = Modifier.weight(1f))
+        } else {
+            HLLabelValueLayout(
+                label = { BasicText(text = title, style = typography.body.copy(color = colors.label)) },
+                value = { BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         ChevronForward()
     }
 }
 
 @Composable
-internal fun HLSwitchRow(
+fun HLSwitchRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     unavailableReason: String?,
+    description: String? = null,
 ) {
     val colors = HandLiveTheme.colors
     val typography = HandLiveTheme.typography
@@ -80,6 +89,9 @@ internal fun HLSwitchRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             BasicText(text = title, style = typography.body.copy(color = colors.label))
+            if (description != null) {
+                BasicText(text = description, style = typography.subheadline.copy(color = colors.secondaryLabel))
+            }
             if (unavailableReason != null) {
                 BasicText(text = unavailableReason, style = typography.subheadline.copy(color = colors.textOrange))
             }
@@ -88,8 +100,43 @@ internal fun HLSwitchRow(
     }
 }
 
+/** Dòng chỉ đọc: nhãn bên trái, giá trị `secondary-label` bên phải; TalkBack đọc cả dòng một lần. */
 @Composable
-internal fun HLActionRow(
+fun HLValueRow(
+    title: String,
+    value: String,
+) {
+    val colors = HandLiveTheme.colors
+    val typography = HandLiveTheme.typography
+    HLGroupedRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        HLLabelValueLayout(
+            label = { BasicText(text = title, style = typography.body.copy(color = colors.label)) },
+            value = { BasicText(text = value, style = typography.body.copy(color = colors.secondaryLabel)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Dòng chọn một trong nhiều giá trị kiểu iOS: dấu kiểm `accent` ở dòng đang chọn; vai trò nút chọn cho TalkBack. */
+@Composable
+fun HLCheckRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = HandLiveTheme.colors
+    HLGroupedRow(modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick)) {
+        BasicText(
+            text = title,
+            style = HandLiveTheme.typography.body.copy(color = colors.label),
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) HLIcon(symbol = HLSymbol.Check, contentDescription = null, tint = colors.accent)
+    }
+}
+
+@Composable
+fun HLActionRow(
     title: String,
     destructive: Boolean,
     onClick: () -> Unit,

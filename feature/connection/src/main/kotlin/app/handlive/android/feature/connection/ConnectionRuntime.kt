@@ -1,0 +1,253 @@
+package app.handlive.android.feature.connection
+
+import android.content.Context
+import app.handlive.android.core.data.HandLiveData
+import app.handlive.android.core.data.db.PeerPlatform
+import app.handlive.android.core.data.pairing.PairStore
+import app.handlive.android.core.protocol.ProtocolJson
+import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.transport.handshake.PairRecord
+import app.handlive.android.core.transport.server.ControlServer
+import app.handlive.android.core.transport.server.ControlServerConfig
+import app.handlive.android.core.transport.server.ControlSession
+import app.handlive.android.core.transport.server.PairingEndpoint
+import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
+import app.handlive.android.core.transport.tls.TlsIdentityProvider
+import app.handlive.android.feature.connection.bench.BenchLog
+import app.handlive.android.feature.connection.capability.CapabilityPublisher
+import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
+import app.handlive.android.feature.connection.discovery.DiscoveryAdvertising
+import app.handlive.android.feature.connection.session.PeerSession
+import app.handlive.android.feature.connection.session.SessionRouter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+/**
+ * A-SVC's engine, one per process (CONN-01, CONN-02): runs the TLS server on 47800–47809, advertises
+ * `_handlive._tcp` with hourly hints, keeps this phone's capability current on every session, and hands decrypted
+ * envelopes to the feature modules through [router]. [HandLiveService] starts and stops it; the UI and the feature
+ * modules read [connectedPeers], [sessions] and [state].
+ */
+class ConnectionRuntime private constructor(
+    context: Context,
+) {
+    private val appContext = context.applicationContext
+    private val data = HandLiveData.get(appContext)
+    private val clock: () -> Long = System::currentTimeMillis
+    private val lock = Mutex()
+    private val sessionsFlow = MutableStateFlow<Map<String, PeerSession>>(emptyMap())
+    private val stateFlow = MutableStateFlow(ServiceState.STOPPED)
+    private val accessibilityRunning = MutableStateFlow(false)
+    private val environmentVersion = MutableStateFlow(0)
+    private val pairingAdvert = MutableStateFlow(PairingAdvert.NONE)
+    private val capability = CapabilityPublisher(LocalEnvironmentReader(appContext))
+    private val discovery = DiscoveryAdvertising(appContext, data.pairs, clock)
+    private var scope: CoroutineScope? = null
+    private var server: ControlServer? = null
+
+    /** Routes envelopes to feature handlers; register handlers before the service starts. */
+    val router = SessionRouter(clock)
+
+    /** Open sessions by `pair_id`. */
+    val sessions: StateFlow<Map<String, PeerSession>> = sessionsFlow.asStateFlow()
+
+    val connectedPeers: StateFlow<List<ConnectedPeer>> =
+        sessionsFlow
+            .map { open -> open.values.map { ConnectedPeer(it.pairId, it.peerName, it.peerPlatform, it.channel) } }
+            .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, emptyList())
+
+    val state: StateFlow<ServiceState> = stateFlow.asStateFlow()
+
+    private val endedFlow = MutableSharedFlow<SessionEnded>(extraBufferCapacity = ENDED_BUFFER)
+
+    /** Sessions that closed, with the peer's `session/bye` reason if it sent one (PAIR-03 API 2 needs `revoked`). */
+    val sessionEnded: SharedFlow<SessionEnded> = endedFlow.asSharedFlow()
+
+    /** Installed by the pairing feature; `/v1/pair` delegates to it (PAIR-01). */
+    @Volatile
+    var pairingEndpoint: PairingEndpoint? = null
+
+    /** SHA-256 of the TLS certificate (`tls_sha256` of PAIR-01 API 3), known once the server runs. */
+    @Volatile
+    var certificateSha256: ByteArray? = null
+        private set
+
+    /** Starts the server and the advertising; idempotent. Blocking Keystore work runs on [Dispatchers.IO]. */
+    suspend fun start() =
+        lock.withLock {
+            if (server != null) return@withLock
+            stateFlow.value = ServiceState.STARTING
+            val failure = runCatching { startLocked() }.exceptionOrNull()
+            if (failure is CancellationException) throw failure
+            stateFlow.value =
+                if (failure == null) {
+                    ServiceState.RUNNING
+                } else {
+                    // Keystore, port or NSD failure: the UI offers "Try Again" (SET-01 E2).
+                    stopLocked()
+                    ServiceState.FAILED
+                }
+        }
+
+    suspend fun stop() =
+        lock.withLock {
+            stopLocked()
+            stateFlow.value = ServiceState.STOPPED
+        }
+
+    /**
+     * A start of the foreground service was requested ([accepted]: a previous failure no longer stands, so the UI can
+     * wait for the outcome of the retry) or refused by Android (SET-01 E2).
+     */
+    fun markLaunch(accepted: Boolean) {
+        stateFlow.update { current ->
+            when {
+                !accepted -> ServiceState.FAILED
+                current == ServiceState.FAILED || current == ServiceState.STOPPED -> ServiceState.STARTING
+                else -> current
+            }
+        }
+    }
+
+    /** CLIP-01 A3: the Accessibility service connected or disconnected; `auto_send` follows. */
+    fun setAccessibilityRunning(running: Boolean) {
+        accessibilityRunning.value = running
+    }
+
+    /** Re-reads permissions (UI `onResume`, SET-01 step 14); a change goes out as `capability/update`. */
+    fun refreshEnvironment() {
+        environmentVersion.update { it + 1 }
+    }
+
+    /** Pairing window opened or closed: TXT gains or loses `pr` / `pm`. */
+    fun setPairingAdvert(advert: PairingAdvert) {
+        pairingAdvert.value = advert
+    }
+
+    /** Closes the session of [pairId] with `session/bye {reason}` (PAIR-03 step 6, CONN-02 API 4). */
+    suspend fun closeSession(
+        pairId: String,
+        reason: String,
+    ) {
+        server?.sessions?.get(pairId)?.let { runCatching { it.bye(reason) } }
+    }
+
+    private suspend fun startLocked() {
+        val runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope = it }
+        val (identity, tls) =
+            withContext(Dispatchers.IO) {
+                data.identity to TlsIdentityProvider.loadOrCreate(AndroidTlsIdentityStorage.create(appContext))
+            }
+        certificateSha256 = tls.certificateSha256()
+        BenchLog.setDevice(identity.deviceId)
+        val capabilityState =
+            capability.state(
+                runtimeScope,
+                data.settings.current(),
+                data.settings.settings,
+                accessibilityRunning,
+                environmentVersion,
+            )
+        val controlServer =
+            ControlServer(
+                ControlServerConfig(
+                    tls = tls,
+                    localDeviceId = identity.deviceId,
+                    pairs = { pairId -> data.pairs.pairRecord(pairId) },
+                    localCapability = { capabilityState.value },
+                    onSessionEstablished = { session -> runtimeScope.launch { attach(session) } },
+                    pairingEndpoint = { socket -> pairingEndpoint?.handle(socket) },
+                ),
+            )
+        val port = controlServer.start()
+        server = controlServer
+        capability.publishUpdates(runtimeScope, capabilityState) { controlServer.sessions.all() }
+        discovery.start(runtimeScope, port, pairingAdvert)
+    }
+
+    private suspend fun stopLocked() {
+        server?.sessions?.all()?.forEach { runCatching { it.bye(BYE_SHUTDOWN) } }
+        server?.stop()
+        server = null
+        discovery.stop()
+        scope?.cancel()
+        scope = null
+        sessionsFlow.value = emptyMap()
+    }
+
+    /** CONN-01 steps 9–10: the session joins [sessions]; its envelopes go to the router until it closes. */
+    private suspend fun attach(control: ControlSession) {
+        val device = data.pairs.find(control.pairId)
+        val peer =
+            PeerSession(
+                peer =
+                    PeerSession.PeerInfo(
+                        pairId = control.pairId,
+                        peerDeviceId = control.peerDeviceId,
+                        peerName = device?.peerName.orEmpty(),
+                        peerPlatform = device?.peerPlatform ?: PeerPlatform.MACOS,
+                    ),
+                channel = PeerSession.Channel.LAN,
+                effectiveFeatures = control.effectiveFeatures,
+                peerCapability = control.peerCapability,
+                sender = { type, plaintext, id -> control.send(type, plaintext, id) },
+                clock = clock,
+            )
+        sessionsFlow.update { it + (control.pairId to peer) }
+        val recorder =
+            control.peerCapability
+                .filterNotNull()
+                .onEach {
+                    data.pairs.recordSeen(
+                        control.pairId,
+                        ProtocolJson.encodeToString(CapabilityData.serializer(), it),
+                    )
+                }.launchIn(checkNotNull(scope))
+        try {
+            for (message in control.inbound) router.route(peer, message)
+        } finally {
+            recorder.cancel()
+            sessionsFlow.update { open -> if (open[control.pairId] === peer) open - control.pairId else open }
+            endedFlow.tryEmit(SessionEnded(control.pairId, control.byeReason.value))
+        }
+    }
+
+    companion object {
+        private const val BYE_SHUTDOWN = "shutdown"
+        private const val ENDED_BUFFER = 16
+
+        @Volatile
+        private var instance: ConnectionRuntime? = null
+
+        fun get(context: Context): ConnectionRuntime =
+            instance ?: synchronized(this) {
+                instance ?: ConnectionRuntime(context).also { instance = it }
+            }
+    }
+}
+
+/** CONN-01 step 7: the pair of `session/hello`, read on the TLS server thread; a tombstone has no `PRK`. */
+private fun PairStore.pairRecord(pairId: String): PairRecord? =
+    secretBlocking(pairId)?.let { secret ->
+        PairRecord(secret.pairId, secret.peerDeviceId, secret.prk ?: ByteArray(0), secret.revoked)
+    }

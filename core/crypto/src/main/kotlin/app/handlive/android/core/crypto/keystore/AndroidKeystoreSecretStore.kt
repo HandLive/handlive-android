@@ -29,19 +29,35 @@ object AndroidKeystoreSecretStore {
     private const val AES_KEY_BITS = 256
 
     fun create(context: Context): SecretStore {
+        val prefs = context.getSharedPreferences(SECRETS_PREFS, Context.MODE_PRIVATE)
+        return AeadSecretStore(aead(context), SharedPreferencesBlobBackend(prefs))
+    }
+
+    /** Sealer for secrets stored inside other records (`prk_enc`), under the same `hl_master`-wrapped keyset. */
+    fun sealer(context: Context): SecretSealer = AeadSecretSealer(aead(context))
+
+    /**
+     * Deletes `hl_master` and the wrapped keyset (SET-02 API 7): every sealed secret left anywhere becomes
+     * unreadable. A missing entry counts as success.
+     */
+    fun destroy(context: Context) {
+        KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(MASTER_KEY_ALIAS)
+        context.deleteSharedPreferences(KEYSET_PREFS)
+        context.deleteSharedPreferences(SECRETS_PREFS)
+    }
+
+    @Synchronized
+    private fun aead(context: Context): Aead {
         AeadConfig.register()
         ensureMasterKey()
-        val aead =
-            AndroidKeysetManager
-                .Builder()
-                .withSharedPref(context, KEYSET_NAME, KEYSET_PREFS)
-                .withKeyTemplate(KeyTemplate.createFrom(PredefinedAeadParameters.AES256_GCM))
-                .withMasterKeyUri(MASTER_KEY_URI)
-                .build()
-                .keysetHandle
-                .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
-        val prefs = context.getSharedPreferences(SECRETS_PREFS, Context.MODE_PRIVATE)
-        return AeadSecretStore(aead, SharedPreferencesBlobBackend(prefs))
+        return AndroidKeysetManager
+            .Builder()
+            .withSharedPref(context, KEYSET_NAME, KEYSET_PREFS)
+            .withKeyTemplate(KeyTemplate.createFrom(PredefinedAeadParameters.AES256_GCM))
+            .withMasterKeyUri(MASTER_KEY_URI)
+            .build()
+            .keysetHandle
+            .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
     }
 
     /** Tạo `hl_master` nếu chưa có; thử StrongBox trước, máy không có thì dùng TEE. */

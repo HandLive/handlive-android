@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CLIP-01 API 1: only the event types needed to notice the Copy action; no window content (C15). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewClicked|typeWindowStateChanged|typeNotificationStateChanged|typeAnnouncement"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/clipboard_consent_purpose"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="100" />
