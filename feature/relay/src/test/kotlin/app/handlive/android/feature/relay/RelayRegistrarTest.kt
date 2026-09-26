@@ -152,6 +152,34 @@ class RelayRegistrarTest {
             assertEquals(3, fixture.http.calls("PUT", "/v1/devices/me/push-token").size)
         }
 
+    @Test
+    fun deletingTheDeviceMakesTheNextUseRegisterAgain() =
+        runTest {
+            registrar.registerAll()
+            fixture.http.enqueue("DELETE", "/v1/devices/me?revoke_pairs=false", 204)
+
+            assertEquals(ServerDeletion.DONE, registrar.deleteDevice(revokePairs = false))
+            val call = fixture.http.calls("DELETE", "/v1/devices/me?revoke_pairs=false").single()
+            assertTrue(call.bearer!!.startsWith("jwt-"))
+
+            registrar.registerAll()
+            assertEquals(2, fixture.http.calls("POST", "/v1/devices").size)
+        }
+
+    @Test
+    fun aDeviceTheRelayNoLongerKnowsCountsAsDeletedAndErrorsChangeNothing() =
+        runTest {
+            // E6: the challenge answers 404 DEVICE_NOT_FOUND; the phone must not register just to delete itself.
+            fixture.http.enqueue("POST", "/v1/auth/challenge", 404, fixture.http.error("DEVICE_NOT_FOUND"))
+            assertEquals(ServerDeletion.DONE, registrar.deleteDevice(revokePairs = true))
+            assertTrue(fixture.http.calls("POST", "/v1/devices").isEmpty())
+
+            fixture.http.enqueue("DELETE", "/v1/devices/me?revoke_pairs=true", 503, fixture.http.error("INTERNAL"))
+            assertEquals(ServerDeletion.UNREACHABLE, registrar.deleteDevice(revokePairs = true))
+            fixture.http.unreachable = true
+            assertEquals(ServerDeletion.UNREACHABLE, registrar.deleteDevice(revokePairs = true))
+        }
+
     private suspend fun entry(
         pairId: String,
         revokedAt: Long?,

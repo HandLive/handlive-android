@@ -59,8 +59,16 @@ object UiSamples {
 
     val settings = SettingsUiState(HandLiveSettings(clipA11yConsentAt = NOW), accessibilityServiceOn = true)
 
-    /** SMS on while `READ_CONTACTS` is missing: "Needs permission" with "Grant Permission". */
-    val smsNeedsPermission = settings.copy(sms = SmsAccessState(missing = setOf("READ_CONTACTS")))
+    /**
+     * SMS on while `READ_CONTACTS` is missing ("Needs permission" with "Grant Permission"), a build with a relay that
+     * refused this device (CONN-03 E3), and both data rows.
+     */
+    val smsNeedsPermission =
+        settings.copy(
+            sms = SmsAccessState(missing = setOf("READ_CONTACTS")),
+            relayAvailable = true,
+            relayDeviceRevoked = true,
+        )
 
     object NoActions : SettingsActions {
         override fun setClipboard(enabled: Boolean) = Unit
