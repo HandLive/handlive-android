@@ -32,8 +32,10 @@ import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.ServiceLauncher
 import app.handlive.android.feature.connection.ServiceState
+import app.handlive.android.feature.sms.system.SmsPermissionNotifier
 import app.handlive.android.ui.AppDependencies
 import app.handlive.android.ui.system.SystemPages
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * The app after setup (03-android.md "Navigation"): the Devices and Settings tabs under a floating tab bar,
@@ -44,6 +46,7 @@ import app.handlive.android.ui.system.SystemPages
 fun MainScreen(
     dependencies: AppDependencies,
     startWithPairing: Boolean,
+    openRequests: MutableStateFlow<String?> = MutableStateFlow(null),
 ) {
     val context = LocalContext.current
     val feedback = remember { HLFeedbackState() }
@@ -66,6 +69,7 @@ fun MainScreen(
         )
     val main = MainContext(dependencies, stack, feedback, banners)
     UnpairedByPeerNotice(main)
+    OpenRequests(main, openRequests)
     BackHandler(enabled = stack.isNotEmpty(), onBack = main::pop)
     Box(modifier = Modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -113,6 +117,21 @@ private fun UnpairedByPeerNotice(main: MainContext) {
             main.feedback.show(HLFeedback(text, HLSymbol.Info))
             unpair.noticeShown()
         }
+    }
+}
+
+/** A notification's screen: the SMS primer of the permission suggestion (SET-01 field 17). */
+@Composable
+private fun OpenRequests(
+    main: MainContext,
+    requests: MutableStateFlow<String?>,
+) {
+    val request by requests.collectAsStateWithLifecycle()
+    LaunchedEffect(request) {
+        if (request == SmsPermissionNotifier.OPEN_SMS_PERMISSION && main.stack.lastOrNull() != Route.SmsPermission) {
+            main.push(Route.SmsPermission)
+        }
+        requests.value = null
     }
 }
 

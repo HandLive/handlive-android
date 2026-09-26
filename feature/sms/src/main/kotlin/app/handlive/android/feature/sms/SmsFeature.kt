@@ -30,6 +30,7 @@ import app.handlive.android.feature.sms.system.PhoneLookupContactNames
 import app.handlive.android.feature.sms.system.PhoneNumberNormalizer
 import app.handlive.android.feature.sms.system.RoomObserverState
 import app.handlive.android.feature.sms.system.SmsContentObserver
+import app.handlive.android.feature.sms.system.SmsPermissionNotifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,9 +96,9 @@ class SmsFeature private constructor(
     @Volatile
     var offline: OfflineSmsDelivery = OfflineSmsDelivery { _, _ -> }
 
-    /** SET-01 field 17: installed by the app, which owns the permission notification. */
+    /** SET-01 field 17: the suggestion notification when a client needs a permission this phone lacks. */
     @Volatile
-    var permissionMissing: PermissionMissingListener = PermissionMissingListener { _, _ -> }
+    var permissionMissing: PermissionMissingListener = SmsPermissionNotifier(appContext, clock)
 
     private val services =
         SmsServices(

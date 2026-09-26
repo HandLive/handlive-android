@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.ui.main.MainScreen
 import app.handlive.android.ui.onboarding.OnboardingFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -21,7 +22,10 @@ import kotlinx.coroutines.flow.map
  * set → the tabs. Nothing is shown until the settings are read, so the welcome screen never flashes.
  */
 @Composable
-fun HandLiveApp(dependencies: AppDependencies) {
+fun HandLiveApp(
+    dependencies: AppDependencies,
+    openRequests: MutableStateFlow<String?> = MutableStateFlow(null),
+) {
     val completedFlow =
         remember {
             dependencies.data.settings.settings
@@ -32,6 +36,6 @@ fun HandLiveApp(dependencies: AppDependencies) {
     when (completed) {
         null -> Box(Modifier.fillMaxSize().background(HandLiveTheme.colors.systemBackground))
         false -> OnboardingFlow(dependencies) { justFinished = true }
-        true -> MainScreen(dependencies, startWithPairing = justFinished)
+        true -> MainScreen(dependencies, startWithPairing = justFinished, openRequests = openRequests)
     }
 }
