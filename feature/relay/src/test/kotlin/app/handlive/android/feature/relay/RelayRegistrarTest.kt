@@ -131,6 +131,29 @@ class RelayRegistrarTest {
         }
 
     @Test
+    fun aPairThePeerCompletedIsMarkedRegisteredAndStopsWaiting() =
+        runTest {
+            val pairId = fixture.addPair(registered = false)
+            // PAIR-01 API 8 logic 6: 404 twice (the peer is not registered yet) → the next call waits 24 h.
+            repeat(2) { fixture.http.enqueue("POST", "/v1/pairs", 404, fixture.http.error("DEVICE_NOT_FOUND")) }
+            registrar.registerAll()
+            assertFalse(fixture.pairs.find(pairId)!!.relayRegistered)
+
+            // The peer registered the pair meanwhile: the relay lists it without revoked_at (PAIR-02 API 1 logic 3).
+            fixture.http.enqueue("GET", "/v1/pairs", 200, """{"pairs":[${entry(pairId, revokedAt = null)}]}""")
+            registrar.checkPairs()
+
+            assertTrue(fixture.pairs.find(pairId)!!.relayRegistered)
+            registrar.registerAll()
+            assertEquals(2, fixture.http.calls("POST", "/v1/pairs").size)
+            // Were it forgotten again, the wait is over: the next registration goes out at once.
+            fixture.relayPairs.markRegistered(pairId, registered = false)
+            fixture.http.enqueue("POST", "/v1/pairs", 200, """{"pair_id":"$pairId"}""")
+            registrar.registerAll()
+            assertEquals(3, fixture.http.calls("POST", "/v1/pairs").size)
+        }
+
+    @Test
     fun thePushTokenGoesWhenNewAndOnceAWeek() =
         runTest {
             repeat(3) { fixture.http.enqueue("PUT", "/v1/devices/me/push-token", 204) }
