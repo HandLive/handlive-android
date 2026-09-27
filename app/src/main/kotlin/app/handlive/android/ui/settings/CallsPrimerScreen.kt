@@ -17,7 +17,7 @@ import app.handlive.android.core.strings.R
 fun CallsPrimerScreen(onContinue: () -> Unit) {
     HLStepScreen(
         symbol = HLSymbol.Smartphone,
-        title = stringResource(R.string.settings_calls),
+        title = stringResource(R.string.permission_calls_primer_title),
         body = stringResource(R.string.permission_calls_primer),
         footer = stringResource(R.string.permission_primer_footer),
     ) {

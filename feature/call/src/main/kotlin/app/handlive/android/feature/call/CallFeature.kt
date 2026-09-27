@@ -22,6 +22,7 @@ import app.handlive.android.feature.call.module.CallServices
 import app.handlive.android.feature.call.module.OfflineCallDelivery
 import app.handlive.android.feature.call.system.AndroidCallAccess
 import app.handlive.android.feature.call.system.AndroidTelecom
+import app.handlive.android.feature.call.system.CallPermissionNotifier
 import app.handlive.android.feature.call.system.ContentResolverCallLog
 import app.handlive.android.feature.call.system.DirectorySimLabels
 import app.handlive.android.feature.call.system.PhoneAccountSubIds
@@ -113,6 +114,11 @@ class CallFeature private constructor(
                 ),
             clock = clock,
         )
+
+    init {
+        // SET-01 field 17: a client refused for a missing call permission makes the phone suggest it.
+        module.permissionMissing = CallPermissionNotifier(appContext, clock)
+    }
 
     /** Clients without a session (CONN-03, CONN-04): installed by the relay feature. */
     var offline: OfflineCallDelivery
