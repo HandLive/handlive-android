@@ -21,7 +21,8 @@ fun interface PairsVerdict {
 /**
  * What the relay must know about this phone (CONN-03 step 3, PAIR-01 API 8, PAIR-02 API 1, PAIR-03 E3, CONN-04
  * API 1): the device (once per process), every pair still at `relay_registered = 0`, the tombstones waiting for their
- * revocation, and the push token. A pair refused with 404 (the peer is not registered yet) waits 24 h. Errors bubble
+ * revocation, and the push token. A pair refused with 404 (the peer is not registered yet) or another 4xx waits 24 h —
+ * but not after a 401, a token the relay refused even once renewed, which the next occasion tries again. Errors bubble
  * up to the caller, which tries again at the next occasion (network, service start, relay switched on).
  */
 class RelayRegistrar(
@@ -59,7 +60,8 @@ class RelayRegistrar(
                 }
 
                 // PAIR-02 API 1 rule 3: the peer has not registered (again) yet; other refusals won't change soon.
-                response.status in CLIENT_ERRORS -> {
+                // A 401 is about the token, which the next occasion renews, not about the pair.
+                response.status in CLIENT_ERRORS && response.status != HTTP_UNAUTHORIZED -> {
                     retryPairAfter[pair.pairId] =
                         clock() + RelayConstants.PAIR_RETRY_AFTER_404_MILLIS
                 }
@@ -153,6 +155,7 @@ class RelayRegistrar(
     }
 
     private companion object {
+        const val HTTP_UNAUTHORIZED = 401
         val CLIENT_ERRORS = 400..499
 
         /** The relay no longer has the device: deleted earlier (E6) or refused for good. */
