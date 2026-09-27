@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.connection.capability.AndroidPermissions
 import app.handlive.android.feature.pairing.revoke.UnpairResult
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DeviceDetailsScreen
@@ -22,6 +23,7 @@ import app.handlive.android.ui.settings.PermissionTarget
 import app.handlive.android.ui.settings.PermissionsScreen
 import app.handlive.android.ui.settings.RestrictedSettingScreen
 import app.handlive.android.ui.settings.SettingsUiState
+import app.handlive.android.ui.settings.SmsPrimerScreen
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.SystemPages
 import kotlinx.coroutines.launch
@@ -67,7 +69,7 @@ fun RouteContent(
         }
 
         Route.SmsPermission -> {
-            SmsPermissionRoute(main)
+            PermissionPrimerRoute(main, AndroidPermissions.SMS) { onContinue -> SmsPrimerScreen(onContinue) }
         }
     }
 }
@@ -141,7 +143,12 @@ private fun PermissionsRoute(
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
-    val state = SettingsUiState(settings, serviceOn, rememberSmsAccess(settings.permissionsRequested))
+    val state =
+        SettingsUiState(
+            settings,
+            serviceOn,
+            rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
+        )
     PermissionsScreen(
         environment = environment,
         autoSend = state.autoSendStatus,

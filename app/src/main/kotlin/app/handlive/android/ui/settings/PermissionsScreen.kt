@@ -69,7 +69,7 @@ fun PermissionsScreen(
             section {
                 row { AutoSendRow(autoSend) { onOpen(PermissionTarget.AUTO_SEND) } }
                 row { HLValueRow(stringResource(R.string.settings_sms_messages), stringResource(sms.label)) }
-                smsPermissionAction(sms)?.let { label ->
+                permissionAction(sms)?.let { label ->
                     row { HLActionRow(stringResource(label), destructive = false) { onOpen(PermissionTarget.SMS) } }
                 }
             }

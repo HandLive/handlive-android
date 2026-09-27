@@ -10,7 +10,7 @@ enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
 data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
     val accessibilityServiceOn: Boolean = false,
-    val sms: SmsAccessState = SmsAccessState(),
+    val sms: FeatureAccess = FeatureAccess(),
     /** This build has a relay (`RELAY_HOST`): "Remove Device from Server" makes sense (SET-02 field 26). */
     val relayAvailable: Boolean = false,
     /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */

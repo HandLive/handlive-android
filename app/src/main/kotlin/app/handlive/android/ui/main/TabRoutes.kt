@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.design.component.HLSymbol
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.connection.capability.AndroidPermissions
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DevicesScreen
 import app.handlive.android.ui.settings.DataActionDialogs
@@ -49,7 +50,7 @@ fun SettingsTab(main: MainContext) {
         SettingsUiState(
             settings,
             serviceOn,
-            rememberSmsAccess(settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
             relayAvailable = relay.available,
             relayDeviceRevoked = relay.deviceRevoked,
             relayPinMismatch = relay.pinMismatch,

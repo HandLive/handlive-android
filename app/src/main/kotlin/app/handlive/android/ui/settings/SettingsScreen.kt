@@ -136,7 +136,7 @@ private fun HLGroupedListScope.smsSection(
     val status = state.smsStatus
     section {
         row { SmsSwitch(state.settings.smsEnabled, status, actions::setSms) }
-        smsPermissionAction(status)?.let { label ->
+        permissionAction(status)?.let { label ->
             row { HLActionRow(stringResource(label), false, actions::grantSms) }
         }
     }
@@ -159,7 +159,7 @@ private fun SmsSwitch(
 }
 
 /** The button a feature card shows for [status]: field 11 "Grant Permission" or field 16 "Open Settings". */
-fun smsPermissionAction(status: FeatureStatus): Int? =
+fun permissionAction(status: FeatureStatus): Int? =
     when (status) {
         FeatureStatus.NEEDS_PERMISSION -> R.string.permission_grant
         FeatureStatus.PERMISSION_DENIED -> R.string.common_open_settings

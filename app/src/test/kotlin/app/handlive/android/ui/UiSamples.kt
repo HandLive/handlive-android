@@ -12,10 +12,10 @@ import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.SmsAvailability
+import app.handlive.android.ui.settings.FeatureAccess
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
-import app.handlive.android.ui.settings.SmsAccessState
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.UnusedAppPause
@@ -65,7 +65,7 @@ object UiSamples {
      */
     val smsNeedsPermission =
         settings.copy(
-            sms = SmsAccessState(missing = setOf("READ_CONTACTS")),
+            sms = FeatureAccess(missing = setOf("READ_CONTACTS")),
             relayAvailable = true,
             relayDeviceRevoked = true,
         )

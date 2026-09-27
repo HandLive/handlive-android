@@ -9,12 +9,12 @@ import org.junit.Test
 class FeatureStatusTest {
     @Test
     fun theStatusFollowsTheSwitchTelephonyAndThePermissions() {
-        assertEquals(FeatureStatus.ON, SmsAccessState().status(enabled = true))
-        assertEquals(FeatureStatus.OFF, SmsAccessState(missing = setOf("READ_SMS")).status(enabled = false))
-        assertEquals(FeatureStatus.UNSUPPORTED, SmsAccessState(telephony = false).status(enabled = true))
+        assertEquals(FeatureStatus.ON, FeatureAccess().status(enabled = true))
+        assertEquals(FeatureStatus.OFF, FeatureAccess(missing = setOf("READ_SMS")).status(enabled = false))
+        assertEquals(FeatureStatus.UNSUPPORTED, FeatureAccess(telephony = false).status(enabled = true))
         assertEquals(
             FeatureStatus.NEEDS_PERMISSION,
-            SmsAccessState(missing = setOf("READ_SMS", "READ_CONTACTS")).status(enabled = true),
+            FeatureAccess(missing = setOf("READ_SMS", "READ_CONTACTS")).status(enabled = true),
         )
     }
 
@@ -31,14 +31,14 @@ class FeatureStatusTest {
 
     @Test
     fun onlyWhenEveryMissingPermissionIsDeniedForGoodDoesTheCardSendToSettings() {
-        val partly = SmsAccessState(missing = setOf("READ_SMS", "READ_CONTACTS"), deniedForGood = setOf("READ_SMS"))
+        val partly = FeatureAccess(missing = setOf("READ_SMS", "READ_CONTACTS"), deniedForGood = setOf("READ_SMS"))
         val all = partly.copy(deniedForGood = setOf("READ_SMS", "READ_CONTACTS"))
 
         assertEquals(FeatureStatus.NEEDS_PERMISSION, partly.status(enabled = true))
         assertEquals(FeatureStatus.PERMISSION_DENIED, all.status(enabled = true))
-        assertEquals(R.string.permission_grant, smsPermissionAction(partly.status(enabled = true)))
-        assertEquals(R.string.common_open_settings, smsPermissionAction(all.status(enabled = true)))
-        assertNull(smsPermissionAction(FeatureStatus.ON))
-        assertNull(smsPermissionAction(FeatureStatus.UNSUPPORTED))
+        assertEquals(R.string.permission_grant, permissionAction(partly.status(enabled = true)))
+        assertEquals(R.string.common_open_settings, permissionAction(all.status(enabled = true)))
+        assertNull(permissionAction(FeatureStatus.ON))
+        assertNull(permissionAction(FeatureStatus.UNSUPPORTED))
     }
 }
