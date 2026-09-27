@@ -4,6 +4,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.CertificatePinner
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -33,8 +34,10 @@ object OkHttpRelayTransport {
             .retryOnConnectionFailure(true)
             .apply {
                 if (config.pins.isNotEmpty()) {
+                    // A pin pattern is a host name, while RELAY_HOST may carry a port ("relay.example.com:8443").
+                    val host = config.baseUrl.toHttpUrl().host
                     val pinner = CertificatePinner.Builder()
-                    config.pins.forEach { pinner.add(config.host, it) }
+                    config.pins.forEach { pinner.add(host, it) }
                     certificatePinner(pinner.build())
                 }
             }.build()
