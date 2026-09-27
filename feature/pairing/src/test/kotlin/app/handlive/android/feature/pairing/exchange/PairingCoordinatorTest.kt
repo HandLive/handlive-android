@@ -22,6 +22,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -144,6 +146,50 @@ class PairingCoordinatorTest {
             runCurrent()
             assertEquals(PairingState.Waiting(pinMode = true), coordinator.state.value)
         }
+
+    @Test
+    fun aMacThatReconnectsBeforeTheNewPinIsTypedKeepsThePinEntryOpenAndPairs() =
+        runBlocking {
+            val phone = localPhone()
+            val windowScope = CoroutineScope(SupervisorJob())
+            val coordinator =
+                PairingCoordinator({ phone }, pairs.store, { adverts += it }, windowScope, clock = { NOW })
+            coordinator.startPin()
+            coordinator.submitPin("111111")
+            // The Mac shows 482915: the offer's MAC does not verify and it answers PIN_INVALID (A5, E7).
+            val first = FakeTextSocket()
+            val firstRun = async { coordinator.handle(first) }
+            first.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            first.toClient.receive()
+            first.toPhone.send(client.error(ErrorCode.PIN_INVALID.name, attemptsLeft = 2))
+            firstRun.await()
+            assertEquals(PairingState.EnterPin(attemptsLeft = 2), coordinator.state.value)
+            // The Mac retries at once, while the user is still typing the new PIN: the PIN entry stays open.
+            val second = FakeTextSocket()
+            val secondRun = async { coordinator.handle(second) }
+            second.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            awaitConsumed(second)
+            assertEquals(PairingState.EnterPin(attemptsLeft = 2), coordinator.state.value)
+            // "Pairing…" starts once the PIN is confirmed; the waiting client then gets the offer under K_pin.
+            coordinator.submitPin("482915")
+            assertEquals(PairingState.Verifying, coordinator.state.value)
+            val offerText = second.toClient.receive()
+            val offer =
+                checkNotNull(client.checkOffer(offerText, client.pinSecret("482915", offerText), phone.tlsSha256))
+            val pairId = UUID.randomUUID().toString()
+            second.toPhone.send(client.confirm(offer, pairId, CREATED_AT))
+            assertTrue(client.checkDone(second.toClient.receive(), offer, pairId, CREATED_AT))
+            second.toPhone.close()
+            secondRun.await()
+            assertEquals(client.name, (coordinator.state.value as PairingState.Paired).peerName)
+            windowScope.cancel()
+        }
+
+    /** Lets the exchange read pair/hello and reach the point where it waits for the PIN. */
+    private suspend fun awaitConsumed(socket: FakeTextSocket) {
+        withTimeout(5_000) { while (!socket.toPhone.isEmpty) yield() }
+        repeat(10) { yield() }
+    }
 
     @Test
     fun deniedCameraOffersThePin() =
