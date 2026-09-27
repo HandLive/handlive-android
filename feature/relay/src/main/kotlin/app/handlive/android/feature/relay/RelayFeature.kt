@@ -107,7 +107,10 @@ class RelayFeature private constructor(
         }
     }
 
-    /** FCM `t = wake` (CONN-04 step 9a, `gms` flavor): run the service and let the waiting client in. */
+    /**
+     * FCM `t = wake` (CONN-04 step 9a, `gms` flavor), for any reason — `call_action` included (CALL-02 B2): run the
+     * service and let the waiting client in.
+     */
     fun onWake() {
         ServiceLauncher.start(appContext)
         onWorker { connector.demand() }

@@ -5,9 +5,10 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 /**
- * FCM data messages (CONN-04 API 3, step 9a): `{"t":"wake","p":<pair_id>,"r":<reason>}` without content. A wake-up
- * starts the connection service (high-priority FCM may start a foreground service) and connects to the relay, where
- * the client that asked is waiting.
+ * FCM data messages (CONN-04 API 3, step 9a): `{"t":"wake","p":<pair_id>,"r":<reason>}` without content. Whatever the
+ * reason — `user_open`, `sms_send`, or `call_action` when an iPhone or iPad declines a call from its notification
+ * while the phone is not on the relay (CALL-02 B2) — a wake-up starts the connection service (high-priority FCM may
+ * start a foreground service) and connects to the relay, where the client that asked is waiting.
  */
 class FcmPushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
