@@ -121,6 +121,28 @@ class RelayRegistrarTest {
         }
 
     @Test
+    fun anUnknownPairIsRevokedWithoutRegisteringTheDeviceAgain() =
+        runTest {
+            val pairId = fixture.addPair()
+            fixture.pairs.revoke(pairId)
+            // PAIR-03 API 3: an unknown pair_id answers 404 DEVICE_NOT_FOUND, which means revoked.
+            fixture.http.enqueue("POST", "/v1/pairs/$pairId/revoke", 404, fixture.http.error("DEVICE_NOT_FOUND"))
+            registrar.revokeTombstones()
+            assertTrue(fixture.relayPairs.tombstonesToRevoke().isEmpty())
+            assertEquals(1, fixture.http.calls("POST", "/v1/pairs/$pairId/revoke").size)
+
+            // A relay that no longer knows this device holds none of its pairs either.
+            val other = fixture.addPair()
+            fixture.pairs.revoke(other)
+            fixture.auth.forget()
+            fixture.http.enqueue("POST", "/v1/auth/challenge", 404, fixture.http.error("DEVICE_NOT_FOUND"))
+            registrar.revokeTombstones()
+            assertTrue(fixture.relayPairs.tombstonesToRevoke().isEmpty())
+            assertTrue(fixture.http.calls("POST", "/v1/pairs/$other/revoke").isEmpty())
+            assertTrue("never registered for a revocation", fixture.http.calls("POST", "/v1/devices").isEmpty())
+        }
+
+    @Test
     fun theListOfPairsCleansUpRevokedPairsAndForgottenRegistrations() =
         runTest {
             val revoked = fixture.addPair()
