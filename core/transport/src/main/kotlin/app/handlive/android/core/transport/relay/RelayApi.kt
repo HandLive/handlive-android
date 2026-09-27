@@ -12,8 +12,9 @@ import app.handlive.android.core.protocol.relay.RelayValues
  * The relay endpoints that need the device JWT (0.7.4). An expired token (401 `TOKEN_EXPIRED`) is renewed and the
  * call retried once (0.6.4 step 3); a token the relay no longer accepts (401 `SIGNATURE_INVALID`, such as one signed
  * before the relay's key changed) and an unknown device (404 `DEVICE_NOT_FOUND`) register the device again first
- * (CONN-03 E2). Where 404 already means "done" — `DELETE /v1/devices/me` (SET-02 E6) — nothing registers again: a
- * refused token is only renewed. Callers read the status and `error.code` of the returned [RelayResponse].
+ * (CONN-03 E2). Where 404 already means "done" — `DELETE /v1/devices/me` (SET-02 E6) and a pair's revocation (PAIR-03
+ * API 3) — nothing registers again: a refused token is only renewed. Callers read the status and `error.code` of the
+ * returned [RelayResponse].
  */
 class RelayApi(
     private val http: RelayHttp,
@@ -30,12 +31,20 @@ class RelayApi(
         return decode(PairsListResponse.serializer(), response.body)
     }
 
-    /** PAIR-03 API 3: 204, or 404 when the pair never reached the relay — both mean revoked. */
+    /**
+     * PAIR-03 API 3: 204, or 404 `DEVICE_NOT_FOUND` when the relay does not know the pair — both mean revoked. That
+     * 404 names the unknown pair, so the device is not registered again for it.
+     */
     suspend fun revokePair(
         pairId: String,
         reason: String,
     ): RelayResponse =
-        authorized("POST", "/v1/pairs/$pairId/revoke", json(PairRevokeRequest.serializer(), PairRevokeRequest(reason)))
+        authorized(
+            "POST",
+            "/v1/pairs/$pairId/revoke",
+            json(PairRevokeRequest.serializer(), PairRevokeRequest(reason)),
+            registerIfUnknown = false,
+        )
 
     /** CONN-04 API 1: the FCM registration token of this phone. */
     suspend fun putPushToken(token: String): RelayResponse =

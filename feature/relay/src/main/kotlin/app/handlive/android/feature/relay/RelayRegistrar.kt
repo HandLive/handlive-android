@@ -101,15 +101,24 @@ class RelayRegistrar(
         relayPairs.tombstonesToRevoke().forEach { pairId -> revoke(pairId, RelayValues.REVOKE_USER) }
     }
 
-    /** PAIR-03 step 8–9: `true` when the relay no longer knows the pair, and the tombstone is gone. */
+    /**
+     * PAIR-03 step 8–9: `true` when the relay no longer knows the pair, and the tombstone is gone. A relay that does
+     * not know this device either (404 while authenticating) holds none of its pairs: done as well, and the device is
+     * not registered again for it.
+     */
     suspend fun revoke(
         pairId: String,
         reason: String,
     ): Boolean {
-        val response = api.revokePair(pairId, reason)
         val done =
-            response.ok || response.errorCode == RelayErrorCode.DEVICE_NOT_FOUND ||
-                response.errorCode == RelayErrorCode.NOT_PAIRED
+            try {
+                val response = api.revokePair(pairId, reason)
+                response.ok || response.errorCode == RelayErrorCode.DEVICE_NOT_FOUND ||
+                    response.errorCode == RelayErrorCode.NOT_PAIRED
+            } catch (e: RelayRequestException) {
+                if (e.code != RelayErrorCode.DEVICE_NOT_FOUND) throw e
+                true
+            }
         if (done) relayPairs.deleteTombstone(pairId)
         return done
     }
