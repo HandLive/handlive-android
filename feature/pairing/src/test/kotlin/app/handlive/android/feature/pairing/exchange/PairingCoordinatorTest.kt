@@ -18,6 +18,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -181,7 +183,9 @@ class PairingCoordinatorTest {
             assertTrue(client.checkDone(second.toClient.receive(), offer, pairId, CREATED_AT))
             second.toPhone.close()
             secondRun.await()
-            assertEquals(client.name, (coordinator.state.value as PairingState.Paired).peerName)
+            val paired = coordinator.state.value as PairingState.Paired
+            assertEquals(client.name, paired.peerName)
+            assertTrue("the phone's first pair, made with the PIN", paired.firstPair)
             windowScope.cancel()
         }
 
@@ -290,6 +294,54 @@ class PairingCoordinatorTest {
         }
 
     @Test
+    fun thePhonesFirstPairSaysItIsTheFirst() =
+        runBlocking {
+            // SET-01 step 8: after the first pairing the app opens the feature list.
+            assertTrue(pairOverQr().firstPair)
+            assertEquals(1, pairs.store.activeCount())
+        }
+
+    @Test
+    fun aPairAddedNextToAnotherIsNotTheFirst() =
+        runBlocking {
+            pairs.store.save(fakePair(), ByteArray(32))
+            assertFalse(pairOverQr().firstPair)
+            assertEquals(2, pairs.store.activeCount())
+        }
+
+    @Test
+    fun pairingTheSameClientAgainIsNotTheFirst() =
+        runBlocking {
+            // The new pair replaces the old one of that client (PAIR-01 API 4 rule 4): still one pair, not the first.
+            pairs.store.save(fakePair(peerDeviceId = client.deviceId), ByteArray(32))
+            assertFalse(pairOverQr().firstPair)
+            assertEquals(1, pairs.store.activeCount())
+        }
+
+    /** A whole QR pairing with [client] on a fresh window; returns the result the screen shows. */
+    private suspend fun pairOverQr(): PairingState.Paired =
+        coroutineScope {
+            val phone = localPhone()
+            val windowScope = CoroutineScope(SupervisorJob())
+            val coordinator =
+                PairingCoordinator({ phone }, pairs.store, { adverts += it }, windowScope, clock = { NOW })
+            coordinator.onScanned(client.qrCode())
+            coordinator.confirm()
+            val socket = FakeTextSocket()
+            val run = async { coordinator.handle(socket) }
+            socket.toPhone.send(client.hello())
+            val offer =
+                checkNotNull(client.checkOffer(socket.toClient.receive(), client.pairingSecret, phone.tlsSha256))
+            val pairId = UUID.randomUUID().toString()
+            socket.toPhone.send(client.confirm(offer, pairId, CREATED_AT))
+            assertTrue(client.checkDone(socket.toClient.receive(), offer, pairId, CREATED_AT))
+            socket.toPhone.close()
+            run.await()
+            windowScope.cancel()
+            coordinator.state.value as PairingState.Paired
+        }
+
+    @Test
     fun aReconnectAfterTheWindowExpiredIsStillPairingClosed() =
         runTest {
             val coordinator = coordinator()
@@ -325,10 +377,10 @@ class PairingCoordinatorTest {
             )
         }
 
-    private fun fakePair() =
+    private fun fakePair(peerDeviceId: String = UUID.randomUUID().toString()) =
         NewPair(
             pairId = UUID.randomUUID().toString(),
-            peer = PeerKeys(UUID.randomUUID().toString(), ByteArray(32), ByteArray(32)),
+            peer = PeerKeys(peerDeviceId, ByteArray(32), ByteArray(32)),
             peerName = "Mac",
             peerPlatform = PeerPlatform.MACOS,
             peerModel = null,
