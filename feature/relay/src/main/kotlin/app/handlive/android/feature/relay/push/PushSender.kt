@@ -32,8 +32,8 @@ class PushDelivery(
  * Alert pushes to an iPhone or iPad without a session (CONN-04), only for a pair registered with the relay whose
  * latest capability wants them and has not refused the relay: a new inbox SMS with `sms.notify` (SMS-02 step 10), an
  * incoming or missed call with `call.notify` (CALL-01 step 5, CALL-04 API 5). A temporary refusal (network, 429, 5xx,
- * 502 `PUSH_PROVIDER_ERROR`) waits in `push_outbox` ([PushQueue], E2); 409 `PUSH_TOKEN_MISSING` and 403 `NOT_PAIRED`
- * are dropped (E1, PAIR-03).
+ * 502 `PUSH_PROVIDER_ERROR`, a 401 that a new token did not cure) waits in `push_outbox` ([PushQueue], E2); 409
+ * `PUSH_TOKEN_MISSING` and 403 `NOT_PAIRED` are dropped (E1, PAIR-03).
  */
 class PushSender(
     private val api: RelayApi,
@@ -103,12 +103,14 @@ class PushSender(
         } catch (_: RelayUnreachableException) {
             PushDelivery(PushResult.RETRY)
         } catch (e: RelayRequestException) {
-            // Authentication failed on the way (5xx, 429 of the auth endpoints, or a revoked device).
-            val temporary = e.status >= HTTP_SERVER_ERROR || e.code == RelayErrorCode.RATE_LIMITED
+            // Authentication failed on the way (5xx, 429 or 401 of the auth endpoints, or a revoked device).
+            val temporary =
+                e.status >= HTTP_SERVER_ERROR || e.status == HTTP_UNAUTHORIZED || e.code == RelayErrorCode.RATE_LIMITED
             PushDelivery(if (temporary) PushResult.RETRY else PushResult.DROPPED, e.retryAfterMillis)
         }
 
     private companion object {
+        const val HTTP_UNAUTHORIZED = 401
         const val HTTP_TOO_MANY_REQUESTS = 429
         const val HTTP_SERVER_ERROR = 500
 
@@ -119,6 +121,9 @@ class PushSender(
                 response.status == HTTP_TOO_MANY_REQUESTS -> PushDelivery(PushResult.RETRY, response.retryAfterMillis)
 
                 response.status >= HTTP_SERVER_ERROR -> PushDelivery(PushResult.RETRY)
+
+                // Refused even with the token RelayApi renewed: the outbox tries again later, with one more renewal.
+                response.status == HTTP_UNAUTHORIZED -> PushDelivery(PushResult.RETRY)
 
                 // 409 PUSH_TOKEN_MISSING (E1), 403 NOT_PAIRED, 413 PAYLOAD_TOO_LARGE, 400: no retry changes that.
                 else -> PushDelivery(PushResult.DROPPED)
