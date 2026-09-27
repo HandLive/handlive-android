@@ -1,6 +1,7 @@
 // The phone's side of the relay (CONN-03, CONN-04): when to connect to /v1/relay and when to leave it, registration
 // of the device and its pairs, remote revocation (PAIR-03 flow B), pairing through a rendezvous (PAIR-01), and alert
-// pushes to iPhone and iPad with the push outbox. No Play Services here: FCM lives in the app's `gms` flavor.
+// pushes (new SMS, incoming and missed calls) to iPhone and iPad with the push outbox. No Play Services here: FCM
+// lives in the app's `gms` flavor.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.serialization)
@@ -43,6 +44,7 @@ dependencies {
     api(project(":feature:connection"))
     implementation(project(":feature:pairing"))
     implementation(project(":feature:sms"))
+    implementation(project(":feature:call"))
     implementation(libs.androidx.core)
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)

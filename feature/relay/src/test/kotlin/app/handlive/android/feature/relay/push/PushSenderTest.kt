@@ -28,7 +28,9 @@ class PushSenderTest {
     private val sent = mutableListOf<Pair<String, String>>()
     private val outbox = fixture.database.pushOutbox()
     private val sender =
-        PushSender(fixture.api, fixture.relayPairs, outbox, fixture.clock, sent = { key, peer -> sent += key to peer })
+        PushSender(fixture.api, fixture.relayPairs, outbox, fixture.clock, { request, status ->
+            if (status == 202) sent += request.collapseKey!! to request.to
+        })
 
     @After
     fun tearDown() = fixture.close()

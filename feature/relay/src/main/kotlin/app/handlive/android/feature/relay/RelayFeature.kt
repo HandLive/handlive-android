@@ -4,6 +4,9 @@ import android.content.Context
 import app.handlive.android.core.data.HandLiveData
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.data.settings.SettingsKeys
+import app.handlive.android.core.protocol.call.CallStateData
+import app.handlive.android.core.protocol.relay.PushRequest
+import app.handlive.android.core.protocol.relay.RelayValues
 import app.handlive.android.core.protocol.sms.SmsNewData
 import app.handlive.android.core.transport.relay.RelayApi
 import app.handlive.android.core.transport.relay.RelayAuth
@@ -12,6 +15,10 @@ import app.handlive.android.core.transport.relay.RelayIdentity
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.relay.RelayTransport
 import app.handlive.android.core.transport.server.PairingEndpoint
+import app.handlive.android.feature.call.CallBenchEvent
+import app.handlive.android.feature.call.CallFeature
+import app.handlive.android.feature.call.module.MissedCall
+import app.handlive.android.feature.call.module.OfflineCallDelivery
 import app.handlive.android.feature.connection.ConnectionRuntime
 import app.handlive.android.feature.connection.ServiceLauncher
 import app.handlive.android.feature.connection.ServiceState
@@ -21,6 +28,7 @@ import app.handlive.android.feature.connection.session.PeerSession
 import app.handlive.android.feature.pairing.PairingFeature
 import app.handlive.android.feature.pairing.exchange.RendezvousConnector
 import app.handlive.android.feature.pairing.revoke.RemoteRevoker
+import app.handlive.android.feature.relay.push.CallPushBuilder
 import app.handlive.android.feature.relay.push.PushOutboxRunner
 import app.handlive.android.feature.relay.push.PushSender
 import app.handlive.android.feature.sms.SmsBenchEvent
@@ -45,7 +53,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The relay on the phone (CONN-03, CONN-04, PAIR-01 over the relay, PAIR-03 flow B): wires the relay client into the
- * connection service, the pairing and SMS features, and the network. Everything that touches the Keystore or the
+ * connection service, the pairing, SMS and call features, and the network. Everything that touches the Keystore or the
  * network runs on one serial worker, so the relay's state needs no locks.
  */
 class RelayFeature private constructor(
@@ -81,11 +89,7 @@ class RelayFeature private constructor(
             PairingFeature.get(appContext).unpair.onRevokedByRelay(pairId, elsewhere = true)
         }
     }
-    private val push by lazy {
-        PushSender(api, data.relayPairs, data.pushOutbox, clock, sent = { messageKey, peer ->
-            BenchLog.event(SmsBenchEvent.SMS_PUSH_SENT, "msg" to messageKey, "peer" to peer.take(PEER_ID))
-        })
-    }
+    private val push by lazy { PushSender(api, data.relayPairs, data.pushOutbox, clock, ::benchPushAnswered) }
     private val outbox = PushOutboxRunner(scope, clock, { push }, owner::allowed)
     private val connectorHolder = lazy { RelayConnector(scope, clock, auth, transport.links, owner) }
     private val connector by connectorHolder
@@ -201,6 +205,45 @@ class RelayFeature private constructor(
         }
     }
 
+    /**
+     * The calls of this phone for clients without a session (CALL-01 steps 4–5, CALL-04 step 8): while an incoming
+     * call rings the relay stays open for the clients waiting there — a "Decline" from an iPhone notification then
+     * needs no wake push (API 4 logic 4) — and follows `RELAY_IDLE_DISCONNECT` once it stops; the pushes go through
+     * [PushSender]. Every call returns at once; the work runs on the relay's worker.
+     */
+    private inner class CallDelivery : OfflineCallDelivery {
+        override fun ringing(callId: String) {
+            onWorker { if (hasRelayPairWithoutSession()) connector.hold(callId, on = true) }
+        }
+
+        override fun incoming(
+            state: CallStateData,
+            connected: Set<String>,
+        ) {
+            onWorker {
+                push.callIncoming(state, runtime.sessions.value.keys + connected)
+                outbox.wake()
+            }
+        }
+
+        override fun ringingEnded(callId: String) {
+            scope.launch {
+                if (connectorHolder.isInitialized()) connector.hold(callId, on = false)
+                attempt { push.dropIncoming(callId) }
+            }
+        }
+
+        override fun missed(
+            missed: MissedCall,
+            connected: Set<String>,
+        ) {
+            onWorker {
+                push.callMissed(missed, runtime.sessions.value.keys + connected)
+                outbox.wake()
+            }
+        }
+    }
+
     private suspend fun hasRelayPairWithoutSession(): Boolean {
         val open = runtime.sessions.value.keys
         return data.pairs
@@ -256,8 +299,6 @@ class RelayFeature private constructor(
     }
 
     companion object {
-        private const val PEER_ID = 8
-
         @Volatile
         private var instance: RelayFeature? = null
 
@@ -276,6 +317,7 @@ class RelayFeature private constructor(
             if (!config.available) return
             SmsFeature.get(context).offline =
                 OfflineSmsDelivery { new, reached -> feature.onSmsForOfflineClients(new, reached) }
+            CallFeature.get(context).offline = feature.CallDelivery()
             val pairing = PairingFeature.get(context)
             pairing.coordinator.rendezvous =
                 object : RendezvousConnector {
@@ -293,3 +335,31 @@ class RelayFeature private constructor(
         }
     }
 }
+
+/** `HLBENCH/1` of the pushes the relay answered: `sms_push_sent` for a 202, `call_push_sent` with any status. */
+private fun benchPushAnswered(
+    request: PushRequest,
+    status: Int,
+) {
+    val peer = "peer" to request.to.take(BENCH_PEER_ID)
+    when (request.reason) {
+        RelayValues.REASON_SMS_NEW -> {
+            if (status == HTTP_ACCEPTED) {
+                BenchLog.event(SmsBenchEvent.SMS_PUSH_SENT, "msg" to request.collapseKey.orEmpty(), peer)
+            }
+        }
+
+        RelayValues.REASON_CALL_INCOMING, RelayValues.REASON_CALL_MISSED -> {
+            // `calllog:<entry_id>`: a missed call that matched no call context.
+            val call = request.collapseKey?.takeIf { it.startsWith(CallPushBuilder.CALL_KEY) }?.substringAfter(':')
+            BenchLog.event(
+                CallBenchEvent.CALL_PUSH_SENT,
+                listOf("call" to (call ?: "none"), peer, "reason" to request.reason, "status" to status),
+            )
+        }
+    }
+}
+
+/** The first 8 hex digits of a peer's `device_id` in `HLBENCH/1` lines. */
+private const val BENCH_PEER_ID = 8
+private const val HTTP_ACCEPTED = 202
