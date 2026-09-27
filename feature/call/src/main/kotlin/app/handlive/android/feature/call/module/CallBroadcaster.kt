@@ -33,8 +33,15 @@ class CallBroadcaster(
     /** Sessions with calls in effect, by `pair_id`. */
     fun active(): Map<String, PeerSession> = sessions.value.filterValues { it.isEffective(Feature.CALL) }
 
-    /** [context] to every active session whose last version differs; an ended one only where it was seen. */
-    suspend fun publish(context: CallContext?) {
+    /**
+     * [context] to every active session whose last version differs; an ended one only where it was seen. [change] =
+     * the context itself changed; otherwise a session got calls in effect or the controls changed, and a session
+     * without any version of the call gets the current one (E8).
+     */
+    suspend fun publish(
+        context: CallContext?,
+        change: Boolean,
+    ) {
         val active = active().values.toSet()
         lastSent.keys.retainAll(active)
         if (context == null) return
@@ -42,7 +49,8 @@ class CallBroadcaster(
             val last = lastSent[session]
             if (context.ended && last?.callId != context.callId) continue
             val data = CallStateView.of(context, recipientOf(session), canControl())
-            if (data != last && send(session, data)) lastSent[session] = data
+            val newSession = !change && last?.callId != data.callId
+            if (data != last && send(session, data, newSession)) lastSent[session] = data
         }
     }
 
@@ -62,30 +70,25 @@ class CallBroadcaster(
     private suspend fun send(
         session: PeerSession,
         data: CallStateData,
-    ): Boolean =
-        send(session, PlaintextCodec.encodeOp(CallOp.STATE, CallStateData.serializer(), data)).also { sent ->
-            if (sent) {
-                trace.stateSent(
-                    data.callId,
-                    data.state,
-                    session.peerDeviceId,
-                    session.channel == PeerSession.Channel.RELAY,
-                )
-            }
-        }
+        newSession: Boolean,
+    ): Boolean {
+        val id = send(session, PlaintextCodec.encodeOp(CallOp.STATE, CallStateData.serializer(), data))
+        id?.let { trace.stateSent(data, it, session, newSession) }
+        return id != null
+    }
 
+    /** The envelope `id`, or `null` when the session was closing. */
     private suspend fun send(
         session: PeerSession,
         plaintext: ByteArray,
-    ): Boolean =
+    ): String? =
         try {
             session.send(MessageType.CALL_EVENT, plaintext)
-            true
         } catch (e: CancellationException) {
             throw e
         } catch (
             @Suppress("TooGenericExceptionCaught") _: Exception,
         ) {
-            false
+            null
         }
 }

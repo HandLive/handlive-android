@@ -38,13 +38,13 @@ class CallRequests(
     ) {
         val callId = (data[CALL_ID] as? JsonPrimitive)?.contentOrNull.orEmpty()
         val action = (data[ACTION] as? JsonPrimitive)?.contentOrNull.orEmpty()
-        services.trace.actionReceived(callId, action, session.peerDeviceId)
+        services.trace.actionReceived(callId, re, session, action)
         val error =
             guarded({ CallError.internal("The call could not be controlled") }) {
                 services.actions.perform(data, mac = session.peerPlatform == PeerPlatform.MACOS)
             }
         reply(session, error?.ack(re) ?: Ack.success(re))
-        services.trace.actionAckSent(callId, action, session.peerDeviceId, error?.code?.name)
+        services.trace.actionAckSent(callId, re, session, error?.code?.name)
         error?.let { suggest(session, it) }
     }
 

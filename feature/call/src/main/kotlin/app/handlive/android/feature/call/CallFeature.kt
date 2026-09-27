@@ -19,7 +19,6 @@ import app.handlive.android.feature.call.module.CallBroadcaster
 import app.handlive.android.feature.call.module.CallLogServices
 import app.handlive.android.feature.call.module.CallModule
 import app.handlive.android.feature.call.module.CallServices
-import app.handlive.android.feature.call.module.CallTrace
 import app.handlive.android.feature.call.module.OfflineCallDelivery
 import app.handlive.android.feature.call.system.AndroidCallAccess
 import app.handlive.android.feature.call.system.AndroidTelecom
@@ -79,7 +78,7 @@ class CallFeature private constructor(
         CallTracker(UuidV7Generator(clock)::next, numbers, DirectorySimLabels(sims)) {
             access.granted(AndroidPermissions.READ_CALL_LOG)
         }
-    private val trace = CallTrace.NONE
+    private val trace = CallBenchTrace()
 
     val module =
         CallModule(

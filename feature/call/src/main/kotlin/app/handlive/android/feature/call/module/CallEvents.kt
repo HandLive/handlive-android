@@ -35,15 +35,11 @@ class CallEvents(
     suspend fun phoneState(
         state: PhoneState,
         at: Long,
-    ) {
-        val changes = tracker.onPhoneState(state, at)
-        changes.forEach { services.trace.phoneState(it.callId, it.phoneState.phase, at) }
-        changed(changes)
-    }
+    ) = changed(tracker.onPhoneState(state, at), CallTrace.LISTENER, at)
 
-    suspend fun simState(report: SimReport) = changed(tracker.onSimState(report))
+    suspend fun simState(report: SimReport) = changed(tracker.onSimState(report), CallTrace.LISTENER, report.at)
 
-    suspend fun broadcast(copy: BroadcastCopy) = changed(tracker.onBroadcast(copy))
+    suspend fun broadcast(copy: BroadcastCopy) = changed(tracker.onBroadcast(copy), CallTrace.BROADCAST, copy.at)
 
     /** The listeners were registered again or removed: the next report builds a new context (E8). */
     fun reset() {
@@ -52,7 +48,7 @@ class CallEvents(
     }
 
     /** A session got calls in effect, or `ANSWER_PHONE_CALLS` changed the controls: the call where it differs. */
-    suspend fun republish() = broadcaster.publish(tracker.current)
+    suspend fun republish() = broadcaster.publish(tracker.current, change = false)
 
     /** CALL-04 API 3: the new call log rows as `log_new`, in ascending `_ID` order. */
     suspend fun logRound() {
@@ -67,13 +63,18 @@ class CallEvents(
             val new = CallLogNewData(entry, context?.callId)
             broadcaster.logNew(new)
             if (entry.type == CallLogType.MISSED) offline().missed(MissedCall.Logged(new), connected())
-            context?.let { correction(it, row.type) }?.let { broadcaster.publish(it) }
+            context?.let { correction(it, row.type) }?.let { changed(listOf(it), CallTrace.CALLLOG, now) }
         }
     }
 
-    private suspend fun changed(contexts: List<CallContext>) {
+    private suspend fun changed(
+        contexts: List<CallContext>,
+        trigger: String,
+        os: Long,
+    ) {
         for (context in contexts) {
-            broadcaster.publish(context)
+            services.trace.changed(context, trigger, os)
+            broadcaster.publish(context, change = true)
             pushes.changed(context)
         }
     }
