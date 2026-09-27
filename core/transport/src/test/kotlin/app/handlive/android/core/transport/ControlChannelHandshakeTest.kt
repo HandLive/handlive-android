@@ -27,6 +27,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Bắt tay thật qua loopback: TLS 1.3 + ghim, `session/hello|welcome`, `capability/hello` đã mã hóa (CONN-01). */
 class ControlChannelHandshakeTest {
@@ -63,6 +64,26 @@ class ControlChannelHandshakeTest {
                 assertEquals(peer.pairId, session.pairId)
                 assertEquals(ControlConnectionState.ESTABLISHED, session.state.value)
                 assertEquals(MAC_CAPABILITY, session.peerCapability.value)
+            }
+        }
+
+    @Test
+    fun eachNewSessionReadsTheCapabilityOfItsHelloAgain() =
+        runBlocking {
+            // SET-01 API 2 logic 4: a permission granted since the last snapshot is in the next session's hello.
+            val reads = AtomicInteger()
+            val fresh = ANDROID_CAPABILITY.copy(permissionsMissing = listOf("CAMERA"))
+            LoopbackServerFixture(helloCapability = { fresh.also { reads.incrementAndGet() } }).use { server ->
+                val peer = server.addPair()
+                repeat(2) { opened ->
+                    client.webSocket(server.url) {
+                        val (_, plaintext) = handshake(peer).receive()
+                        val hello = PlaintextCodec.decodeOp(plaintext, CapabilityData.serializer())
+                        assertEquals(CapabilityOp.HELLO, hello.op)
+                        assertEquals(fresh, hello.data)
+                    }
+                    assertEquals(opened + 1, reads.get())
+                }
             }
         }
 
