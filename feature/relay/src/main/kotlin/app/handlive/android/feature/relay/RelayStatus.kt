@@ -3,8 +3,9 @@ package app.handlive.android.feature.relay
 /**
  * The relay as Settings shows it (SET-02 field 21, CONN-03 E3 and E7): the link, whether the relay refused this
  * device (410 `DEVICE_REVOKED` → "This device was removed from the internet service" until the user turns it back
- * on), and whether its certificate matched none of the pins ("The server's certificate isn't trusted…", until a
- * connection succeeds or the user turns the relay back on).
+ * on), and whether its certificate was refused — no pin matched, or the platform does not trust its chain — on the
+ * link or a REST call ("The server's certificate isn't trusted…", until a connection succeeds or the user turns the
+ * relay back on).
  */
 data class RelayStatus(
     val link: RelayLinkState = RelayLinkState.OFF,

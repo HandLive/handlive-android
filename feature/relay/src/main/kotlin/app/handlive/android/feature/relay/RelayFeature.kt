@@ -14,6 +14,7 @@ import app.handlive.android.core.transport.relay.RelayConfig
 import app.handlive.android.core.transport.relay.RelayIdentity
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.relay.RelayTransport
+import app.handlive.android.core.transport.relay.reportingRefusedCertificates
 import app.handlive.android.core.transport.server.PairingEndpoint
 import app.handlive.android.feature.call.CallBenchEvent
 import app.handlive.android.feature.call.CallFeature
@@ -75,15 +76,18 @@ class RelayFeature private constructor(
 
     // Created on the worker: the identity keys come from the Keystore.
     private val transport by lazy { RelayTransport.create(config) }
+
+    /** The REST calls of every relay task: a refused certificate on any of them shows E7 (CONN-03 E7, field 4). */
+    private val http by lazy { transport.http.reportingRefusedCertificates(owner::pinMismatch) }
     private val auth by lazy {
         val identity = data.identity
         RelayAuth(
-            transport.http,
+            http,
             RelayIdentity(identity.deviceId, identity.signingPublicKey, appContext.appVersion(), identity::sign),
             clock,
         )
     }
-    private val api by lazy { RelayApi(transport.http, auth) }
+    private val api by lazy { RelayApi(http, auth) }
     private val registrar by lazy {
         RelayRegistrar(auth, api, data.pairs, data.relayPairs, clock) { pairId ->
             PairingFeature.get(appContext).unpair.onRevokedByRelay(pairId, elsewhere = true)

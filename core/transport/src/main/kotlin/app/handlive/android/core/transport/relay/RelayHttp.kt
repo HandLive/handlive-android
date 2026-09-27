@@ -40,6 +40,20 @@ fun interface RelayHttp {
     ): RelayResponse
 }
 
+/**
+ * This client, telling [onRefused] of every call that met a refused certificate (CONN-03 E7) before that call fails:
+ * a REST call then reports E7 as the `/v1/relay` link does.
+ */
+fun RelayHttp.reportingRefusedCertificates(onRefused: () -> Unit): RelayHttp =
+    RelayHttp { method, path, body, bearer ->
+        try {
+            send(method, path, body, bearer)
+        } catch (e: RelayPinMismatchException) {
+            onRefused()
+            throw e
+        }
+    }
+
 /** No HTTP response: no network, a timeout, a TLS failure (CONN-03 E1). */
 open class RelayUnreachableException(
     message: String,
