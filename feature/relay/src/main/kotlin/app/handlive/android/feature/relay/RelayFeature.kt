@@ -216,7 +216,13 @@ class RelayFeature private constructor(
      */
     private inner class CallDelivery : OfflineCallDelivery {
         override fun ringing(callId: String) {
-            onWorker { if (hasRelayPairWithoutSession()) connector.hold(callId, on = true) }
+            onWorker {
+                if (hasRelayPairWithoutSession()) {
+                    connector.hold(callId, on = true)
+                    // While the number is awaited, a fresh token: the push that follows only has its POST to make.
+                    attempt { auth.token() }
+                }
+            }
         }
 
         override fun incoming(
