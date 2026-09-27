@@ -125,7 +125,7 @@ class ControlSession internal constructor(
     }
 
     internal suspend fun sendCapabilityHello() {
-        channel.send(MessageType.CAPABILITY.wire, capabilityPlaintext(CapabilityOp.HELLO, config.localCapability()))
+        channel.send(MessageType.CAPABILITY.wire, capabilityPlaintext(CapabilityOp.HELLO, config.helloCapability()))
     }
 
     /** The peer's `session/bye`: the session ends without answering with one (CONN-02 API 4). */
