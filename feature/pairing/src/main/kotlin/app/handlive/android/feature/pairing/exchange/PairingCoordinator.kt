@@ -117,18 +117,26 @@ class PairingCoordinator(
         stateFlow.value = PairingState.Waiting(pinMode = false)
     }
 
-    /** "Enter PIN" (A3): the window opens in PIN mode before the PIN is typed. */
+    /** "Enter PIN" (A3): the PIN field; the window opens only once the PIN is confirmed (A4). */
     suspend fun startPin() {
         if (pairs.activeCount() >= PairStore.MAX_ACTIVE_PAIRS) {
             stateFlow.value = PairingState.Failed(PairingFailure.LIMIT_REACHED)
             return
         }
-        open(PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS), PairingAdvert(pinMode = true))
+        closeWindow()
         stateFlow.value = PairingState.EnterPin(attemptsLeft = null)
     }
 
+    /**
+     * The user confirmed the PIN (end of A3). The first PIN opens the 120 s window with TXT `pm = 1` (A4); after
+     * `PIN_INVALID` the window is still open and takes the new PIN.
+     */
     fun submitPin(pin: String) {
-        val current = window as? PairingWindow.Pin ?: return
+        val current =
+            window as? PairingWindow.Pin
+                ?: PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS).also {
+                    open(it, PairingAdvert(pinMode = true))
+                }
         current.submit(pin)
         stateFlow.value = PairingState.Waiting(pinMode = true)
     }
