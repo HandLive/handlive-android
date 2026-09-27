@@ -94,7 +94,10 @@ class RelayFeature private constructor(
     private val connectorHolder = lazy { RelayConnector(scope, clock, auth, transport.links, owner) }
     private val connector by connectorHolder
 
-    /** SET-02 field 21 and CONN-03 E3 for Settings; a build without a relay stays `available = false`. */
+    /**
+     * SET-02 field 21 and CONN-03 E3 for Settings; a build without a relay stays `available = false`. Nothing that
+     * goes wrong while the relay is set up can end the app from here: the status then stays as it was.
+     */
     val status: StateFlow<RelayStatus> by lazy {
         MutableStateFlow(RelayStatus(available = config.available)).also { status ->
             if (config.available) {
@@ -102,7 +105,7 @@ class RelayFeature private constructor(
                 certificateRejected
                     .onEach { rejected -> status.update { it.copy(pinMismatch = rejected) } }
                     .launchIn(scope)
-                scope.launch { connector.state.collect { link -> status.update { it.copy(link = link) } } }
+                scope.launch { attempt { connector.state.collect { link -> status.update { it.copy(link = link) } } } }
             }
         }
     }
@@ -185,7 +188,8 @@ class RelayFeature private constructor(
         } else {
             scope.launch {
                 attempt { runtime.relayGate.closeSessions() }
-                connector.stop()
+                // A connector that was never made has no link to close.
+                if (connectorHolder.isInitialized()) connector.stop()
             }
         }
     }

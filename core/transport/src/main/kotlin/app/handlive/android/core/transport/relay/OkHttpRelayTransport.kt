@@ -111,9 +111,24 @@ class RelayTransport(
     val links: RelayLinkFactory,
 ) {
     companion object {
-        fun create(config: RelayConfig): RelayTransport {
-            val client = OkHttpRelayTransport.client(config)
-            return RelayTransport(OkHttpRelayTransport.http(client, config), OkHttpRelayLinkFactory(client, config))
+        /**
+         * The pinned transport of [config]. Relay settings the client cannot take — a malformed pin or host among the
+         * build settings — give a transport on which every call fails as unreachable (CONN-03 E1): the relay does not
+         * work, and nothing that touches it crashes.
+         */
+        fun create(config: RelayConfig): RelayTransport =
+            try {
+                val client = OkHttpRelayTransport.client(config)
+                // Both URLs are parsed now, so a malformed host fails here rather than at the first call or link.
+                Request.Builder().url(config.baseUrl).url(config.webSocketUrl)
+                RelayTransport(OkHttpRelayTransport.http(client, config), OkHttpRelayLinkFactory(client, config))
+            } catch (e: IllegalArgumentException) {
+                unusable(e)
+            }
+
+        private fun unusable(cause: IllegalArgumentException): RelayTransport {
+            fun failure() = RelayUnreachableException("relay settings unusable", cause)
+            return RelayTransport({ _, _, _, _ -> throw failure() }, { throw failure() })
         }
     }
 }
