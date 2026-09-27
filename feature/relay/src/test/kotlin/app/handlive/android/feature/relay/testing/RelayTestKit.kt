@@ -22,6 +22,7 @@ import app.handlive.android.core.transport.relay.RelayPinMismatchException
 import app.handlive.android.core.transport.relay.RelayResponse
 import app.handlive.android.core.transport.relay.RelayUnreachableException
 import java.util.UUID
+import app.handlive.android.core.protocol.capability.CallFeature as CallCapability
 import app.handlive.android.core.protocol.capability.RelayFeature as RelayCapability
 import app.handlive.android.core.protocol.capability.SmsFeature as SmsCapability
 
@@ -33,14 +34,26 @@ object Features {
     val SMS_NOTIFY = of(SmsCapability(enabled = true, notify = true))
     val SMS_SILENT = of(SmsCapability(enabled = true, notify = false))
     val RELAY_OFF = of(SmsCapability(enabled = true, notify = true), RelayCapability(enabled = false))
+    val CALLS_NOTIFY = of(null, call = CallCapability(enabled = true, notify = true))
+    val CALLS_SILENT = of(null, call = CallCapability(enabled = true, notify = false))
+    val CALLS_OFF = of(null, call = CallCapability(enabled = false, notify = true))
+    val CALLS_RELAY_OFF = of(null, RelayCapability(enabled = false), CallCapability(enabled = true, notify = true))
 
     fun of(
         sms: SmsCapability?,
         relay: RelayCapability? = null,
+        call: CallCapability? = null,
     ): String =
         ProtocolJson.encodeToString(
             CapabilityData.serializer(),
-            CapabilityData(1, "1.0.0 (100)", "ios", "18.0", "iPhone16,1", CapabilityFeatures(sms = sms, relay = relay)),
+            CapabilityData(
+                1,
+                "1.0.0 (100)",
+                "ios",
+                "18.0",
+                "iPhone16,1",
+                CapabilityFeatures(sms = sms, call = call, relay = relay),
+            ),
         )
 }
 
