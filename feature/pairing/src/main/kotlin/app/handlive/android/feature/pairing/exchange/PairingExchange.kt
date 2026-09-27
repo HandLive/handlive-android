@@ -26,9 +26,11 @@ import app.handlive.android.core.protocol.pairing.PairOfferData
 import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.core.transport.WsCloseCode
 import app.handlive.android.core.transport.server.TextMessageSocket
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 
 /** This phone as the offer describes it (PAIR-01 API 3). */
 class LocalPairingDevice(
@@ -99,7 +101,15 @@ class PairingExchange(
         val outcome =
             try {
                 exchange(socket)
-            } catch (abort: Abort) {
+            } catch (cancelled: CancellationException) {
+                if (holdsClaim) window.release()
+                throw cancelled
+            } catch (
+                @Suppress("TooGenericExceptionCaught") failure: Exception,
+            ) {
+                // Besides the planned aborts, a broken socket is a lost client and anything else ends this exchange
+                // with `pair/error INTERNAL` and a close frame; never a window claim that stays taken (API 2 rule 4).
+                val abort = failure as? Abort ?: unexpected(failure)
                 abort.refusal?.let { wire.refuse(socket, it) }
                 abort.outcome
             }
@@ -321,6 +331,13 @@ class PairingExchange(
         val WINDOW_GOES_ON = setOf(PairingFailure.DISCONNECTED, PairingFailure.PIN_INVALID)
 
         fun disconnected() = Abort(PairingOutcome.Failed(PairingFailure.DISCONNECTED))
+
+        fun unexpected(failure: Exception) =
+            if (failure is IOException) {
+                disconnected()
+            } else {
+                Abort(PairingOutcome.Failed(PairingFailure.INTERNAL), ErrorCode.INTERNAL)
+            }
 
         fun refused(code: ErrorCode): Abort {
             val closed = code == ErrorCode.PAIRING_CLOSED
