@@ -67,6 +67,24 @@ class RelayCertificateTest {
         }
 
     @Test
+    fun aRestCallReportsARefusedCertificateBeforeItFails() =
+        runBlocking {
+            var refused = 0
+            val http = OkHttpRelayTransport.http(client, config).reportingRefusedCertificates { refused++ }
+            val failure = runCatching { http.send("GET", "/v1/pairs", null, "jwt") }.exceptionOrNull()
+            assertTrue("$failure", failure is RelayPinMismatchException)
+            assertEquals(1, refused)
+
+            val offline =
+                RelayHttp { _, _, _, _ -> throw RelayUnreachableException("offline") }
+                    .reportingRefusedCertificates { refused++ }
+            assertTrue(runCatching { offline.send("GET", "/v1/pairs", null, "jwt") }.isFailure)
+            val answered = RelayHttp { _, _, _, _ -> RelayResponse(401, "") }.reportingRefusedCertificates { refused++ }
+            assertEquals(401, answered.send("GET", "/v1/pairs", null, "jwt").status)
+            assertEquals("only the refused certificate is reported", 1, refused)
+        }
+
+    @Test
     fun onlyCertificateFailuresOfTheHandshakeCountAsRefused() {
         assertTrue(SSLPeerUnverifiedException("Certificate pinning failure!").refusesCertificate())
         val untrusted =
