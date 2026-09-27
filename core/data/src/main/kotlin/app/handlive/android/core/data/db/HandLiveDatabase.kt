@@ -9,14 +9,15 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 
 /**
- * Room `handlive.db` of the Android hub (0.9.1): `paired_device` since Phase 1; Phase 2 adds `sms_observer_state`
- * (SMS-02) and `push_outbox` (CONN-04). Version 2 only adds tables, so Room migrates 1 → 2 by itself.
+ * Room `handlive.db` of the Android hub (0.9.1): `paired_device` since version 1; version 2 adds
+ * `sms_observer_state` (SMS-02) and `push_outbox` (CONN-04); version 3 adds `push_outbox.reason` for the call pushes
+ * (CALL-01 API 4, CALL-04 API 5). Each version only adds, so Room migrates by itself.
  */
 @Database(
     entities = [PairedDeviceEntity::class, SmsObserverStateEntity::class, PushOutboxEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 @TypeConverters(HandLiveConverters::class)
 abstract class HandLiveDatabase : RoomDatabase() {
