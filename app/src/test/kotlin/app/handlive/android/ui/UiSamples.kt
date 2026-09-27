@@ -70,6 +70,10 @@ object UiSamples {
             relayDeviceRevoked = true,
         )
 
+    /** Calls on with the call log denied for good ("Permission denied" with "Open Settings", SET-01 E5). */
+    val callsDenied =
+        settings.copy(calls = FeatureAccess(missing = setOf("READ_CALL_LOG"), deniedForGood = setOf("READ_CALL_LOG")))
+
     /** CONN-03 E7 under Internet Connection: the longest text field 21 shows. */
     val relayPinMismatch = settings.copy(relayAvailable = true, relayPinMismatch = true)
 
@@ -89,6 +93,10 @@ object UiSamples {
         override fun setSms(enabled: Boolean) = Unit
 
         override fun grantSms() = Unit
+
+        override fun setCalls(enabled: Boolean) = Unit
+
+        override fun grantCalls() = Unit
 
         override fun open(page: SettingsPage) = Unit
     }
