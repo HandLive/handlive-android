@@ -124,6 +124,20 @@ class RelayConnectorTest {
         }
 
     @Test
+    fun aTokenTheRelayNoLongerAcceptsRegistersAgainAndIsRenewedOnce() =
+        runTest {
+            val http = FakeRelayHttp { currentTime }
+            val connector = connector(http)
+            links.refuseNext(RelayLinkEvent.Closed(null, 401, RelayErrorCode.SIGNATURE_INVALID))
+            connector.demand()
+            runCurrent()
+            // Registered once per process at the first token, then again for the refused signature (E2).
+            assertEquals(2, http.calls("POST", "/v1/devices").size)
+            assertEquals(listOf("jwt-1", "jwt-2"), links.opened.map { it.bearer })
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+        }
+
+    @Test
     fun aRevokedDeviceOrAnUnpinnedCertificateStopsForGood() =
         runTest {
             val connector = connector()

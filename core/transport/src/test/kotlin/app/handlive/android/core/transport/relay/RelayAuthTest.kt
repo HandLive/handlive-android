@@ -125,6 +125,66 @@ class RelayAuthTest {
         }
 
     @Test
+    fun aTokenSignedWithAnOldKeyRegistersAgainThenRetriesOnce() =
+        runBlocking {
+            enqueueRegistrationAndToken("jwt-1")
+            server.enqueue(json(401, SIGNATURE_INVALID))
+            server.enqueue(json(200, """{"device_id":"${identity.deviceId}","created_at":$now}"""))
+            enqueueChallengeAndToken("jwt-2")
+            server.enqueue(json(202, """{"accepted":true}"""))
+            assertEquals(202, api.push(PUSH).status)
+
+            val requests = List(server.requestCount) { server.takeRequest() }
+            assertEquals(
+                listOf(
+                    "/v1/devices",
+                    "/v1/auth/challenge",
+                    "/v1/auth/token",
+                    "/v1/push",
+                    "/v1/devices",
+                    "/v1/auth/challenge",
+                    "/v1/auth/token",
+                    "/v1/push",
+                ),
+                requests.map { it.path },
+            )
+            assertEquals("Bearer jwt-2", requests.last().getHeader("Authorization"))
+
+            // Refused again with the new token: that answer is the caller's, with no third try.
+            now += 900_000
+            enqueueChallengeAndToken("jwt-3")
+            server.enqueue(json(401, SIGNATURE_INVALID))
+            server.enqueue(json(200, """{"device_id":"${identity.deviceId}","created_at":$now}"""))
+            enqueueChallengeAndToken("jwt-4")
+            server.enqueue(json(401, SIGNATURE_INVALID))
+            assertEquals(401, api.push(PUSH).status)
+            assertEquals("eight calls, then seven", 15, server.requestCount)
+        }
+
+    @Test
+    fun whereNotFoundMeansDoneARefusedTokenIsOnlyRenewed() =
+        runBlocking {
+            enqueueChallengeAndToken("jwt-1")
+            server.enqueue(json(401, SIGNATURE_INVALID))
+            enqueueChallengeAndToken("jwt-2")
+            server.enqueue(MockResponse().setResponseCode(204))
+            assertEquals(204, api.deleteThisDevice(revokePairs = false).status)
+            val requests = List(server.requestCount) { server.takeRequest() }
+            assertEquals(
+                listOf(
+                    "/v1/auth/challenge",
+                    "/v1/auth/token",
+                    "/v1/devices/me?revoke_pairs=false",
+                    "/v1/auth/challenge",
+                    "/v1/auth/token",
+                    "/v1/devices/me?revoke_pairs=false",
+                ),
+                requests.map { it.path },
+            )
+            assertEquals("Bearer jwt-2", requests.last().getHeader("Authorization"))
+        }
+
+    @Test
     fun aRevokedDeviceStopsWithItsCode() =
         runBlocking {
             server.enqueue(json(410, """{"error":{"code":"DEVICE_REVOKED","message":"revoked"}}"""))
@@ -173,6 +233,8 @@ class RelayAuthTest {
     ) = MockResponse().setResponseCode(status).setHeader("Content-Type", "application/json").setBody(body)
 
     private companion object {
+        const val SIGNATURE_INVALID = """{"error":{"code":"SIGNATURE_INVALID","message":"invalid"}}"""
+
         val PUSH =
             PushRequest(
                 pairId = "9a8b7c6d-5e4f-4a3b-9c2d-1e0f2a3b4c5d",
