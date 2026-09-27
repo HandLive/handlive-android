@@ -32,6 +32,7 @@ import app.handlive.android.feature.call.system.UriObserver
 import app.handlive.android.feature.connection.ConnectionRuntime
 import app.handlive.android.feature.connection.capability.AndroidPermissions
 import app.handlive.android.feature.connection.capability.SimDirectory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -143,7 +144,7 @@ class CallFeature private constructor(
         runtime.localCapability
             .map(CallWatch::of)
             .distinctUntilChanged()
-            .onEach(::watch)
+            .onEach(::watchSafely)
             .launchIn(scope)
         logSignals
             .receiveAsFlow()
@@ -153,6 +154,21 @@ class CallFeature private constructor(
                 logSignals.tryReceive()
                 module.onLogChanged()
             }.launchIn(scope)
+    }
+
+    /** A system service that refuses in an unexpected way leaves calls off until the next change; A-SVC goes on. */
+    private fun watchSafely(next: CallWatch) {
+        try {
+            watch(next)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") _: Exception,
+        ) {
+            watching = CallWatch.OFF
+            runCatching { telephony.stop() }
+            runCatching { receiver.unregister() }
+        }
     }
 
     /** Registers and removes the listeners, the receiver and the observers as calls come and go (API 2 logic 4). */
