@@ -43,4 +43,9 @@ data class CallContext(
 
     /** An incoming call that rings on its own, not a call waiting behind an ongoing one (E9). */
     val ringingIncoming: Boolean get() = ringing && !waiting && direction == CallDirection.INCOMING
+
+    /** The same call as the clients and the pushes see it: the bookkeeping fields do not count. */
+    fun sameAs(other: CallContext): Boolean =
+        copy(bareRingingCopies = 0, requestedAudio = null) ==
+            other.copy(bareRingingCopies = 0, requestedAudio = null)
 }

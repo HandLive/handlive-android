@@ -159,6 +159,6 @@ class CallTracker(
         new: CallContext,
     ): List<CallContext> {
         current = new
-        return if (new == old) emptyList() else listOf(new)
+        return if (new.sameAs(old)) emptyList() else listOf(new)
     }
 }
