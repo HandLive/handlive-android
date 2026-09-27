@@ -11,6 +11,7 @@ class PairingFailureMessageTest {
     fun failuresWithTheirOwnTextKeepIt() {
         assertEquals(R.string.error_qr_invalid, PairingFailure.QR_INVALID.message)
         assertEquals(R.string.error_pairing_closed, PairingFailure.PAIRING_CLOSED.message)
+        assertEquals(R.string.error_pin_expired, PairingFailure.PIN_EXPIRED.message)
         assertEquals(R.string.error_pairing_auth_failed, PairingFailure.AUTH_FAILED.message)
         assertEquals(R.string.error_pin_invalid, PairingFailure.PIN_INVALID.message)
         assertEquals(R.string.pairing_limit_reached, PairingFailure.LIMIT_REACHED.message)

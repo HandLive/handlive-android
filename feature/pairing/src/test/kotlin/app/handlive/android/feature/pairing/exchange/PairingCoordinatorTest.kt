@@ -235,6 +235,18 @@ class PairingCoordinatorTest {
     }
 
     @Test
+    fun pinWindowThatEndsWithoutAPairSaysThePinExpired() =
+        runTest {
+            val coordinator = coordinator()
+            coordinator.startPin()
+            coordinator.submitPin("482915")
+            advanceTimeBy(PairingWindow.DURATION_MILLIS + 1)
+            runCurrent()
+            assertEquals(PairingState.Failed(PairingFailure.PIN_EXPIRED), coordinator.state.value)
+            assertEquals(PairingAdvert.NONE, adverts.last())
+        }
+
+    @Test
     fun deniedCameraOffersThePin() =
         runTest {
             val coordinator = coordinator()
