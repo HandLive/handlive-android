@@ -32,8 +32,8 @@ fun DevicesTab(main: MainContext) {
 }
 
 /**
- * The Settings tab bound to the settings keys, the Accessibility service state, the SMS permissions and the relay,
- * with the dialogs and the result of SET-02 A1–A6.
+ * The Settings tab bound to the settings keys, the Accessibility service state, the SMS and call permissions and the
+ * relay, with the dialogs and the result of SET-02 A1–A6.
  */
 @Composable
 fun SettingsTab(main: MainContext) {
@@ -51,6 +51,7 @@ fun SettingsTab(main: MainContext) {
             settings,
             serviceOn,
             rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
             relayAvailable = relay.available,
             relayDeviceRevoked = relay.deviceRevoked,
             relayPinMismatch = relay.pinMismatch,

@@ -22,8 +22,8 @@ import java.text.DateFormat
 
 /**
  * SET-02 on the phone: the Clipboard group (fields 1–6, each switch with its one-line description), SMS Messages
- * (field 7, with its permission status and action, SET-01 fields 10, 11 and 16), Internet Connection (field 21),
- * Permissions & Background (field 23) and Language (field 32).
+ * (field 7) and Calls (field 10), each with its permission status and action (SET-01 fields 10, 11 and 16), Internet
+ * Connection (field 21), Permissions & Background (field 23) and Language (field 32).
  */
 @Composable
 fun SettingsScreen(
@@ -44,7 +44,20 @@ fun SettingsScreen(
         HLGroupedList(modifier = Modifier.weight(1f)) {
             bannerSections(banners, labels)
             clipboardSection(clipboardTitle, autoClearFooter, state, actions)
-            smsSection(state, actions)
+            featureSection(
+                R.string.settings_sms_messages,
+                state.settings.smsEnabled,
+                state.smsStatus,
+                actions::setSms,
+                actions::grantSms,
+            )
+            featureSection(
+                R.string.settings_calls,
+                state.settings.callEnabled,
+                state.callStatus,
+                actions::setCalls,
+                actions::grantCalls,
+            )
             section {
                 row {
                     Switch(
@@ -126,31 +139,34 @@ private fun AutoSendSwitch(
 }
 
 /**
- * Field 7: the switch, disabled with "Not supported on this phone" without telephony; while it is on with a
- * permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
+ * Field 7 or 10: the switch [title], disabled with "Not supported on this phone" without telephony; while it is on
+ * with a permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
  */
-private fun HLGroupedListScope.smsSection(
-    state: SettingsUiState,
-    actions: SettingsActions,
+private fun HLGroupedListScope.featureSection(
+    title: Int,
+    enabled: Boolean,
+    status: FeatureStatus,
+    onChange: (Boolean) -> Unit,
+    onGrant: () -> Unit,
 ) {
-    val status = state.smsStatus
     section {
-        row { SmsSwitch(state.settings.smsEnabled, status, actions::setSms) }
+        row { FeatureSwitch(title, enabled, status, onChange) }
         permissionAction(status)?.let { label ->
-            row { HLActionRow(stringResource(label), false, actions::grantSms) }
+            row { HLActionRow(stringResource(label), false, onGrant) }
         }
     }
 }
 
 @Composable
-private fun SmsSwitch(
+private fun FeatureSwitch(
+    title: Int,
     enabled: Boolean,
     status: FeatureStatus,
     onChange: (Boolean) -> Unit,
 ) {
     val unsupported = status == FeatureStatus.UNSUPPORTED
     HLSwitchRow(
-        stringResource(R.string.settings_sms_messages),
+        stringResource(title),
         enabled && !unsupported,
         onChange,
         unavailableReason = if (unsupported) stringResource(status.label) else null,

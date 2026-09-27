@@ -69,11 +69,27 @@ class SettingsActionsImpl(
         }
     }
 
-    override fun grantSms() {
-        if (state.smsStatus == FeatureStatus.PERMISSION_DENIED) {
+    override fun grantSms() = grant(state.smsStatus, Route.SmsPermission)
+
+    override fun setCalls(enabled: Boolean) {
+        save { store.set(SettingsKeys.FEATURE_CALL, enabled) }
+        // SET-02 step 3: the key is saved as true even when the permissions end up denied.
+        if (enabled && state.calls.status(enabled = true) == FeatureStatus.NEEDS_PERMISSION) {
+            main.push(Route.CallPermission)
+        }
+    }
+
+    override fun grantCalls() = grant(state.callStatus, Route.CallPermission)
+
+    /** SET-01 fields 11 and 16: the feature's primer, or the App info page once its permission is denied for good. */
+    private fun grant(
+        status: FeatureStatus,
+        primer: Route,
+    ) {
+        if (status == FeatureStatus.PERMISSION_DENIED) {
             SystemPages.open(context, SystemPages.appDetails(context))
         } else {
-            main.push(Route.SmsPermission)
+            main.push(primer)
         }
     }
 

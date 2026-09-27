@@ -11,6 +11,7 @@ data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
     val accessibilityServiceOn: Boolean = false,
     val sms: FeatureAccess = FeatureAccess(),
+    val calls: FeatureAccess = FeatureAccess(),
     /** This build has a relay (`RELAY_HOST`): "Remove Device from Server" makes sense (SET-02 field 26). */
     val relayAvailable: Boolean = false,
     /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */
@@ -29,6 +30,9 @@ data class SettingsUiState(
 
     /** SET-02 field 7 with SET-01 field 10: the SMS switch and its feature card. */
     val smsStatus: FeatureStatus get() = sms.status(settings.smsEnabled)
+
+    /** SET-02 field 10 with SET-01 field 10: the Calls switch and its feature card. */
+    val callStatus: FeatureStatus get() = calls.status(settings.callEnabled)
 
     /** Field 15: on only with the setting, the recorded consent and the service turned on. */
     val autoSendStatus: AutoSendStatus
@@ -61,6 +65,12 @@ interface SettingsActions {
     /** SET-01 fields 11 and 16: the SMS primer and its request, or the App info page once denied for good. */
     fun grantSms()
 
+    /** SET-02 field 10: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
+    fun setCalls(enabled: Boolean)
+
+    /** SET-01 fields 11 and 16 for calls. */
+    fun grantCalls()
+
     fun open(page: SettingsPage)
 }
 
@@ -68,4 +78,4 @@ interface SettingsActions {
 enum class SettingsPage { AUTO_CLEAR, PERMISSIONS, LANGUAGE }
 
 /** The system pages the Permissions & Background screen leads to. */
-enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS }
+enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS, CALLS }

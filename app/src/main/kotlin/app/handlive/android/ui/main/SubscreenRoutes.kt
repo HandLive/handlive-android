@@ -16,6 +16,7 @@ import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DeviceDetailsScreen
 import app.handlive.android.ui.pairing.PairingFlow
 import app.handlive.android.ui.settings.AutoClearScreen
+import app.handlive.android.ui.settings.CallsPrimerScreen
 import app.handlive.android.ui.settings.ConsentScreen
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
@@ -70,6 +71,10 @@ fun RouteContent(
 
         Route.SmsPermission -> {
             PermissionPrimerRoute(main, AndroidPermissions.SMS) { onContinue -> SmsPrimerScreen(onContinue) }
+        }
+
+        Route.CallPermission -> {
+            PermissionPrimerRoute(main, AndroidPermissions.CALLS) { onContinue -> CallsPrimerScreen(onContinue) }
         }
     }
 }
@@ -148,11 +153,13 @@ private fun PermissionsRoute(
             settings,
             serviceOn,
             rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
         )
     PermissionsScreen(
         environment = environment,
         autoSend = state.autoSendStatus,
         sms = state.smsStatus,
+        calls = state.callStatus,
         onOpen = { target -> openPermissionTarget(context, main, environment, state, target) },
         onBack = main::pop,
     )
@@ -191,12 +198,26 @@ private fun openPermissionTarget(
         }
 
         PermissionTarget.SMS -> {
-            if (state.smsStatus == FeatureStatus.PERMISSION_DENIED) {
-                SystemPages.open(context, SystemPages.appDetails(context))
-            } else {
-                main.push(Route.SmsPermission)
-            }
+            grant(context, main, state.smsStatus, Route.SmsPermission)
         }
+
+        PermissionTarget.CALLS -> {
+            grant(context, main, state.callStatus, Route.CallPermission)
+        }
+    }
+}
+
+/** SET-01 fields 11 and 16: the feature's primer, or the App info page once its permission is denied for good. */
+private fun grant(
+    context: Context,
+    main: MainContext,
+    status: FeatureStatus,
+    primer: Route,
+) {
+    if (status == FeatureStatus.PERMISSION_DENIED) {
+        SystemPages.open(context, SystemPages.appDetails(context))
+    } else {
+        main.push(primer)
     }
 }
 

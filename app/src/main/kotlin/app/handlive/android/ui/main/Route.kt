@@ -22,4 +22,7 @@ sealed interface Route {
 
     /** SET-01 part B for SMS: the primer, then the system dialogs (steps 10–11). */
     data object SmsPermission : Route
+
+    /** SET-01 part B for calls: the primer, then the system dialogs (steps 10–11). */
+    data object CallPermission : Route
 }
