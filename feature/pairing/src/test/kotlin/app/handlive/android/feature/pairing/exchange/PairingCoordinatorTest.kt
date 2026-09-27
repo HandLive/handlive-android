@@ -6,6 +6,7 @@ import app.handlive.android.core.data.pairing.PeerKeys
 import app.handlive.android.core.data.pairing.SignedAttestation
 import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.pairing.PairErrorData
+import app.handlive.android.core.protocol.pairing.PairHelloData
 import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.feature.connection.PairingAdvert
 import app.handlive.android.feature.pairing.testing.FakePairingClient
@@ -110,13 +111,37 @@ class PairingCoordinatorTest {
         }
 
     @Test
-    fun pinWindowAdvertisesPmAndWaitsForThePin() =
+    fun pinWindowOpensWithPmOnlyOnceThePinIsConfirmed() =
         runTest {
             val coordinator = coordinator()
             coordinator.startPin()
-            assertEquals(PairingAdvert(pinMode = true), adverts.last())
+            assertEquals(PairingState.EnterPin(attemptsLeft = null), coordinator.state.value)
+            // A3 → A4: while the PIN is typed nothing advertises `pm = 1` and /v1/pair stays closed.
+            assertTrue(adverts.none { it.pinMode })
+            val early = FakeTextSocket()
+            early.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            coordinator.handle(early)
+            assertEquals(
+                ErrorCode.PAIRING_CLOSED.name,
+                client.read(early.toClient.receive(), PairErrorData.serializer())?.code,
+            )
             assertEquals(PairingState.EnterPin(attemptsLeft = null), coordinator.state.value)
             coordinator.submitPin("482915")
+            assertEquals(PairingAdvert(pinMode = true), adverts.last())
+            assertEquals(PairingState.Waiting(pinMode = true), coordinator.state.value)
+        }
+
+    @Test
+    fun pinWindowLasts120SecondsFromTheConfirmedPin() =
+        runTest {
+            val coordinator = coordinator()
+            coordinator.startPin()
+            advanceTimeBy(PairingWindow.DURATION_MILLIS + 1)
+            runCurrent()
+            assertEquals(PairingState.EnterPin(attemptsLeft = null), coordinator.state.value)
+            coordinator.submitPin("482915")
+            advanceTimeBy(PairingWindow.DURATION_MILLIS - 1)
+            runCurrent()
             assertEquals(PairingState.Waiting(pinMode = true), coordinator.state.value)
         }
 
