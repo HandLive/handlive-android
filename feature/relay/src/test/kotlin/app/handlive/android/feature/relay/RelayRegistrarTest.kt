@@ -83,6 +83,22 @@ class RelayRegistrarTest {
         }
 
     @Test
+    fun aPairRefusedFor401IsTriedAgainAtTheNextOccasion() =
+        runTest {
+            val pairId = fixture.addPair(registered = false)
+            // Refused with the renewed token as well: nothing about the pair itself, so no 24-hour wait.
+            repeat(2) { fixture.http.enqueue("POST", "/v1/pairs", 401, fixture.http.error("SIGNATURE_INVALID")) }
+            registrar.registerAll()
+            assertEquals(2, fixture.http.calls("POST", "/v1/pairs").size)
+            assertFalse(fixture.pairs.find(pairId)!!.relayRegistered)
+
+            fixture.http.enqueue("POST", "/v1/pairs", 201, """{"pair_id":"$pairId"}""")
+            registrar.registerAll()
+            assertEquals(3, fixture.http.calls("POST", "/v1/pairs").size)
+            assertTrue(fixture.pairs.find(pairId)!!.relayRegistered)
+        }
+
+    @Test
     fun tombstonesAreRevokedOnTheRelayUntilItConfirms() =
         runTest {
             val pairId = fixture.addPair()
