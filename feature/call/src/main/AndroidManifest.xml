@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- SET-01 part B, requested together when calls are turned on (SET-01 API 2, C12): the call state and the SIMs,
+         the incoming number (the PHONE_STATE broadcast carries it only with READ_CALL_LOG) and the call log, answering,
+         declining and ending through TelecomManager, and contact names. No InCallService. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Calls work only on phones with telephony; the app still installs on others (SET-01 step 8: "unsupported"). -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+</manifest>
