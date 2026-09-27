@@ -213,7 +213,7 @@ class PairingCoordinator(
 
                 else -> {
                     closeWindow()
-                    PairingState.Failed(failure ?: PairingFailure.INTERNAL)
+                    PairingState.Failed(current.closedAs(failure ?: PairingFailure.INTERNAL))
                 }
             }
     }
@@ -230,7 +230,7 @@ class PairingCoordinator(
                 delay(next.expiresAt - clock())
                 if (window === next) {
                     closeWindow()
-                    stateFlow.value = PairingState.Failed(PairingFailure.PAIRING_CLOSED)
+                    stateFlow.value = PairingState.Failed(next.closedAs(PairingFailure.PAIRING_CLOSED))
                 }
             }
     }
@@ -253,6 +253,10 @@ private fun notServed(
     claimed: Boolean,
     failure: PairingFailure?,
 ) = !claimed && failure in NOT_SERVED
+
+/** E2: a closed PIN window says the PIN expired, not that a QR code changed. */
+private fun PairingWindow.closedAs(failure: PairingFailure): PairingFailure =
+    if (failure == PairingFailure.PAIRING_CLOSED && this is PairingWindow.Pin) PairingFailure.PIN_EXPIRED else failure
 
 /** After a lost client: waiting for the next one, or the PIN entry [shown] while the PIN is still being typed. */
 private fun PairingWindow.waitingAgain(shown: PairingState): PairingState =

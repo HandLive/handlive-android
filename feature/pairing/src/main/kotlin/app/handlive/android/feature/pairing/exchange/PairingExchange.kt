@@ -47,6 +47,9 @@ class LocalPairingDevice(
 enum class PairingFailure {
     QR_INVALID,
     PAIRING_CLOSED,
+
+    /** E2 in the PIN flow: the PIN window closed without a pair; the phone's own reading of `PAIRING_CLOSED`. */
+    PIN_EXPIRED,
     AUTH_FAILED,
     PIN_INVALID,
     LIMIT_REACHED,
