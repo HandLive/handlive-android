@@ -22,6 +22,9 @@ sealed class PairingWindow(
 
     fun isOpen(now: Long): Boolean = now < expiresAt
 
+    /** The key material the offer needs is here: always for a QR code, for a PIN once the user confirmed it (A3). */
+    open val hasSecret: Boolean get() = true
+
     class Qr(
         val invite: PairingInvite,
         expiresAt: Long,
@@ -37,6 +40,9 @@ sealed class PairingWindow(
         fun submit(value: String) {
             if (!entry.complete(value)) entry = CompletableDeferred(value)
         }
+
+        /** The user confirmed a PIN that no `PIN_INVALID` has discarded yet. */
+        override val hasSecret: Boolean get() = entry.isCompleted
 
         /** Waits for the PIN; the client's connection stays open meanwhile. */
         suspend fun awaitPin(): String = entry.await()

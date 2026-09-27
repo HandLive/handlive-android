@@ -81,6 +81,8 @@ class PairingExchange(
     private val pairs: PairStore,
     private val clock: () -> Long = System::currentTimeMillis,
     private val nonce: () -> ByteArray = { SecureRandomBytes.next(NONCE_SIZE) },
+    /** This connection took the window (API 2 rule 4); a PIN window may still wait for the PIN (A3). */
+    private val onClaimed: () -> Unit = {},
 ) {
     private val wire = PairingWire(clock)
 
@@ -129,6 +131,7 @@ class PairingExchange(
     /** One client per window (API 2 rule 4): a second connection gets `PAIRING_CLOSED`. */
     private fun claimOrClosed(): ErrorCode? {
         holdsClaim = window.claim()
+        if (holdsClaim) onClaimed()
         return if (holdsClaim) null else ErrorCode.PAIRING_CLOSED
     }
 

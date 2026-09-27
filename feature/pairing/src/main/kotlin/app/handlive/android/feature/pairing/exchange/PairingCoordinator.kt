@@ -80,6 +80,12 @@ class PairingCoordinator(
     private var expiry: Job? = null
     private var rendezvousId: String? = null
 
+    /** Orders a client taking the window against the PIN being confirmed, so "Pairing…" starts exactly once. */
+    private val pinLock = Any()
+
+    /** A client holds the window; in PIN mode it may be waiting for the PIN (A3–A4). Guarded by [pinLock]. */
+    private var clientWaiting = false
+
     /** The relay rendezvous, when the relay is available (Phase 2); without it a code with `rv` pairs on the LAN. */
     @Volatile
     var rendezvous: RendezvousConnector? = null
@@ -137,8 +143,11 @@ class PairingCoordinator(
                 ?: PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS).also {
                     open(it, PairingAdvert(pinMode = true))
                 }
-        current.submit(pin)
-        stateFlow.value = PairingState.Waiting(pinMode = true)
+        synchronized(pinLock) {
+            current.submit(pin)
+            // A client that connected while the PIN was typed has been waiting for it: checking starts now.
+            stateFlow.value = if (clientWaiting) PairingState.Verifying else PairingState.Waiting(pinMode = true)
+        }
     }
 
     /** "Cancel" (E5) or leaving the screen: nothing is stored, the secret is dropped. */
@@ -165,9 +174,23 @@ class PairingCoordinator(
             wire.refuse(socket, ErrorCode.PAIRING_CLOSED)
             return
         }
-        stateFlow.value = PairingState.Verifying
-        val outcome = PairingExchange(device, current, pairs, clock).run(socket)
+        var claimed = false
+        val outcome =
+            try {
+                // A client took the window. With the key material at hand the check starts (`verifying`); a PIN
+                // window whose PIN is still being typed keeps the PIN entry open, the client waits for submitPin.
+                PairingExchange(device, current, pairs, clock) {
+                    claimed = true
+                    synchronized(pinLock) {
+                        clientWaiting = true
+                        if (current.hasSecret) stateFlow.value = PairingState.Verifying
+                    }
+                }.run(socket)
+            } finally {
+                if (claimed) synchronized(pinLock) { clientWaiting = false }
+            }
         if (window !== current) return
+        val failure = (outcome as? PairingOutcome.Failed)?.failure
         stateFlow.value =
             when {
                 outcome is PairingOutcome.Paired -> {
@@ -176,20 +199,19 @@ class PairingCoordinator(
                     PairingState.Paired(outcome.peerName, outcome.safetyCode)
                 }
 
-                outcome is PairingOutcome.Failed && outcome.failure == PairingFailure.PIN_INVALID -> {
+                failure == PairingFailure.PIN_INVALID -> {
                     (current as? PairingWindow.Pin)?.reset()
-                    PairingState.EnterPin(outcome.attemptsLeft)
+                    PairingState.EnterPin((outcome as PairingOutcome.Failed).attemptsLeft)
                 }
 
-                // A client that dropped may come back while the window is open.
-                outcome is PairingOutcome.Failed && outcome.failure == PairingFailure.DISCONNECTED &&
-                    current.isOpen(clock()) -> {
-                    PairingState.Waiting(pinMode = current is PairingWindow.Pin)
+                // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
+                failure == PairingFailure.DISCONNECTED && current.isOpen(clock()) -> {
+                    if (current.hasSecret) PairingState.Waiting(current is PairingWindow.Pin) else stateFlow.value
                 }
 
                 else -> {
                     closeWindow()
-                    PairingState.Failed((outcome as? PairingOutcome.Failed)?.failure ?: PairingFailure.INTERNAL)
+                    PairingState.Failed(failure ?: PairingFailure.INTERNAL)
                 }
             }
     }
