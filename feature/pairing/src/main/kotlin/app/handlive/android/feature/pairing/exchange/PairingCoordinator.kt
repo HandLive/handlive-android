@@ -189,8 +189,10 @@ class PairingCoordinator(
             } finally {
                 if (claimed) synchronized(pinLock) { clientWaiting = false }
             }
-        if (window !== current) return
         val failure = (outcome as? PairingOutcome.Failed)?.failure
+        // A connection that never took the window (a second client, API 2 rule 4, or one that left before
+        // pair/hello) changes nothing: the client holding the window, or the PIN being typed, carries on.
+        if (window !== current || notServed(claimed, failure)) return
         stateFlow.value =
             when {
                 outcome is PairingOutcome.Paired -> {
@@ -206,7 +208,7 @@ class PairingCoordinator(
 
                 // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
                 failure == PairingFailure.DISCONNECTED && current.isOpen(clock()) -> {
-                    if (current.hasSecret) PairingState.Waiting(current is PairingWindow.Pin) else stateFlow.value
+                    current.waitingAgain(shown = stateFlow.value)
                 }
 
                 else -> {
@@ -243,3 +245,15 @@ class PairingCoordinator(
         advertise(PairingAdvert.NONE)
     }
 }
+
+/** Ends of a connection that did not take the window; AUTH_FAILED still closes it (E4). */
+private val NOT_SERVED = setOf(PairingFailure.PAIRING_CLOSED, PairingFailure.DISCONNECTED)
+
+private fun notServed(
+    claimed: Boolean,
+    failure: PairingFailure?,
+) = !claimed && failure in NOT_SERVED
+
+/** After a lost client: waiting for the next one, or the PIN entry [shown] while the PIN is still being typed. */
+private fun PairingWindow.waitingAgain(shown: PairingState): PairingState =
+    if (hasSecret) PairingState.Waiting(pinMode = this is PairingWindow.Pin) else shown
