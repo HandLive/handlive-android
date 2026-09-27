@@ -185,6 +185,49 @@ class PairingCoordinatorTest {
             windowScope.cancel()
         }
 
+    @Test
+    fun aSecondClientIsTurnedAwayWithoutClosingTheWindow() =
+        runBlocking {
+            val phone = localPhone()
+            val windowScope = CoroutineScope(SupervisorJob())
+            val coordinator =
+                PairingCoordinator({ phone }, pairs.store, { adverts += it }, windowScope, clock = { NOW })
+            coordinator.startPin()
+            coordinator.submitPin("111111")
+            val first = FakeTextSocket()
+            val firstRun = async { coordinator.handle(first) }
+            first.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            first.toClient.receive()
+            first.toPhone.send(client.error(ErrorCode.PIN_INVALID.name, attemptsLeft = 2))
+            firstRun.await()
+            // The Mac reconnects and waits for the new PIN; a second connection arrives meanwhile (API 2 rule 4).
+            val waiting = FakeTextSocket()
+            val waitingRun = async { coordinator.handle(waiting) }
+            waiting.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            awaitConsumed(waiting)
+            val second = FakeTextSocket()
+            second.toPhone.send(client.hello(mode = PairHelloData.MODE_PIN))
+            coordinator.handle(second)
+            assertEquals(
+                ErrorCode.PAIRING_CLOSED.name,
+                client.read(second.toClient.receive(), PairErrorData.serializer())?.code,
+            )
+            // Only that connection is refused: the PIN entry, the window and pm = 1 stay.
+            assertEquals(PairingState.EnterPin(attemptsLeft = 2), coordinator.state.value)
+            assertEquals(PairingAdvert(pinMode = true), adverts.last())
+            coordinator.submitPin("482915")
+            val offerText = waiting.toClient.receive()
+            val offer =
+                checkNotNull(client.checkOffer(offerText, client.pinSecret("482915", offerText), phone.tlsSha256))
+            val pairId = UUID.randomUUID().toString()
+            waiting.toPhone.send(client.confirm(offer, pairId, CREATED_AT))
+            assertTrue(client.checkDone(waiting.toClient.receive(), offer, pairId, CREATED_AT))
+            waiting.toPhone.close()
+            waitingRun.await()
+            assertEquals(client.name, (coordinator.state.value as PairingState.Paired).peerName)
+            windowScope.cancel()
+        }
+
     /** Lets the exchange read pair/hello and reach the point where it waits for the PIN. */
     private suspend fun awaitConsumed(socket: FakeTextSocket) {
         withTimeout(5_000) { while (!socket.toPhone.isEmpty) yield() }
