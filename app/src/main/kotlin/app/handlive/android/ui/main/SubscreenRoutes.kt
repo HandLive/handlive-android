@@ -22,6 +22,7 @@ import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
 import app.handlive.android.ui.settings.PermissionTarget
 import app.handlive.android.ui.settings.PermissionsScreen
+import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.RestrictedSettingScreen
 import app.handlive.android.ui.settings.SettingsUiState
 import app.handlive.android.ui.settings.SmsPrimerScreen
@@ -198,11 +199,11 @@ private fun openPermissionTarget(
         }
 
         PermissionTarget.SMS -> {
-            grant(context, main, state.smsStatus, Route.SmsPermission)
+            grant(context, main, state, PhoneFeature.SMS)
         }
 
         PermissionTarget.CALLS -> {
-            grant(context, main, state.callStatus, Route.CallPermission)
+            grant(context, main, state, PhoneFeature.CALLS)
         }
     }
 }
@@ -211,13 +212,13 @@ private fun openPermissionTarget(
 private fun grant(
     context: Context,
     main: MainContext,
-    status: FeatureStatus,
-    primer: Route,
+    state: SettingsUiState,
+    feature: PhoneFeature,
 ) {
-    if (status == FeatureStatus.PERMISSION_DENIED) {
+    if (state.status(feature) == FeatureStatus.PERMISSION_DENIED) {
         SystemPages.open(context, SystemPages.appDetails(context))
     } else {
-        main.push(primer)
+        main.push(primerOf(feature))
     }
 }
 

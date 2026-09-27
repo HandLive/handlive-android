@@ -5,6 +5,7 @@ import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.settings.AutoSendStatus
 import app.handlive.android.ui.settings.FeatureStatus
+import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
@@ -59,37 +60,33 @@ class SettingsActionsImpl(
 
     override fun setInternet(enabled: Boolean) = save { store.set(SettingsKeys.RELAY_ENABLED, enabled) }
 
-    override fun setSms(enabled: Boolean) {
-        save { store.set(SettingsKeys.FEATURE_SMS, enabled) }
-        // SET-02 step 3: the key is saved as true even when the permissions end up denied.
-        if (enabled &&
-            state.sms.status(enabled = true) == FeatureStatus.NEEDS_PERMISSION
-        ) {
-            main.push(Route.SmsPermission)
-        }
-    }
-
-    override fun grantSms() = grant(state.smsStatus, Route.SmsPermission)
-
-    override fun setCalls(enabled: Boolean) {
-        save { store.set(SettingsKeys.FEATURE_CALL, enabled) }
-        // SET-02 step 3: the key is saved as true even when the permissions end up denied.
-        if (enabled && state.calls.status(enabled = true) == FeatureStatus.NEEDS_PERMISSION) {
-            main.push(Route.CallPermission)
-        }
-    }
-
-    override fun grantCalls() = grant(state.callStatus, Route.CallPermission)
-
-    /** SET-01 fields 11 and 16: the feature's primer, or the App info page once its permission is denied for good. */
-    private fun grant(
-        status: FeatureStatus,
-        primer: Route,
+    override fun setFeature(
+        feature: PhoneFeature,
+        enabled: Boolean,
     ) {
-        if (status == FeatureStatus.PERMISSION_DENIED) {
+        save {
+            store.set(
+                if (feature ==
+                    PhoneFeature.SMS
+                ) {
+                    SettingsKeys.FEATURE_SMS
+                } else {
+                    SettingsKeys.FEATURE_CALL
+                },
+                enabled,
+            )
+        }
+        // SET-02 step 3: the key is saved as true even when the permissions end up denied.
+        if (enabled && state.access(feature).status(enabled = true) == FeatureStatus.NEEDS_PERMISSION) {
+            main.push(primerOf(feature))
+        }
+    }
+
+    override fun grantFeature(feature: PhoneFeature) {
+        if (state.status(feature) == FeatureStatus.PERMISSION_DENIED) {
             SystemPages.open(context, SystemPages.appDetails(context))
         } else {
-            main.push(primer)
+            main.push(primerOf(feature))
         }
     }
 
@@ -117,3 +114,10 @@ class SettingsActionsImpl(
         scope.launch { write() }
     }
 }
+
+/** SET-01 part B: the primer route of a telephony feature. */
+fun primerOf(feature: PhoneFeature): Route =
+    when (feature) {
+        PhoneFeature.SMS -> Route.SmsPermission
+        PhoneFeature.CALLS -> Route.CallPermission
+    }

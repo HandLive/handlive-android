@@ -44,20 +44,8 @@ fun SettingsScreen(
         HLGroupedList(modifier = Modifier.weight(1f)) {
             bannerSections(banners, labels)
             clipboardSection(clipboardTitle, autoClearFooter, state, actions)
-            featureSection(
-                R.string.settings_sms_messages,
-                state.settings.smsEnabled,
-                state.smsStatus,
-                actions::setSms,
-                actions::grantSms,
-            )
-            featureSection(
-                R.string.settings_calls,
-                state.settings.callEnabled,
-                state.callStatus,
-                actions::setCalls,
-                actions::grantCalls,
-            )
+            featureSection(R.string.settings_sms_messages, state.settings.smsEnabled, state, PhoneFeature.SMS, actions)
+            featureSection(R.string.settings_calls, state.settings.callEnabled, state, PhoneFeature.CALLS, actions)
             section {
                 row {
                     Switch(
@@ -145,14 +133,15 @@ private fun AutoSendSwitch(
 private fun HLGroupedListScope.featureSection(
     title: Int,
     enabled: Boolean,
-    status: FeatureStatus,
-    onChange: (Boolean) -> Unit,
-    onGrant: () -> Unit,
+    state: SettingsUiState,
+    feature: PhoneFeature,
+    actions: SettingsActions,
 ) {
+    val status = state.status(feature)
     section {
-        row { FeatureSwitch(title, enabled, status, onChange) }
+        row { FeatureSwitch(title, enabled, status) { actions.setFeature(feature, it) } }
         permissionAction(status)?.let { label ->
-            row { HLActionRow(stringResource(label), false, onGrant) }
+            row { HLActionRow(stringResource(label), false) { actions.grantFeature(feature) } }
         }
     }
 }

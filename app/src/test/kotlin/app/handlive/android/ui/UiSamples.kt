@@ -14,6 +14,7 @@ import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.SmsAvailability
 import app.handlive.android.ui.settings.FeatureAccess
+import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
@@ -92,13 +93,12 @@ object UiSamples {
 
         override fun setInternet(enabled: Boolean) = Unit
 
-        override fun setSms(enabled: Boolean) = Unit
+        override fun setFeature(
+            feature: PhoneFeature,
+            enabled: Boolean,
+        ) = Unit
 
-        override fun grantSms() = Unit
-
-        override fun setCalls(enabled: Boolean) = Unit
-
-        override fun grantCalls() = Unit
+        override fun grantFeature(feature: PhoneFeature) = Unit
 
         override fun open(page: SettingsPage) = Unit
     }
