@@ -45,6 +45,21 @@ class OkHttpRelayTransportTest {
             assertEquals(1, server.requestCount)
         }
 
+    @Test
+    fun relaySettingsTheClientCannotTakeFailAsUnreachable() =
+        runBlocking {
+            listOf(
+                RelayConfig("relay.example.com", listOf("md5/not-a-pin")),
+                RelayConfig("relay example.com"),
+            ).forEach { config ->
+                val transport = RelayTransport.create(config)
+                val call = runCatching { transport.http.send("GET", "/v1/pairs", null, null) }.exceptionOrNull()
+                assertTrue("$call", call is RelayUnreachableException && call !is RelayPinMismatchException)
+                val link = runCatching { transport.links.open("jwt") }.exceptionOrNull()
+                assertTrue("$link", link is RelayUnreachableException)
+            }
+        }
+
     /** The REST client of a relay at this server's `host:port` with [pins], the test certificate trusted. */
     private fun pinned(pins: List<String>): RelayHttp {
         val config = RelayConfig("${server.hostName}:${server.port}", pins)
