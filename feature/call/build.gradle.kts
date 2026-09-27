@@ -13,6 +13,20 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The instrumented test APK packs the Netty jars of core:transport: drop their duplicate descriptors.
+    packaging {
+        resources {
+            excludes +=
+                setOf(
+                    "META-INF/INDEX.LIST",
+                    "META-INF/io.netty.versions.properties",
+                    "META-INF/license/*",
+                    "META-INF/native-image/**",
+                )
+        }
     }
 
     compileOptions {
@@ -53,4 +67,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.json.schema.validator)
     testImplementation(testFixtures(project(":core:protocol")))
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
