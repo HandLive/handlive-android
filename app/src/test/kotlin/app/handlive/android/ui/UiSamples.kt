@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.Density
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.feature.pairing.devices.CallAvailability
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
@@ -36,6 +37,7 @@ object UiSamples {
             clipboard = ClipboardAvailability.OFF_ON_PEER,
             safetyCode = "fc647e0b",
             sms = SmsAvailability.MISSING_PERMISSION,
+            calls = CallAvailability.MISSING_PERMISSION,
         )
 
     val ipad =
