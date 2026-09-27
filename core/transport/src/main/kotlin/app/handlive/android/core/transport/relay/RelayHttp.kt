@@ -46,7 +46,10 @@ open class RelayUnreachableException(
     cause: Throwable? = null,
 ) : IOException(message, cause)
 
-/** The relay's certificate chain matches none of the pins (CONN-03 E7): never connect, report a security error. */
+/**
+ * The relay's certificate was refused (CONN-03 E7): its chain matches none of the pins, or the platform does not trust
+ * it. Never connect; report a security error.
+ */
 class RelayPinMismatchException(
     cause: Throwable? = null,
 ) : RelayUnreachableException("relay certificate pin mismatch", cause)

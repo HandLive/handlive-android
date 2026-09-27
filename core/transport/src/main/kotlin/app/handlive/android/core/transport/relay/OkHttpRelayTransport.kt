@@ -11,7 +11,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.security.cert.CertPathBuilderException
+import java.security.cert.CertPathValidatorException
+import java.security.cert.CertificateException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -81,10 +85,8 @@ object OkHttpRelayTransport {
                         e: IOException,
                     ) {
                         val failure =
-                            if (e is SSLPeerUnverifiedException) {
-                                RelayPinMismatchException(
-                                    e,
-                                )
+                            if (e.refusesCertificate()) {
+                                RelayPinMismatchException(e)
                             } else {
                                 RelayUnreachableException("relay unreachable", e)
                             }
@@ -104,6 +106,24 @@ object OkHttpRelayTransport {
     private val JSON = "application/json; charset=utf-8".toMediaType()
     private const val EMPTY = ""
 }
+
+/**
+ * CONN-03 E7: TLS refused the relay's certificate — its chain matches none of the pins or names another host, or the
+ * platform does not trust the chain (a handshake that failed on the certificate path) — rather than a network or
+ * protocol failure (E1).
+ */
+internal fun Throwable.refusesCertificate(): Boolean =
+    this is SSLPeerUnverifiedException ||
+        (
+            this is SSLHandshakeException &&
+                generateSequence(cause) { it.cause }.take(MAX_CAUSES).any { cause ->
+                    cause is CertificateException || cause is CertPathValidatorException ||
+                        cause is CertPathBuilderException
+                }
+        )
+
+/** How deep [refusesCertificate] looks through the causes of a handshake failure. */
+private const val MAX_CAUSES = 8
 
 /** The relay REST client and the `/v1/relay` socket factory on one pinned client (CONN-03, 0.4.3). */
 class RelayTransport(
