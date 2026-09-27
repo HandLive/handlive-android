@@ -20,10 +20,15 @@ import app.handlive.android.ui.pairing.PinEntryScreen
 import app.handlive.android.ui.pairing.ScannerFrame
 import app.handlive.android.ui.settings.AutoClearScreen
 import app.handlive.android.ui.settings.ConsentScreen
+import app.handlive.android.ui.settings.DataAction
+import app.handlive.android.ui.settings.DataActionDialogs
+import app.handlive.android.ui.settings.DataStep
+import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
 import app.handlive.android.ui.settings.PermissionsScreen
 import app.handlive.android.ui.settings.RestrictedSettingScreen
 import app.handlive.android.ui.settings.SettingsScreen
+import app.handlive.android.ui.settings.SmsPrimerScreen
 
 /** Every screen of A1.4 with sample data, by name, for the text-fit and semantics tests. */
 object ScreenCatalog {
@@ -49,11 +54,32 @@ object ScreenCatalog {
             "limit reached" to { PairingFailedScreen(PairingFailure.LIMIT_REACHED, {}, {}, {}) },
             "pairing lost" to { PairingFailedScreen(PairingFailure.DISCONNECTED, {}, {}, {}) },
             "settings" to { SettingsScreen(UiSamples.settings, warnings, UiSamples.NoActions, "System Default") },
+            "settings sms needs permission" to {
+                SettingsScreen(UiSamples.smsNeedsPermission, StatusBanners(), UiSamples.NoActions, "English")
+            },
+            "settings relay certificate" to {
+                SettingsScreen(UiSamples.relayPinMismatch, StatusBanners(), UiSamples.NoActions, "English")
+            },
+            "remove from server sheet" to {
+                DataActionDialogs(DataStep.Confirm(DataAction.REMOVE_FROM_SERVER), {}, {}, {})
+            },
+            "delete all sheet" to { DataActionDialogs(DataStep.Confirm(DataAction.DELETE_ALL), {}, {}, {}) },
+            "delete offline alert" to { DataActionDialogs(DataStep.DeleteOffline, {}, {}, {}) },
             "auto-clear" to { AutoClearScreen(60, {}, {}) },
             "language" to { LanguageScreen(AppLanguage.Vietnamese, {}, {}) },
             "permissions" to {
-                PermissionsScreen(UiSamples.environment, UiSamples.settings.autoSendStatus, {}, {})
+                PermissionsScreen(UiSamples.environment, UiSamples.settings.autoSendStatus, FeatureStatus.ON, {}, {})
             },
+            "permissions sms denied" to {
+                PermissionsScreen(
+                    UiSamples.environment,
+                    UiSamples.settings.autoSendStatus,
+                    FeatureStatus.PERMISSION_DENIED,
+                    {},
+                    {},
+                )
+            },
+            "sms primer" to { SmsPrimerScreen {} },
             "consent" to { ConsentScreen({}, {}) },
             "restricted setting" to { RestrictedSettingScreen {} },
         )

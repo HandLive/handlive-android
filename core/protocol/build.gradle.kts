@@ -43,6 +43,7 @@ dependencies {
 
     testFixturesImplementation(libs.kotlinx.serialization.json)
     testFixturesImplementation(libs.junit)
+    testFixturesImplementation(libs.json.schema.validator)
 
     testImplementation(libs.junit)
     testImplementation(libs.json.schema.validator)

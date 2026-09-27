@@ -11,9 +11,11 @@ import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
+import app.handlive.android.feature.pairing.devices.SmsAvailability
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
+import app.handlive.android.ui.settings.SmsAccessState
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.UnusedAppPause
@@ -33,6 +35,7 @@ object UiSamples {
             appVersion = "1.0.0 (100)",
             clipboard = ClipboardAvailability.OFF_ON_PEER,
             safetyCode = "fc647e0b",
+            sms = SmsAvailability.MISSING_PERMISSION,
         )
 
     val ipad =
@@ -56,6 +59,20 @@ object UiSamples {
 
     val settings = SettingsUiState(HandLiveSettings(clipA11yConsentAt = NOW), accessibilityServiceOn = true)
 
+    /**
+     * SMS on while `READ_CONTACTS` is missing ("Needs permission" with "Grant Permission"), a build with a relay that
+     * refused this device (CONN-03 E3), and both data rows.
+     */
+    val smsNeedsPermission =
+        settings.copy(
+            sms = SmsAccessState(missing = setOf("READ_CONTACTS")),
+            relayAvailable = true,
+            relayDeviceRevoked = true,
+        )
+
+    /** CONN-03 E7 under Internet Connection: the longest text field 21 shows. */
+    val relayPinMismatch = settings.copy(relayAvailable = true, relayPinMismatch = true)
+
     object NoActions : SettingsActions {
         override fun setClipboard(enabled: Boolean) = Unit
 
@@ -68,6 +85,10 @@ object UiSamples {
         override fun setAutoClear(seconds: Int) = Unit
 
         override fun setInternet(enabled: Boolean) = Unit
+
+        override fun setSms(enabled: Boolean) = Unit
+
+        override fun grantSms() = Unit
 
         override fun open(page: SettingsPage) = Unit
     }

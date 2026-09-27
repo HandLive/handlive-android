@@ -16,4 +16,11 @@ object AndroidTlsIdentityStorage {
             AndroidKeystoreSecretStore.create(context),
             File(context.noBackupFilesDir, PKCS12_FILE),
         )
+
+    /** SET-02 API 7: deletes the PKCS#12 file; a missing file counts as deleted. */
+    fun delete(context: Context): Boolean =
+        File(context.noBackupFilesDir, PKCS12_FILE).let {
+            !it.exists() ||
+                it.delete()
+        }
 }

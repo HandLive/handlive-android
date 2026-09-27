@@ -1,0 +1,249 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "8cb5c30546d1d436557fa707f3e42d1b",
+    "entities": [
+      {
+        "tableName": "paired_device",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pair_id` TEXT NOT NULL, `peer_device_id` TEXT NOT NULL, `peer_name` TEXT NOT NULL, `peer_platform` TEXT NOT NULL, `peer_model` TEXT, `peer_ik_sig_pub` BLOB NOT NULL, `peer_ik_dh_pub` BLOB NOT NULL, `peer_bt_address` TEXT, `prk_enc` BLOB NOT NULL, `attestation` BLOB NOT NULL, `sig_self` BLOB NOT NULL, `sig_peer` BLOB NOT NULL, `features_json` TEXT NOT NULL DEFAULT '{}', `relay_registered` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `last_seen_at` INTEGER, `revoked_at` INTEGER, PRIMARY KEY(`pair_id`))",
+        "fields": [
+          {
+            "fieldPath": "pairId",
+            "columnName": "pair_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerDeviceId",
+            "columnName": "peer_device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerName",
+            "columnName": "peer_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerPlatform",
+            "columnName": "peer_platform",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerModel",
+            "columnName": "peer_model",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "peerIkSigPub",
+            "columnName": "peer_ik_sig_pub",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerIkDhPub",
+            "columnName": "peer_ik_dh_pub",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerBtAddress",
+            "columnName": "peer_bt_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "prkEnc",
+            "columnName": "prk_enc",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attestation",
+            "columnName": "attestation",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sigSelf",
+            "columnName": "sig_self",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sigPeer",
+            "columnName": "sig_peer",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "featuresJson",
+            "columnName": "features_json",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'{}'"
+          },
+          {
+            "fieldPath": "relayRegistered",
+            "columnName": "relay_registered",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenAt",
+            "columnName": "last_seen_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "revokedAt",
+            "columnName": "revoked_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "pair_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_paired_device_peer_device_id",
+            "unique": true,
+            "columnNames": [
+              "peer_device_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_paired_device_peer_device_id` ON `${TABLE_NAME}` (`peer_device_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sms_observer_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `last_sms_id` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSmsId",
+            "columnName": "last_sms_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "push_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pair_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `body_b64` TEXT, `collapse_key` TEXT, `attempts` INTEGER NOT NULL DEFAULT 0, `next_attempt_at` INTEGER NOT NULL, `expires_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`pair_id`) REFERENCES `paired_device`(`pair_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pairId",
+            "columnName": "pair_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyB64",
+            "columnName": "body_b64",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "collapseKey",
+            "columnName": "collapse_key",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "attempts",
+            "columnName": "attempts",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "next_attempt_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expires_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_push_outbox_pair_id",
+            "unique": false,
+            "columnNames": [
+              "pair_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_push_outbox_pair_id` ON `${TABLE_NAME}` (`pair_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "paired_device",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "pair_id"
+            ],
+            "referencedColumns": [
+              "pair_id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8cb5c30546d1d436557fa707f3e42d1b')"
+    ]
+  }
+}

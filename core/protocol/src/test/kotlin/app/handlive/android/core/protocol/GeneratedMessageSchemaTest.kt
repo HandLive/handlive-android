@@ -14,6 +14,7 @@ import app.handlive.android.core.protocol.session.SessionHelloData
 import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.protocol.session.SessionRekeyData
 import app.handlive.android.core.protocol.session.SessionWelcomeData
+import app.handlive.android.core.protocol.testing.JsonSchemaValidation
 import app.handlive.android.core.protocol.testing.SharedTestVectors
 import app.handlive.android.core.protocol.testing.str
 import kotlinx.serialization.json.JsonPrimitive

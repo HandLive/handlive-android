@@ -21,6 +21,8 @@ data class PairedDevice(
     val lastSeenAt: Long?,
     /** PAIR-02 field 10: first 8 hex digits of SHA-256(`attestation`), identical on both devices of the pair. */
     val safetyCode: String,
+    /** The relay knows the pair (`relay_registered`, PAIR-01 API 8). */
+    val relayRegistered: Boolean = false,
 )
 
 /** What the session handshake and the discovery hints need of a pair; [prk] is `null` for a tombstone. */
@@ -114,8 +116,9 @@ class PairStore(
     ) = dao.recordSeen(pairId, clock(), featuresJson)
 
     /**
-     * PAIR-03 step 7 then 9: wipes the key into a tombstone, then drops the row. Phase 1 has no relay, so no
-     * pair is `relay_registered` and the tombstone is removed at once. Returns `false` if the pair was not active.
+     * PAIR-03 step 7 then 9: wipes the key into a tombstone, then drops the row unless the relay knows the pair —
+     * that tombstone stays until the relay confirms the revocation ([RelayPairs.deleteTombstone], E3). Returns
+     * `false` if the pair was not active.
      */
     suspend fun revoke(pairId: String): Boolean {
         val revoked = dao.tombstone(pairId, clock()) > 0
@@ -144,7 +147,7 @@ class PairStore(
 }
 
 /** A `PRK` that cannot be opened (the Keystore lost its master key) makes the pair unknown (`null`). */
-private fun PairedDeviceEntity.toSecret(sealer: SecretSealer): PairSecret? =
+internal fun PairedDeviceEntity.toSecret(sealer: SecretSealer): PairSecret? =
     if (revokedAt != null) {
         PairSecret(pairId, peerDeviceId, prk = null, revoked = true)
     } else {
@@ -166,4 +169,5 @@ private fun toModel(row: PairedDeviceEntity) =
         createdAt = row.createdAt,
         lastSeenAt = row.lastSeenAt,
         safetyCode = PairStore.safetyCode(row.attestation),
+        relayRegistered = row.relayRegistered,
     )

@@ -11,8 +11,6 @@ import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.capability.Feature
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -41,6 +39,12 @@ class PeerSession(
     private val sender: EnvelopeSender,
     clock: () -> Long,
 ) {
+    /**
+     * The `id`s this session's envelopes used. The connection runtime shares one per pair across the successive
+     * sessions of the pair (LAN ↔ relay), so a request retried on a new session is not processed twice.
+     */
+    internal var ledger: EnvelopeLedger = EnvelopeLedger(clock)
+
     /** Who the client is (the pair row of `paired_device`). */
     data class PeerInfo(
         val pairId: String,
@@ -49,7 +53,7 @@ class PeerSession(
         val peerPlatform: PeerPlatform,
     )
 
-    /** How the session reaches the phone (0.11, PAIR-02 field 5); Phase 1 serves the LAN only. */
+    /** How the session reaches the phone (0.11, PAIR-02 field 5). */
     enum class Channel { LAN, RELAY, USB }
 
     val pairId: String get() = peer.pairId
@@ -59,8 +63,6 @@ class PeerSession(
 
     private val ids = UuidV7Generator(clock)
     private val pendingAcks = ConcurrentHashMap<String, CompletableDeferred<Ack>>()
-    private val processedLock = Mutex()
-    internal val processed = ProcessedEnvelopeCache(clock)
 
     fun isEffective(feature: Feature): Boolean = feature in effectiveFeatures.value
 
@@ -95,7 +97,7 @@ class PeerSession(
 
     /** Sends the `ack` of request [re] and keeps it for duplicates. */
     suspend fun sendAck(ack: Ack) {
-        processedLock.withLock { processed.recordAck(ack) }
+        ledger.recordAck(ack)
         send(MessageType.ACK, PlaintextCodec.encodeAck(ack))
     }
 
@@ -112,16 +114,8 @@ class PeerSession(
 
     /** `true` when [id] is new (and is now remembered); a duplicate gets its old `ack` again, if one was sent. */
     internal suspend fun firstDelivery(id: String): Boolean {
-        val duplicateAck =
-            processedLock.withLock {
-                val entry = processed.find(id)
-                if (entry == null) {
-                    processed.remember(id)
-                    return true
-                }
-                entry.ack
-            }
+        val (first, duplicateAck) = ledger.firstDelivery(id)
         duplicateAck?.let { send(MessageType.ACK, PlaintextCodec.encodeAck(it)) }
-        return false
+        return first
     }
 }

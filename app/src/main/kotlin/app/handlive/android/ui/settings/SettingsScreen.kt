@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import app.handlive.android.core.design.component.HLActionRow
 import app.handlive.android.core.design.component.HLGroupedList
 import app.handlive.android.core.design.component.HLGroupedListScope
 import app.handlive.android.core.design.component.HLNavigationRow
@@ -20,8 +21,9 @@ import app.handlive.android.ui.main.bannerSections
 import java.text.DateFormat
 
 /**
- * SET-02 on the phone for Phase 1: the Clipboard group (fields 1–6, each switch with its one-line description),
- * Internet Connection (field 21), Permissions & Background (field 23) and Language (field 32).
+ * SET-02 on the phone: the Clipboard group (fields 1–6, each switch with its one-line description), SMS Messages
+ * (field 7, with its permission status and action, SET-01 fields 10, 11 and 16), Internet Connection (field 21),
+ * Permissions & Background (field 23) and Language (field 32).
  */
 @Composable
 fun SettingsScreen(
@@ -30,23 +32,26 @@ fun SettingsScreen(
     actions: SettingsActions,
     languageValue: String,
     modifier: Modifier = Modifier,
+    onDataAction: (DataAction) -> Unit = {},
 ) {
     val labels = bannerLabels()
     val clipboardTitle = stringResource(R.string.settings_clipboard)
     val autoClearFooter = stringResource(R.string.settings_auto_clear_footer)
+    val dataTitle = stringResource(R.string.settings_data)
     val settings = state.settings
     Column(modifier = modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         HLScreenHeader(title = stringResource(R.string.settings_title))
         HLGroupedList(modifier = Modifier.weight(1f)) {
             bannerSections(banners, labels)
             clipboardSection(clipboardTitle, autoClearFooter, state, actions)
+            smsSection(state, actions)
             section {
                 row {
                     Switch(
                         R.string.settings_internet_connection,
                         settings.relayEnabled,
                         actions::setInternet,
-                        R.string.settings_internet_connection_description,
+                        state.internetDescription,
                     )
                 }
             }
@@ -59,6 +64,7 @@ fun SettingsScreen(
                 }
                 row { Navigation(R.string.settings_language, languageValue) { actions.open(SettingsPage.LANGUAGE) } }
             }
+            dataSection(dataTitle, state.relayAvailable, onDataAction)
         }
     }
 }
@@ -117,6 +123,72 @@ private fun AutoSendSwitch(
         unavailableReason = null,
         description = description,
     )
+}
+
+/**
+ * Field 7: the switch, disabled with "Not supported on this phone" without telephony; while it is on with a
+ * permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
+ */
+private fun HLGroupedListScope.smsSection(
+    state: SettingsUiState,
+    actions: SettingsActions,
+) {
+    val status = state.smsStatus
+    section {
+        row { SmsSwitch(state.settings.smsEnabled, status, actions::setSms) }
+        smsPermissionAction(status)?.let { label ->
+            row { HLActionRow(stringResource(label), false, actions::grantSms) }
+        }
+    }
+}
+
+@Composable
+private fun SmsSwitch(
+    enabled: Boolean,
+    status: FeatureStatus,
+    onChange: (Boolean) -> Unit,
+) {
+    val unsupported = status == FeatureStatus.UNSUPPORTED
+    HLSwitchRow(
+        stringResource(R.string.settings_sms_messages),
+        enabled && !unsupported,
+        onChange,
+        unavailableReason = if (unsupported) stringResource(status.label) else null,
+        description = status.takeIf { it.needsAction }?.let { stringResource(it.label) },
+    )
+}
+
+/** The button a feature card shows for [status]: field 11 "Grant Permission" or field 16 "Open Settings". */
+fun smsPermissionAction(status: FeatureStatus): Int? =
+    when (status) {
+        FeatureStatus.NEEDS_PERMISSION -> R.string.permission_grant
+        FeatureStatus.PERMISSION_DENIED -> R.string.common_open_settings
+        else -> null
+    }
+
+private val FeatureStatus.needsAction: Boolean
+    get() = this == FeatureStatus.NEEDS_PERMISSION || this == FeatureStatus.PERMISSION_DENIED
+
+/** Fields 26–27, each behind its confirmation (field 28); "Remove Device from Server" only in a build with a relay. */
+private fun HLGroupedListScope.dataSection(
+    title: String,
+    relayAvailable: Boolean,
+    onAction: (DataAction) -> Unit,
+) {
+    section(title = title) {
+        if (relayAvailable) {
+            row {
+                HLActionRow(stringResource(R.string.settings_remove_from_server), destructive = true) {
+                    onAction(DataAction.REMOVE_FROM_SERVER)
+                }
+            }
+        }
+        row {
+            HLActionRow(stringResource(R.string.settings_delete_all_data), destructive = true) {
+                onAction(DataAction.DELETE_ALL)
+            }
+        }
+    }
 }
 
 /** Field 6 choices: "Off", "After 1 Minute", "After 5 Minutes". */

@@ -7,18 +7,22 @@ import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.transport.handshake.PairRecord
+import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.server.ControlServer
 import app.handlive.android.core.transport.server.ControlServerConfig
 import app.handlive.android.core.transport.server.ControlSession
 import app.handlive.android.core.transport.server.PairingEndpoint
+import app.handlive.android.core.transport.server.SessionTransport
 import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
 import app.handlive.android.core.transport.tls.TlsIdentityProvider
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
+import app.handlive.android.feature.connection.capability.SimChangeWatcher
 import app.handlive.android.feature.connection.discovery.DiscoveryAdvertising
 import app.handlive.android.feature.connection.session.PeerSession
 import app.handlive.android.feature.connection.session.SessionRouter
+import app.handlive.android.feature.connection.session.SessionTable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,33 +59,39 @@ class ConnectionRuntime private constructor(
     private val data = HandLiveData.get(appContext)
     private val clock: () -> Long = System::currentTimeMillis
     private val lock = Mutex()
-    private val sessionsFlow = MutableStateFlow<Map<String, PeerSession>>(emptyMap())
     private val stateFlow = MutableStateFlow(ServiceState.STOPPED)
     private val accessibilityRunning = MutableStateFlow(false)
     private val environmentVersion = MutableStateFlow(0)
     private val pairingAdvert = MutableStateFlow(PairingAdvert.NONE)
     private val capability = CapabilityPublisher(LocalEnvironmentReader(appContext))
+    private val localCapabilityFlow = MutableStateFlow<CapabilityData?>(null)
+    private val simWatcher = SimChangeWatcher(appContext, ::refreshEnvironment)
     private val discovery = DiscoveryAdvertising(appContext, data.pairs, clock)
     private var scope: CoroutineScope? = null
     private var server: ControlServer? = null
 
     /** Routes envelopes to feature handlers; register handlers before the service starts. */
     val router = SessionRouter(clock)
+    private val table = SessionTable(data.pairs, router, clock)
 
-    /** Open sessions by `pair_id`. */
-    val sessions: StateFlow<Map<String, PeerSession>> = sessionsFlow.asStateFlow()
+    /** Open sessions by `pair_id`, over the LAN or the relay. */
+    val sessions: StateFlow<Map<String, PeerSession>> = table.sessions
 
     val connectedPeers: StateFlow<List<ConnectedPeer>> =
-        sessionsFlow
+        table.sessions
             .map { open -> open.values.map { ConnectedPeer(it.pairId, it.peerName, it.peerPlatform, it.channel) } }
             .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<ServiceState> = stateFlow.asStateFlow()
 
-    private val endedFlow = MutableSharedFlow<SessionEnded>(extraBufferCapacity = ENDED_BUFFER)
+    /**
+     * This phone's current capability (0.7.2) while the service runs, `null` otherwise: feature modules start and
+     * stop their work from it (SMS registers its observer only while `features.sms` is on with `READ_SMS`).
+     */
+    val localCapability: StateFlow<CapabilityData?> = localCapabilityFlow.asStateFlow()
 
     /** Sessions that closed, with the peer's `session/bye` reason if it sent one (PAIR-03 API 2 needs `revoked`). */
-    val sessionEnded: SharedFlow<SessionEnded> = endedFlow.asSharedFlow()
+    val sessionEnded: SharedFlow<SessionEnded> = table.ended
 
     /** Installed by the pairing feature; `/v1/pair` delegates to it (PAIR-01). */
     @Volatile
@@ -144,6 +154,9 @@ class ConnectionRuntime private constructor(
         pairingAdvert.value = advert
     }
 
+    /** The relay's way into the control server (CONN-03): relayed sessions in, and out again when it is turned off. */
+    val relayGate = RelayGate { server }
+
     /** Closes the session of [pairId] with `session/bye {reason}` (PAIR-03 step 6, CONN-02 API 4). */
     suspend fun closeSession(
         pairId: String,
@@ -175,66 +188,32 @@ class ConnectionRuntime private constructor(
                     localDeviceId = identity.deviceId,
                     pairs = { pairId -> data.pairs.pairRecord(pairId) },
                     localCapability = { capabilityState.value },
-                    onSessionEstablished = { session -> runtimeScope.launch { attach(session) } },
+                    onSessionEstablished = { session -> runtimeScope.launch { table.attach(session, runtimeScope) } },
                     pairingEndpoint = { socket -> pairingEndpoint?.handle(socket) },
                 ),
             )
         val port = controlServer.start()
         server = controlServer
+        capabilityState.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
         capability.publishUpdates(runtimeScope, capabilityState) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
+        simWatcher.start()
     }
 
     private suspend fun stopLocked() {
+        simWatcher.stop()
+        localCapabilityFlow.value = null
         server?.sessions?.all()?.forEach { runCatching { it.bye(BYE_SHUTDOWN) } }
         server?.stop()
         server = null
         discovery.stop()
         scope?.cancel()
         scope = null
-        sessionsFlow.value = emptyMap()
-    }
-
-    /** CONN-01 steps 9–10: the session joins [sessions]; its envelopes go to the router until it closes. */
-    private suspend fun attach(control: ControlSession) {
-        val device = data.pairs.find(control.pairId)
-        val peer =
-            PeerSession(
-                peer =
-                    PeerSession.PeerInfo(
-                        pairId = control.pairId,
-                        peerDeviceId = control.peerDeviceId,
-                        peerName = device?.peerName.orEmpty(),
-                        peerPlatform = device?.peerPlatform ?: PeerPlatform.MACOS,
-                    ),
-                channel = PeerSession.Channel.LAN,
-                effectiveFeatures = control.effectiveFeatures,
-                peerCapability = control.peerCapability,
-                sender = { type, plaintext, id -> control.send(type, plaintext, id) },
-                clock = clock,
-            )
-        sessionsFlow.update { it + (control.pairId to peer) }
-        val recorder =
-            control.peerCapability
-                .filterNotNull()
-                .onEach {
-                    data.pairs.recordSeen(
-                        control.pairId,
-                        ProtocolJson.encodeToString(CapabilityData.serializer(), it),
-                    )
-                }.launchIn(checkNotNull(scope))
-        try {
-            for (message in control.inbound) router.route(peer, message)
-        } finally {
-            recorder.cancel()
-            sessionsFlow.update { open -> if (open[control.pairId] === peer) open - control.pairId else open }
-            endedFlow.tryEmit(SessionEnded(control.pairId, control.byeReason.value))
-        }
+        table.clear()
     }
 
     companion object {
         private const val BYE_SHUTDOWN = "shutdown"
-        private const val ENDED_BUFFER = 16
 
         @Volatile
         private var instance: ConnectionRuntime? = null

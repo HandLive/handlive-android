@@ -11,6 +11,7 @@ import app.handlive.android.core.design.component.HLGroupedList
 import app.handlive.android.core.design.component.HLGroupedListScope
 import app.handlive.android.core.design.component.HLNavigationRow
 import app.handlive.android.core.design.component.HLScreenHeader
+import app.handlive.android.core.design.component.HLValueRow
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.ui.onboarding.instructionsOf
@@ -18,14 +19,16 @@ import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.UnusedAppPause
 
 /**
- * SET-02 field 23 → SET-01 fields 3, 6–9 and 15: notifications, background running (with its warning, E3),
- * "Pause app activity if unused", the manufacturer's autostart instructions, and automatic clipboard sending.
- * Every row leads to the page that changes it; the states are read again on every resume.
+ * SET-02 field 23 → SET-01 fields 3, 6–11, 15 and 16: notifications, background running (with its warning, E3),
+ * "Pause app activity if unused", the manufacturer's autostart instructions, and one card per feature — automatic
+ * clipboard sending and SMS with its status and "Grant Permission" or "Open Settings". Every row leads to the page
+ * that changes it; the states are read again on every resume.
  */
 @Composable
 fun PermissionsScreen(
     environment: PhoneEnvironment,
     autoSend: AutoSendStatus,
+    sms: FeatureStatus,
     onOpen: (PermissionTarget) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -63,7 +66,13 @@ fun PermissionsScreen(
                     }
                 }
             }
-            section { row { AutoSendRow(autoSend) { onOpen(PermissionTarget.AUTO_SEND) } } }
+            section {
+                row { AutoSendRow(autoSend) { onOpen(PermissionTarget.AUTO_SEND) } }
+                row { HLValueRow(stringResource(R.string.settings_sms_messages), stringResource(sms.label)) }
+                smsPermissionAction(sms)?.let { label ->
+                    row { HLActionRow(stringResource(label), destructive = false) { onOpen(PermissionTarget.SMS) } }
+                }
+            }
         }
     }
 }

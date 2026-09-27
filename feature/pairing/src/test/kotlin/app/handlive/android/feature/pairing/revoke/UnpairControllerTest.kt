@@ -47,10 +47,10 @@ class UnpairControllerTest {
     @After
     fun tearDown() = pairs.database.close()
 
-    private fun newSession() =
+    private fun newSession(channel: PeerSession.Channel = PeerSession.Channel.LAN) =
         PeerSession(
             peer = PeerSession.PeerInfo(pairId, "5b1f8c2e-9a4d-8e6f-a1b2-c3d4e5f60718", "MacBook", PeerPlatform.MACOS),
-            channel = PeerSession.Channel.LAN,
+            channel = channel,
             effectiveFeatures = MutableStateFlow(emptySet()),
             peerCapability = MutableStateFlow(null),
             sender = { type, plaintext, id ->
@@ -147,6 +147,44 @@ class UnpairControllerTest {
             controller.onSessionEnded(SessionEnded(pairId, "shutdown"))
             assertEquals(1, pairs.store.activeCount())
             controller.onSessionEnded(SessionEnded(pairId, "revoked"))
+            assertEquals(0, pairs.store.activeCount())
+        }
+
+    @Test
+    fun deleteAllTellsLanClientsWithReinstallAndKeepsNoTombstone() =
+        runTest {
+            scope = backgroundScope
+            session = newSession()
+            pairs.store.save(pair(), ByteArray(32))
+            pairs.database.pairedDevices().setRelayRegistered(pairId, true)
+
+            controller(withSession = true).revokeAllForReinstall()
+
+            val request = PlaintextCodec.decodeOp(sent.single().second, PairRevokeData.serializer())
+            assertEquals(PairRevokeData(pairId, "reinstall"), request.data)
+            assertEquals(listOf(pairId to "revoked"), closed)
+            // SET-02 A4: deleted outright, even a pair the relay knew (the relay already dropped it).
+            assertNull(pairs.database.pairedDevices().findBlocking(pairId))
+        }
+
+    @Test
+    fun deleteAllGoesOnWithoutAnAckAndSkipsRelayedSessions() =
+        runTest {
+            scope = backgroundScope
+            answerRevoke = false
+            session = newSession()
+            pairs.store.save(pair(), ByteArray(32))
+            controller(withSession = true).revokeAllForReinstall()
+            assertEquals(1, sent.size)
+            assertNull(pairs.database.pairedDevices().findBlocking(pairId))
+
+            sent.clear()
+            closed.clear()
+            session = newSession(PeerSession.Channel.RELAY)
+            pairs.store.save(pair(), ByteArray(32))
+            controller(withSession = true).revokeAllForReinstall()
+            assertTrue(sent.isEmpty())
+            assertTrue(closed.isEmpty())
             assertEquals(0, pairs.store.activeCount())
         }
 

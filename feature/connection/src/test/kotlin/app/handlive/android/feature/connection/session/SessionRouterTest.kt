@@ -108,6 +108,32 @@ class SessionRouterTest {
         }
 
     @Test
+    fun aRequestRetriedOnTheNextSessionOfThePairGetsItsOldAck() =
+        runTest {
+            // CONN-03: the client moved from the LAN to the relay and retried with the same envelope id.
+            var handled = 0
+            router.register(MessageType.CLIPBOARD) { s, envelope ->
+                handled++
+                s.sendAck(Ack.success(envelope.id))
+            }
+            val relayed =
+                PeerSession(
+                    peer = session.peer,
+                    channel = PeerSession.Channel.RELAY,
+                    effectiveFeatures = MutableStateFlow(emptySet()),
+                    peerCapability = MutableStateFlow(null),
+                    sender = { type, plaintext, id -> sent += Sent(type, plaintext, id) },
+                    clock = { now },
+                )
+            relayed.ledger = session.ledger
+            val request = inbound(MessageType.CLIPBOARD, op("push"))
+            router.route(session, request)
+            router.route(relayed, request)
+            assertEquals(1, handled)
+            assertEquals(listOf(request.id, request.id), sent.map { PlaintextCodec.decodeAck(it.plaintext).re })
+        }
+
+    @Test
     fun unknownRequestIsRefusedWithUnsupportedTypeAndUnknownEventIsIgnored() =
         runTest {
             val request = inbound(MessageType.SMS, op("send"))

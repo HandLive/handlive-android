@@ -31,8 +31,12 @@ data class PairingAdvert(
     }
 }
 
-/** A `/v1/ctl` session of [pairId] ended; [byeReason] is the `reason` of the peer's `session/bye`, if any. */
+/**
+ * A `/v1/ctl` session of [pairId] ended; [byeReason] is the `reason` of the peer's `session/bye`, if any, and
+ * [channel] how it reached the phone (a LAN session that dropped makes the relay worth reaching, CONN-03).
+ */
 data class SessionEnded(
     val pairId: String,
     val byeReason: String?,
+    val channel: PeerSession.Channel = PeerSession.Channel.LAN,
 )

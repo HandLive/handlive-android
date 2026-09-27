@@ -82,5 +82,8 @@ data class PairRevokeData(
 ) {
     companion object {
         const val REASON_USER = "user"
+
+        /** SET-02 A4: "Delete All HandLive Data" on the initiating device. */
+        const val REASON_REINSTALL = "reinstall"
     }
 }

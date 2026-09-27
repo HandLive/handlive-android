@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- SET-01 part B, requested together when SMS is turned on (SET-01 API 2). RECEIVE_SMS is not requested: new
+         messages are found with a ContentObserver on content://sms (C18). -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- SMS works only on phones with telephony; the app still installs on others (SET-01 step 8: "unsupported"). -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
+    <application>
+        <!-- SMS-04 API 3: "sent" and "delivered" results of each part, as explicit broadcasts from SmsManager. -->
+        <receiver
+            android:name=".system.SmsResultReceiver"
+            android:exported="false" />
+    </application>
+</manifest>

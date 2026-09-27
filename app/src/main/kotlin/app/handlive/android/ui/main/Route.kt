@@ -19,4 +19,7 @@ sealed interface Route {
 
     /** SET-01 field 14 before the Accessibility settings. */
     data object RestrictedSetting : Route
+
+    /** SET-01 part B for SMS: the primer, then the system dialogs (steps 10–11). */
+    data object SmsPermission : Route
 }

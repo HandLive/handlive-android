@@ -81,12 +81,15 @@ dependencies {
         // Giữ netty-transport-classes-epoll/kqueue: Ktor gọi Epoll/KQueue.isAvailable() khi chọn event loop.
     }
     implementation(libs.ktor.server.websockets)
+    // Relay client (CONN-03): HTTPS and WebSocket with SPKI pinning of the relay's certificate chain.
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.ktor.client.java)
     testImplementation(testFixtures(project(":core:protocol")))
+    testImplementation(libs.okhttp.mockwebserver)
 
     // Smoke test on a real device: Netty + TLS 1.3 (Conscrypt) and the Keystore-backed TLS identity.
     androidTestImplementation(libs.androidx.test.runner)

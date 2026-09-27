@@ -1,6 +1,7 @@
 package app.handlive.android.ui.settings
 
 import app.handlive.android.core.data.settings.HandLiveSettings
+import app.handlive.android.core.strings.R
 
 /** SET-01 field 15: the state of automatic clipboard sending. */
 enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
@@ -9,7 +10,26 @@ enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
 data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
     val accessibilityServiceOn: Boolean = false,
+    val sms: SmsAccessState = SmsAccessState(),
+    /** This build has a relay (`RELAY_HOST`): "Remove Device from Server" makes sense (SET-02 field 26). */
+    val relayAvailable: Boolean = false,
+    /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */
+    val relayDeviceRevoked: Boolean = false,
+    /** CONN-03 E7: the relay's certificate matched none of the pins; field 21 says so. */
+    val relayPinMismatch: Boolean = false,
 ) {
+    /** SET-02 field 21: the relay error of CONN-03 E3 or E7 in place of the description, else the description. */
+    val internetDescription: Int
+        get() =
+            when {
+                relayDeviceRevoked -> R.string.error_relay_device_revoked
+                relayPinMismatch -> R.string.error_relay_pin_mismatch
+                else -> R.string.settings_internet_connection_description
+            }
+
+    /** SET-02 field 7 with SET-01 field 10: the SMS switch and its feature card. */
+    val smsStatus: FeatureStatus get() = sms.status(settings.smsEnabled)
+
     /** Field 15: on only with the setting, the recorded consent and the service turned on. */
     val autoSendStatus: AutoSendStatus
         get() =
@@ -35,6 +55,12 @@ interface SettingsActions {
 
     fun setInternet(enabled: Boolean)
 
+    /** SET-02 field 7: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
+    fun setSms(enabled: Boolean)
+
+    /** SET-01 fields 11 and 16: the SMS primer and its request, or the App info page once denied for good. */
+    fun grantSms()
+
     fun open(page: SettingsPage)
 }
 
@@ -42,4 +68,4 @@ interface SettingsActions {
 enum class SettingsPage { AUTO_CLEAR, PERMISSIONS, LANGUAGE }
 
 /** The system pages the Permissions & Background screen leads to. */
-enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND }
+enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS }

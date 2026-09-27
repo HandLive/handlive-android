@@ -26,11 +26,12 @@ import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceListItem
+import app.handlive.android.feature.pairing.devices.SmsAvailability
 
 /**
  * PAIR-02 details on the phone: link status, model, last connection (relative time), the peer's app version, the
- * clipboard with the reason it is off, the Security Code (two groups of four, selectable), and "Unpair" in the
- * last group behind an action sheet (PAIR-03 field 3).
+ * clipboard and SMS with the reason each is off (SET-02 field 24), the Security Code (two groups of four,
+ * selectable), and "Unpair" in the last group behind an action sheet (PAIR-03 field 3).
  */
 @Composable
 fun DeviceDetailsScreen(
@@ -54,8 +55,11 @@ fun DeviceDetailsScreen(
                     row { HLValueRow(stringResource(R.string.pairing_app_version), version) }
                 }
             }
-            if (item.clipboard != ClipboardAvailability.UNKNOWN) {
-                section(title = featuresTitle) { row { ClipboardRow(item) } }
+            if (item.clipboard != ClipboardAvailability.UNKNOWN || item.sms != SmsAvailability.UNKNOWN) {
+                section(title = featuresTitle) {
+                    if (item.clipboard != ClipboardAvailability.UNKNOWN) row { ClipboardRow(item) }
+                    if (item.sms != SmsAvailability.UNKNOWN) row { SmsRow(item) }
+                }
             }
             section { row { SecurityCodeRow(item.safetyCode) } }
             section { actionRow(unpairLabel, onClick = { confirming = true }, destructive = true) }
@@ -97,6 +101,19 @@ private fun ClipboardRow(item: DeviceListItem) {
             else -> stringResource(R.string.common_off)
         }
     HLValueRow(stringResource(R.string.settings_clipboard), value)
+}
+
+/** PAIR-02 field 8 and SET-02 field 24 for SMS: "On", "Off on <device>", "Off" or the missing permission. */
+@Composable
+private fun SmsRow(item: DeviceListItem) {
+    val value =
+        when (item.sms) {
+            SmsAvailability.ON -> stringResource(R.string.common_on)
+            SmsAvailability.OFF_ON_PEER -> stringResource(R.string.pairing_reason_off_on_device, item.name)
+            SmsAvailability.MISSING_PERMISSION -> stringResource(R.string.pairing_reason_missing_sms_permission)
+            else -> stringResource(R.string.common_off)
+        }
+    HLValueRow(stringResource(R.string.settings_sms_messages), value)
 }
 
 /** PAIR-02 field 10: 8 lowercase hex digits shown as two groups ("fc64 7e0b"), selectable and copyable. */

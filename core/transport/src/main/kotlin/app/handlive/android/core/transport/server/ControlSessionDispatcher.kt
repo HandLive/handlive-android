@@ -83,8 +83,15 @@ internal object ControlSessionDispatcher {
 
             SessionOp.BYE -> {
                 // The app needs the reason: `revoked` cleans up a pair whose `pair/revoke` got lost (PAIR-03 API 2).
-                session.recordBye(decode(SessionByeData.serializer(), payload.data).reason)
-                CloseReason(WsCloseCode.NORMAL, "bye")
+                // The session ends here, on the LAN and on the relay alike: `replaced` like 4409, anything else like
+                // 1000 (CONN-02 API 4).
+                val reason = decode(SessionByeData.serializer(), payload.data).reason
+                session.recordBye(reason)
+                if (reason == BYE_REPLACED) {
+                    CloseReason(WsCloseCode.REPLACED, reason)
+                } else {
+                    CloseReason(WsCloseCode.NORMAL, "bye")
+                }
             }
 
             // hello/welcome/error chỉ hợp lệ lúc bắt tay; op lạ của sự kiện thì bỏ qua (0.5.1 quy tắc 3).
@@ -114,6 +121,8 @@ internal object ControlSessionDispatcher {
         session.deliver(InboundEnvelope(envelope.type, envelope.id, envelope.ts, plaintext))
         return null
     }
+
+    private const val BYE_REPLACED = "replaced"
 
     private fun <T> decode(
         serializer: KSerializer<T>,
