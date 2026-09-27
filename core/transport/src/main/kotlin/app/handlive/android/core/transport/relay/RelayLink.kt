@@ -24,9 +24,9 @@ sealed interface RelayLinkEvent {
     ) : RelayLinkEvent
 
     /**
-     * The link ended: closed by either side ([code]), refused at the upgrade ([httpStatus] 401 `TOKEN_EXPIRED`, 404
-     * `DEVICE_NOT_FOUND`, 410 `DEVICE_REVOKED`, with [errorCode]), or failed ([pinMismatch]: the relay's certificate
-     * was refused, CONN-03 E7).
+     * The link ended: closed by either side ([code]), refused at the upgrade ([httpStatus] 401 `TOKEN_EXPIRED` or
+     * `SIGNATURE_INVALID`, 404 `DEVICE_NOT_FOUND`, 410 `DEVICE_REVOKED`, with [errorCode]), or failed ([pinMismatch]:
+     * the relay's certificate was refused, CONN-03 E7).
      */
     class Closed(
         val code: Int?,

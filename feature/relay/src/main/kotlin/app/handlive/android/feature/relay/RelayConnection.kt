@@ -37,10 +37,11 @@ internal enum class RelayOutcome {
 
 /**
  * One `/v1/relay` connection (CONN-03 steps 3–4 and 9): opens the link with the device token — renewed once after
- * 401 `TOKEN_EXPIRED`, the device registered once after 404 `DEVICE_NOT_FOUND` (E2) — and routes what the relay
- * sends: peer envelopes to their `/v1/ctl` sessions, `presence` and `error` to end them, `rv_msg` to the rendezvous,
- * `pair_revoked` to the owner. It leaves by itself after `RELAY_IDLE_DISCONNECT` without sessions, rendezvous, a hold
- * ([held]) or traffic. Used on the connector's serial scope only.
+ * 401 `TOKEN_EXPIRED`, the device registered once after 404 `DEVICE_NOT_FOUND` or 401 `SIGNATURE_INVALID`, a token
+ * the relay no longer accepts (E2) — and routes what the relay sends: peer envelopes to their `/v1/ctl` sessions,
+ * `presence` and `error` to end them, `rv_msg` to the rendezvous, `pair_revoked` to the owner. It leaves by itself
+ * after `RELAY_IDLE_DISCONNECT` without sessions, rendezvous, a hold ([held]) or traffic. Used on the connector's
+ * serial scope only.
  */
 internal class RelayConnection(
     private val scope: CoroutineScope,
@@ -79,7 +80,7 @@ internal class RelayConnection(
                     outcomeOf(serve(auth.token(), onOpened))
                 }
 
-                first.isUnknownDevice() -> {
+                first.isUnknownDevice() || first.isRefusedSignature() -> {
                     auth.register()
                     auth.forget()
                     outcomeOf(serve(auth.token(), onOpened))
@@ -253,6 +254,10 @@ internal class RelayConnection(
 
         fun RelayLinkEvent.Closed.isUnknownDevice() =
             httpStatus == HTTP_NOT_FOUND && errorCode == RelayErrorCode.DEVICE_NOT_FOUND
+
+        /** A token signed with a key the relay no longer uses, such as one from before a relay restart. */
+        fun RelayLinkEvent.Closed.isRefusedSignature() =
+            httpStatus == HTTP_UNAUTHORIZED && errorCode == RelayErrorCode.SIGNATURE_INVALID
 
         /** A frame the phone cannot read is ignored, like an unknown op (0.4.3). */
         fun decodeFailure(error: Throwable): RelayIncoming? = if (error is ProtocolException) null else throw error
