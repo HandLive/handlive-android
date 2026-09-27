@@ -97,7 +97,7 @@ class SettingsActionsImpl(
             }
 
             SettingsPage.PERMISSIONS -> {
-                main.push(Route.Permissions)
+                main.push(Route.Permissions())
             }
 
             SettingsPage.LANGUAGE -> {

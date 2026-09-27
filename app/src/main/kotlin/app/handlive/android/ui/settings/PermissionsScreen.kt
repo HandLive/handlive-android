@@ -23,7 +23,8 @@ import app.handlive.android.ui.system.UnusedAppPause
  * SET-02 field 23 → SET-01 fields 3, 6–11, 15 and 16: notifications, background running (with its warning, E3),
  * "Pause app activity if unused", the manufacturer's autostart instructions, and one card per feature — automatic
  * clipboard sending, SMS and calls, each with its status and "Grant Permission" or "Open Settings". Every row leads
- * to the page that changes it; the states are read again on every resume.
+ * to the page that changes it; the states are read again on every resume. [backLabel] names the screen Back returns
+ * to: Settings, or Devices when the list opens after the phone's first pairing (SET-01 step 8).
  */
 @Composable
 fun PermissionsScreen(
@@ -33,6 +34,7 @@ fun PermissionsScreen(
     calls: FeatureStatus,
     onOpen: (PermissionTarget) -> Unit,
     onBack: () -> Unit,
+    backLabel: String = stringResource(R.string.settings_title),
 ) {
     val backgroundWarning =
         if (environment.batteryExempt) {
@@ -46,7 +48,7 @@ fun PermissionsScreen(
     Column(modifier = Modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         HLScreenHeader(
             title = stringResource(R.string.settings_permissions_background),
-            backLabel = stringResource(R.string.settings_title),
+            backLabel = backLabel,
             onBack = onBack,
         )
         HLGroupedList(modifier = Modifier.weight(1f)) {

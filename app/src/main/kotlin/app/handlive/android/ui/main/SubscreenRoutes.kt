@@ -1,6 +1,7 @@
 package app.handlive.android.ui.main
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,8 +55,8 @@ fun RouteContent(
             LanguageScreen(AppLanguageSetting.current(), AppLanguageSetting::apply, main::pop)
         }
 
-        Route.Permissions -> {
-            PermissionsRoute(main, environment)
+        is Route.Permissions -> {
+            PermissionsRoute(main, environment, route.backLabel)
         }
 
         Route.Consent -> {
@@ -85,9 +86,9 @@ private fun PairingRoute(main: MainContext) {
     val paired = stringResource(R.string.pairing_paired)
     PairingFlow(
         coordinator = main.dependencies.pairing.coordinator,
-        onPaired = {
+        onPaired = { result ->
             main.feedback.show(HLFeedback(paired))
-            main.pop()
+            main.stack.closePairing(result.firstPair)
         },
         onClose = main::pop,
     )
@@ -142,6 +143,7 @@ private fun AutoClearRoute(main: MainContext) {
 private fun PermissionsRoute(
     main: MainContext,
     environment: PhoneEnvironment,
+    @StringRes backLabel: Int,
 ) {
     val context = LocalContext.current
     val settings = rememberSettings(main)
@@ -163,6 +165,7 @@ private fun PermissionsRoute(
         calls = state.callStatus,
         onOpen = { target -> openPermissionTarget(context, main, environment, state, target) },
         onBack = main::pop,
+        backLabel = stringResource(backLabel),
     )
 }
 

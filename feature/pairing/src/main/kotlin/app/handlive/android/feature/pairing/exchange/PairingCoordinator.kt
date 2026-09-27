@@ -40,6 +40,8 @@ sealed interface PairingState {
     data class Paired(
         val peerName: String,
         val safetyCode: String,
+        /** The phone had no pair before this one: the app goes on to the feature list (SET-01 step 8). */
+        val firstPair: Boolean,
     ) : PairingState
 
     data class Failed(
@@ -86,6 +88,13 @@ class PairingCoordinator(
     /** A client holds the window; in PIN mode it may be waiting for the PIN (A3–A4). Guarded by [pinLock]. */
     private var clientWaiting = false
 
+    /**
+     * The phone had no pair when this pairing began, read with the limit check of step 4 or A3: before the exchange
+     * stores its pair, which replaces any older pair of the same client (SET-01 step 8).
+     */
+    @Volatile
+    private var noPairBefore = false
+
     /** The relay rendezvous, when the relay is available (Phase 2); without it a code with `rv` pairs on the LAN. */
     @Volatile
     var rendezvous: RendezvousConnector? = null
@@ -99,12 +108,18 @@ class PairingCoordinator(
     /** PAIR-01 step 4: E1 for a code that is not HandLive's, E6 when 8 pairs exist already. */
     suspend fun onScanned(text: String) {
         val invite = PairingInvite.parse(text)
-        stateFlow.value =
-            when {
-                invite == null -> PairingState.Failed(PairingFailure.QR_INVALID)
-                pairs.activeCount() >= PairStore.MAX_ACTIVE_PAIRS -> PairingState.Failed(PairingFailure.LIMIT_REACHED)
-                else -> PairingState.Confirm(invite.clientName).also { scanned = invite }
-            }
+        if (invite == null) {
+            stateFlow.value = PairingState.Failed(PairingFailure.QR_INVALID)
+            return
+        }
+        val existing = pairs.activeCount()
+        if (existing >= PairStore.MAX_ACTIVE_PAIRS) {
+            stateFlow.value = PairingState.Failed(PairingFailure.LIMIT_REACHED)
+            return
+        }
+        scanned = invite
+        noPairBefore = existing == 0
+        stateFlow.value = PairingState.Confirm(invite.clientName)
     }
 
     /** "Pair" in the confirmation (step 5 → 6). */
@@ -125,11 +140,13 @@ class PairingCoordinator(
 
     /** "Enter PIN" (A3): the PIN field; the window opens only once the PIN is confirmed (A4). */
     suspend fun startPin() {
-        if (pairs.activeCount() >= PairStore.MAX_ACTIVE_PAIRS) {
+        val existing = pairs.activeCount()
+        if (existing >= PairStore.MAX_ACTIVE_PAIRS) {
             stateFlow.value = PairingState.Failed(PairingFailure.LIMIT_REACHED)
             return
         }
         closeWindow()
+        noPairBefore = existing == 0
         stateFlow.value = PairingState.EnterPin(attemptsLeft = null)
     }
 
@@ -198,7 +215,7 @@ class PairingCoordinator(
                 outcome is PairingOutcome.Paired -> {
                     closeWindow()
                     onPaired(outcome.pairId)
-                    PairingState.Paired(outcome.peerName, outcome.safetyCode)
+                    PairingState.Paired(outcome.peerName, outcome.safetyCode, firstPair = noPairBefore)
                 }
 
                 failure == PairingFailure.PIN_INVALID -> {
