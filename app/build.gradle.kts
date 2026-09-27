@@ -142,6 +142,7 @@ dependencies {
     implementation(project(":feature:pairing"))
     implementation(project(":feature:clipboard"))
     implementation(project(":feature:sms"))
+    implementation(project(":feature:call"))
     implementation(project(":feature:relay"))
 
     implementation(platform(libs.compose.bom))
