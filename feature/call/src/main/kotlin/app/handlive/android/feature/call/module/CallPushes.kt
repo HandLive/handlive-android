@@ -23,8 +23,18 @@ internal class CallPushes(
     private val callerId: () -> Boolean,
 ) {
     private var ringingCallId: String? = null
+    private var settledCallId: String? = null
     private var pushedCallId: String? = null
     private var numberWait: Job? = null
+
+    /**
+     * [context] settles the caller's number of its ringing call — the copy with the number, the second copy without
+     * it that marks a withheld caller (a copy held for `RINGING` counts with it), or `RINGING` itself without
+     * `READ_CALL_LOG` — where the incoming push time starts (API 4 logic 2). True for one change per call, before
+     * [changed] gets that change; the 300 ms fallback settles nothing.
+     */
+    fun settles(context: CallContext): Boolean =
+        context.ringingIncoming && settled(context) && context.callId != settledCallId
 
     fun changed(context: CallContext) {
         when {
@@ -48,8 +58,14 @@ internal class CallPushes(
             offline().ringing(context.callId)
             numberWait = later(CallConstants.PUSH_NUMBER_WAIT_MILLIS) { pushIncoming(context.callId) }
         }
-        if (context.numberSettled || !callerId()) pushIncoming(context.callId)
+        if (settled(context)) {
+            settledCallId = context.callId
+            pushIncoming(context.callId)
+        }
     }
+
+    /** The number is known or withheld, or none can come (E2): the push waits no longer. */
+    private fun settled(context: CallContext) = context.numberSettled || !callerId()
 
     /** At most one `call_incoming` push per `call_id`, only while it rings. */
     private fun pushIncoming(callId: String) {

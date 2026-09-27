@@ -18,6 +18,7 @@ internal class CallBenchTrace(
         context: CallContext,
         trigger: String,
         os: Long,
+        settled: Boolean,
     ) = log(
         CallBenchEvent.CALL_CHANGED,
         buildList {
@@ -27,6 +28,7 @@ internal class CallBenchTrace(
             add("trigger" to trigger)
             add("os" to os)
             add("number" to if (context.number != null) "known" else "none")
+            if (settled) add("settled" to true)
             context.subId?.let { add("sub" to it) }
             context.endReason?.let { add("end" to it) }
         },

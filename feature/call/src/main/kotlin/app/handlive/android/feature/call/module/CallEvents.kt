@@ -73,7 +73,7 @@ class CallEvents(
         os: Long,
     ) {
         for (context in contexts) {
-            services.trace.changed(context, trigger, os)
+            services.trace.changed(context, trigger, os, settled = pushes.settles(context))
             broadcaster.publish(context, change = true)
             pushes.changed(context)
         }

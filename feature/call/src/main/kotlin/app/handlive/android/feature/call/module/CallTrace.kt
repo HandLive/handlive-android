@@ -10,11 +10,16 @@ import app.handlive.android.feature.connection.session.PeerSession
  * rules, 0.6.5). A no-op outside debug builds.
  */
 interface CallTrace {
-    /** A-CALL applied an OS event that changed [context]; [os] = when the OS delivered it (`call_changed`). */
+    /**
+     * A-CALL applied an OS event that changed [context]; [os] = when the OS delivered it (`call_changed`). [settled]:
+     * this event settled the caller's number of the ringing call, where the incoming push time starts (CALL-01 API 4
+     * logic 2); true for one change per call at most.
+     */
     fun changed(
         context: CallContext,
         trigger: String,
         os: Long,
+        settled: Boolean,
     ) = Unit
 
     /** `call_event/state` [data] handed to one client's session as envelope [envId] (`call_state_sent`). */
