@@ -16,7 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Every `call_event` message and `ack` the phone emits passes the strict sender-side schemas of shared/schemas (S3.2). */
+/** Every `call_event` message and `ack` the phone emits passes the strict sender-side schemas of shared/schemas. */
 class CallMessageSchemaTest {
     @Test
     fun theEventsOfAWholeDayOfCallsAreValid() =

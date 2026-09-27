@@ -37,8 +37,8 @@ data class LocalEnvironment(
 }
 
 /**
- * Builds this phone's `capability/hello|update` (0.7.2, SET-02 API 1): the clipboard, SMS (Phase 2), calls (Phase 3)
- * and the relay. Call audio and camera are absent — a feature the phone does not have yet is off for every peer.
+ * Builds this phone's `capability/hello|update` (0.7.2, SET-02 API 1): the clipboard, SMS, calls and the relay. Call
+ * audio and camera are absent — a feature the phone does not have yet is off for every peer.
  */
 object LocalCapabilityBuilder {
     const val MAX_TEXT_BYTES = 1_048_576L

@@ -9,7 +9,7 @@ import app.handlive.android.feature.call.context.PhoneState
 
 /**
  * What the receiving client adds to a state (CALL-01 API 1 logic 4): whether that Mac has the HFP profile connected
- * to the phone and where the call audio is. Call audio comes with Phase 4 (group 7); until then every client sees
+ * to the phone and where the call audio is. Call audio (group 7) is not built yet: until then every client sees
  * [PHONE] — and an iPhone or iPad always does.
  */
 data class ClientAudio(
