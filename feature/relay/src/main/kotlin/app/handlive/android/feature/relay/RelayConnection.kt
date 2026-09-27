@@ -39,8 +39,8 @@ internal enum class RelayOutcome {
  * One `/v1/relay` connection (CONN-03 steps 3–4 and 9): opens the link with the device token — renewed once after
  * 401 `TOKEN_EXPIRED`, the device registered once after 404 `DEVICE_NOT_FOUND` (E2) — and routes what the relay
  * sends: peer envelopes to their `/v1/ctl` sessions, `presence` and `error` to end them, `rv_msg` to the rendezvous,
- * `pair_revoked` to the owner. It leaves by itself after `RELAY_IDLE_DISCONNECT` without sessions, rendezvous or
- * traffic. Used on the connector's serial scope only.
+ * `pair_revoked` to the owner. It leaves by itself after `RELAY_IDLE_DISCONNECT` without sessions, rendezvous, a hold
+ * ([held]) or traffic. Used on the connector's serial scope only.
  */
 internal class RelayConnection(
     private val scope: CoroutineScope,
@@ -50,6 +50,9 @@ internal class RelayConnection(
     private val owner: RelayOwner,
     private val rendezvous: RelayRendezvousTable,
 ) {
+    /** Something holds the relay open (a call ringing): it counts as activity for the idle rule. */
+    var held: () -> Boolean = { false }
+
     private var link: RelayLink? = null
     private var mux: RelayPeerMux? = null
     private var lastActivity = 0L
@@ -228,11 +231,11 @@ internal class RelayConnection(
         if (code == RelayErrorCode.NOT_PAIRED) owner.notPaired()
     }
 
-    /** `RELAY_IDLE_DISCONNECT`: no relayed session, no rendezvous and no traffic for 5 minutes → leave. */
+    /** `RELAY_IDLE_DISCONNECT`: no relayed session, no rendezvous, no hold and no traffic for 5 minutes → leave. */
     private suspend fun closeWhenIdle(opened: RelayLink) {
         while (true) {
             delay(RelayConstants.IDLE_CHECK_MILLIS)
-            if (peerCount > 0 || !rendezvous.isEmpty) lastActivity = clock()
+            if (peerCount > 0 || !rendezvous.isEmpty || held()) lastActivity = clock()
             if (!owner.allowed() || clock() - lastActivity >= RelayConstants.IDLE_DISCONNECT_MILLIS) break
         }
         idleClosed = true
