@@ -40,6 +40,13 @@ class LoopGuard(
     /** [sha256] is the clip sent within `CLIP_LOOP_WINDOW` (only the automatic path skips it). */
     fun justSent(sha256: ByteArray): Boolean = matches(sent, sha256)
 
+    /**
+     * [sha256] is the clip HandLive wrote or sent within `CLIP_LOOP_WINDOW`: the clipboard already holds it. A push of
+     * the same content is acknowledged without a second write, which would show the Android 13+ clipboard overlay
+     * again and give another clipboard tool (an emulator's clipboard sharing) something to echo back.
+     */
+    fun alreadyHolds(sha256: ByteArray): Boolean = matches(written, sha256) || matches(sent, sha256)
+
     /** [automatic]: the read came from the Accessibility path or the in-app listener, not from a manual action. */
     fun isEcho(
         sha256: ByteArray,

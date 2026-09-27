@@ -164,6 +164,7 @@ class ClipReceiver(
         push: ClipboardPushData,
         content: ClipContent,
     ) {
+        if (state.loopGuard.alreadyHolds(content.sha256)) return acknowledgeHeld(session, pushId, push, content)
         val now = context.clock.wall()
         val decision =
             ConflictPolicy.decide(
@@ -218,6 +219,21 @@ class ClipReceiver(
             reply(session, ClipWire.applied(pushId, push.clipId), push.clipId)
             sender.distribute(clip, manual = false)
         }
+    }
+
+    /**
+     * QC4: the clipboard already holds this content (written or sent within `CLIP_LOOP_WINDOW`): `applied` without a
+     * second write and without forwarding it again, since the other clients got it the first time.
+     */
+    private suspend fun acknowledgeHeld(
+        session: PeerSession,
+        pushId: String,
+        push: ClipboardPushData,
+        content: ClipContent,
+    ) {
+        (content as? ClipContent.FileBacked)?.file?.delete()
+        state.ledger.recordFinal(push.clipId)
+        reply(session, ClipWire.applied(pushId, push.clipId), push.clipId)
     }
 
     /** QC8: `ignored`/`conflict`; case (a) also tells the sender which device kept its content (API 6 logic 1). */
