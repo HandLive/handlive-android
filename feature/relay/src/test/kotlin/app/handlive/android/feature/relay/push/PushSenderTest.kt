@@ -119,6 +119,30 @@ class PushSenderTest {
         }
 
     @Test
+    fun aPushWhoseTokenIsRefusedIsRenewedThenQueued() =
+        runTest {
+            fixture.addPair(PeerPlatform.IOS, peerDeviceId = PEER)
+            // A token signed before the relay changed its key: renewed once, then the push goes.
+            fixture.http.enqueue("POST", "/v1/push", 401, fixture.http.error("SIGNATURE_INVALID"))
+            fixture.http.enqueue("POST", "/v1/push", 202, """{"accepted":true}""")
+            sender.smsNew(NEW, connected = emptySet())
+            assertEquals(listOf("jwt-1", "jwt-2"), fixture.http.calls("POST", "/v1/push").map { it.bearer })
+            assertEquals(listOf("sms:12847" to PEER), sent)
+            assertNull(outbox.nextAttemptAt(fixture.now))
+
+            // Refused again with the new token: the push waits in the outbox instead of being dropped.
+            repeat(2) { fixture.http.enqueue("POST", "/v1/push", 401, fixture.http.error("SIGNATURE_INVALID")) }
+            sender.smsNew(NEW, connected = emptySet())
+            assertEquals(fixture.now + 5_000, outbox.nextAttemptAt(fixture.now))
+
+            fixture.now += 5_000
+            fixture.http.enqueue("POST", "/v1/push", 202, """{"accepted":true}""")
+            sender.retryDue()
+            assertEquals(2, sent.size)
+            assertNull(outbox.nextAttemptAt(fixture.now))
+        }
+
+    @Test
     fun refusalsAreDroppedAndExpiredPushesDeletedUnsent() =
         runTest {
             fixture.addPair(PeerPlatform.IOS)
