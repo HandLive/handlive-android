@@ -156,6 +156,8 @@ class PairingExchange(
         val clientNonce = Base64Codecs.decodeB64u(hello.nonce, NONCE_SIZE)
         val serverNonce = nonce()
         val secret = secretFor(clientNonce, serverNonce)
+        // A4: at most 3 offers per PIN, counted here; a used-up PIN gets no offer (the coordinator closes the window).
+        if (window is PairingWindow.Pin && !window.takeOffer()) throw refused(ErrorCode.PAIRING_CLOSED)
         val transcript =
             PairingAuthDerivation.offerTranscript(
                 clientParty(hello, clientNonce),

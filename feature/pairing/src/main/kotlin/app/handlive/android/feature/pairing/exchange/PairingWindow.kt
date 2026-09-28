@@ -3,6 +3,7 @@ package app.handlive.android.feature.pairing.exchange
 import app.handlive.android.feature.pairing.invite.PairingInvite
 import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * An open pairing window (PAIR-01 step 6, A4): `/v1/pair` accepts one client while it is open and not expired
@@ -50,6 +51,22 @@ sealed class PairingWindow(
         /** After `PIN_INVALID` the next attempt needs a new PIN. */
         fun reset() {
             entry = CompletableDeferred()
+        }
+
+        private val offers = AtomicInteger(0)
+
+        /**
+         * Takes one of the [MAX_OFFERS] `pair/offer` this PIN allows (A4, `PIN_MAX_ATTEMPTS`); `false` once they are
+         * used up. The phone counts its own offers and never trusts the client's `attempts_left`.
+         */
+        fun takeOffer(): Boolean = offers.incrementAndGet() <= MAX_OFFERS
+
+        /** Offers left for this PIN, shown after a wrong PIN (field 7). */
+        val offersLeft: Int get() = (MAX_OFFERS - offers.get()).coerceAtLeast(0)
+
+        companion object {
+            /** `PIN_MAX_ATTEMPTS` (0.10): the Mac's 3 attempts, one offer each. */
+            const val MAX_OFFERS = 3
         }
     }
 

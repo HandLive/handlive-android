@@ -207,9 +207,11 @@ class PairingCoordinator(
                 if (claimed) synchronized(pinLock) { clientWaiting = false }
             }
         val failure = (outcome as? PairingOutcome.Failed)?.failure
-        // A connection that never took the window (a second client, API 2 rule 4, or one that left before
-        // pair/hello) changes nothing: the client holding the window, or the PIN being typed, carries on.
-        if (window !== current || notServed(claimed, failure)) return
+        // A connection that never took the window (a second client, API 2 rule 4, a wrong or malformed pair/hello,
+        // one that left before pair/hello) changes nothing, whatever its failure (API 2 logic 4): only its own socket
+        // was refused; the client holding the window, or the PIN being typed, carries on.
+        if (window !== current || !claimed) return
+        val pinUsedUp = current is PairingWindow.Pin && current.offersLeft == 0
         stateFlow.value =
             when {
                 outcome is PairingOutcome.Paired -> {
@@ -218,9 +220,16 @@ class PairingCoordinator(
                     PairingState.Paired(outcome.peerName, outcome.safetyCode, firstPair = noPairBefore)
                 }
 
-                failure == PairingFailure.PIN_INVALID -> {
-                    (current as? PairingWindow.Pin)?.reset()
-                    PairingState.EnterPin((outcome as PairingOutcome.Failed).attemptsLeft)
+                // A4, E2: the third offer for this PIN ended without pair/done; the user makes a new PIN.
+                pinUsedUp -> {
+                    closeWindow()
+                    PairingState.Failed(PairingFailure.PIN_EXPIRED)
+                }
+
+                failure == PairingFailure.PIN_INVALID && current is PairingWindow.Pin -> {
+                    current.reset()
+                    // Field 7 shows the phone's own count; the client's `attempts_left` is ignored (API 6).
+                    PairingState.EnterPin(current.offersLeft)
                 }
 
                 // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
@@ -262,14 +271,6 @@ class PairingCoordinator(
         advertise(PairingAdvert.NONE)
     }
 }
-
-/** Ends of a connection that did not take the window; AUTH_FAILED still closes it (E4). */
-private val NOT_SERVED = setOf(PairingFailure.PAIRING_CLOSED, PairingFailure.DISCONNECTED)
-
-private fun notServed(
-    claimed: Boolean,
-    failure: PairingFailure?,
-) = !claimed && failure in NOT_SERVED
 
 /** E2: a closed PIN window says the PIN expired, not that a QR code changed. */
 private fun PairingWindow.closedAs(failure: PairingFailure): PairingFailure =
