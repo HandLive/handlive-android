@@ -23,12 +23,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext]. */
+/**
+ * Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext]. [replayed]: its `id`
+ * was already accepted in this key epoch (0.5.1 rule 2); the receiver resends the earlier `ack` if it still has it
+ * and never processes the message again.
+ */
 class InboundEnvelope(
     val type: String,
     val id: String,
     val ts: Long,
     val plaintext: ByteArray,
+    val replayed: Boolean = false,
 )
 
 /** How a `/v1/ctl` session reaches the client (0.11 channel, PAIR-02 field 5). */

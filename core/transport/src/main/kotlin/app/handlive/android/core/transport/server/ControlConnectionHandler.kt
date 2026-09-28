@@ -186,7 +186,7 @@ internal class ControlConnectionHandler(
         text: String,
     ): CloseReason? {
         val envelope = EnvelopeCodec.decode(text)
-        val plaintext = session.channel.open(envelope)
+        val plaintext = session.channel.open(envelope).plaintext
         val (capability, close) =
             if (ControlSessionDispatcher.isCapabilityHello(envelope, plaintext)) {
                 ControlSessionDispatcher.capabilityOrClose(plaintext)
@@ -203,8 +203,8 @@ internal class ControlConnectionHandler(
     ): CloseReason? =
         try {
             val envelope = EnvelopeCodec.decode(text)
-            val plaintext = session.channel.open(envelope)
-            ControlSessionDispatcher.dispatch(session, envelope, plaintext).also {
+            val opened = session.channel.open(envelope)
+            ControlSessionDispatcher.dispatch(session, envelope, opened.plaintext, opened.replayed).also {
                 if (it == null) session.channel.startRekeyIfDue()
             }
         } catch (e: ProtocolException) {

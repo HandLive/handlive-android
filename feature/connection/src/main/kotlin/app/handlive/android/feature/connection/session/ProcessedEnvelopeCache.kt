@@ -3,8 +3,9 @@ package app.handlive.android.feature.connection.session
 import app.handlive.android.core.protocol.ack.Ack
 
 /**
- * `id`s processed in the last 5 minutes, at most 1 000 (0.5.1 rule 2, `DEDUP_WINDOW`): a repeated request gets its
- * old `ack` again and is not processed twice. Not thread-safe; one per session, used from its receive loop.
+ * `id`s processed in the last 5 minutes, at most 1 000, with their `ack`s: a repeated request gets its old `ack`
+ * again and is not processed twice. Replay protection over the whole key epoch (`DEDUP_WINDOW`, 0.5.1 rule 2) is the
+ * transport's (`SessionCipher.accept`); this cache only bounds how long an old `ack` can be resent. Not thread-safe.
  */
 class ProcessedEnvelopeCache(
     private val clock: () -> Long,

@@ -112,6 +112,11 @@ class PeerSession(
         pendingAcks[ack.re]?.complete(ack)
     }
 
+    /** An `id` the transport saw before in this key epoch: its old `ack` again, if the ledger still has it. */
+    internal suspend fun resendAck(id: String) {
+        ledger.ackFor(id)?.let { send(MessageType.ACK, PlaintextCodec.encodeAck(it)) }
+    }
+
     /** `true` when [id] is new (and is now remembered); a duplicate gets its old `ack` again, if one was sent. */
     internal suspend fun firstDelivery(id: String): Boolean {
         val (first, duplicateAck) = ledger.firstDelivery(id)
