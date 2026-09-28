@@ -19,7 +19,10 @@ import kotlinx.coroutines.launch
 
 /** How one connection to `/v1/relay` ended. */
 internal enum class RelayOutcome {
-    /** The link was open, then the relay or the network closed it: reconnect from the first backoff step. */
+    /**
+     * The link was open, then the relay or the network closed it: reconnect from the first backoff step if it stayed
+     * open for `BACKOFF_STABLE_MILLIS`, else from the next step.
+     */
     CLOSED,
 
     /** It did not open (network, 5xx, 429): the next backoff step. */

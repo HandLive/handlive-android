@@ -13,6 +13,9 @@ object RelayConstants {
     const val BACKOFF_MAX_MILLIS = 30_000L
     const val BACKOFF_JITTER = 0.2
 
+    /** `RECONNECT_BACKOFF`: back to the first step once a link has stayed open this long. */
+    const val BACKOFF_STABLE_MILLIS = 30_000L
+
     /** PAIR-02 step 4: `GET /v1/pairs` at most once every 60 s. */
     const val PAIRS_CHECK_MIN_INTERVAL_MILLIS = 60_000L
 
