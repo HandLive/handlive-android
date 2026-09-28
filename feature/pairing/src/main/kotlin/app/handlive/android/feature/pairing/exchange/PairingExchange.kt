@@ -118,7 +118,12 @@ class PairingExchange(
             }
         // The window goes on after a lost connection (QR and PIN) or a wrong PIN: the next connection may claim it.
         // Any other failure closes the window (the coordinator), so the claim is kept until then.
-        if (holdsClaim && outcome is PairingOutcome.Failed && outcome.failure in WINDOW_GOES_ON) window.release()
+        if (holdsClaim && outcome is PairingOutcome.Failed && outcome.failure in WINDOW_GOES_ON) {
+            // A wrong PIN is dropped before the claim is given back, so the next client waits for a new PIN instead
+            // of getting an offer under the wrong one.
+            if (outcome.failure == PairingFailure.PIN_INVALID && window is PairingWindow.Pin) window.reset()
+            window.release()
+        }
         return outcome
     }
 
@@ -156,6 +161,8 @@ class PairingExchange(
         val clientNonce = Base64Codecs.decodeB64u(hello.nonce, NONCE_SIZE)
         val serverNonce = nonce()
         val secret = secretFor(clientNonce, serverNonce)
+        // A4: at most 3 offers per PIN, counted here; a used-up PIN gets no offer (the coordinator closes the window).
+        if (window is PairingWindow.Pin && !window.takeOffer()) throw refused(ErrorCode.PAIRING_CLOSED)
         val transcript =
             PairingAuthDerivation.offerTranscript(
                 clientParty(hello, clientNonce),

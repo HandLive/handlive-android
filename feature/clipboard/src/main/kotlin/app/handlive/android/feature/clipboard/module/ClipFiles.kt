@@ -14,17 +14,17 @@ class ClipFiles(
     private val wall: () -> Long,
     private val freeSpace: (File) -> Long = File::getUsableSpace,
 ) {
-    fun part(transferId: String): File = File(ready(), "$transferId$PART")
+    fun part(transferId: String): File = inside("$transferId$PART")
 
-    fun source(id: String): File = File(ready(), "$id.src")
+    fun source(id: String): File = inside("$id.src")
 
-    fun converted(id: String): File = File(ready(), "$id.png")
+    fun converted(id: String): File = inside("$id.png")
 
     /** The file a received clip is written from (CLIP-03 API 6); the extension gives `FileProvider` its MIME type. */
     fun clip(
         clipId: String,
         mime: String,
-    ): File = File(ready(), "$clipId.${extension(mime)}")
+    ): File = inside("$clipId.${extension(mime)}")
 
     /** E9: room for [bytes] more in the cache directory. */
     fun hasRoomFor(bytes: Long): Boolean = freeSpace(ready()) > bytes
@@ -38,6 +38,16 @@ class ClipFiles(
     }
 
     private fun ready(): File = dir.also { it.mkdirs() }
+
+    /**
+     * A file directly inside [dir]. Ids come from peers and are checked as UUIDv7 before they get here; this is the
+     * second line: a name that would leave the directory throws [IllegalArgumentException].
+     */
+    private fun inside(name: String): File {
+        val file = File(ready(), name)
+        require(file.canonicalFile.parentFile == dir.canonicalFile) { "clip file name leaves the clip directory" }
+        return file
+    }
 
     private fun extension(mime: String) =
         when (mime) {

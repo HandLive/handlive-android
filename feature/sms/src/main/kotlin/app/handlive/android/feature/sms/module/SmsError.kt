@@ -23,6 +23,9 @@ class SmsError(
     companion object {
         fun featureDisabled() = SmsError(ErrorCode.FEATURE_DISABLED, "SMS is turned off on the phone")
 
+        /** SMS is off on the client that asked (its latest `capability`), group 5 rules. */
+        val notInEffect = SmsError(ErrorCode.FEATURE_DISABLED, "SMS is not in effect for this session")
+
         /** SMS-01 E2, SMS-04 E3: `details.permission` is the full name, `android.permission.READ_SMS`. */
         fun permissionMissing(shortName: String) =
             SmsError(
@@ -56,6 +59,14 @@ class SmsError(
             )
 
         fun internal() = SmsError(ErrorCode.INTERNAL, "Could not read the SMS provider")
+
+        /** SMS-04 E11: over `SMS_SEND_LIMIT`; `details.retry_after_ms` = the wait until a send is allowed again. */
+        fun rateLimited(retryAfterMillis: Long) =
+            SmsError(
+                ErrorCode.RATE_LIMITED,
+                "Sending limit reached",
+                buildJsonObject { put("retry_after_ms", retryAfterMillis) },
+            )
 
         const val REASON_CURSOR = "cursor"
         const val REASON_PAGE_TOKEN = "page_token"

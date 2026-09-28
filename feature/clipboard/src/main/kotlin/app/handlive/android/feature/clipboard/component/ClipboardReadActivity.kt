@@ -28,21 +28,35 @@ class ClipboardReadActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent?.action == Intent.ACTION_SEND) {
-            handled = true
-            val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
-            val read =
-                if (text.isEmpty()) {
-                    LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, ClipboardValues.SOURCE_SHARE)
-                } else {
-                    // API 4 logic 1–3: sent only, never written to the phone's clipboard; no IS_SENSITIVE to read.
-                    LocalRead.Text(text, sensitiveExtra = false, source = ClipboardValues.SOURCE_SHARE)
-                }
-            ClipboardFeature.get(this).module.onLocalRead(read)
-            finishQuietly()
-        } else {
-            handler.postDelayed(giveUp, ClipLimits.FOCUS_WAIT_MILLIS)
+        when (launchOf(intent)) {
+            Launch.SHARE -> {
+                onShare()
+            }
+
+            Launch.OWN -> {
+                handler.postDelayed(giveUp, ClipLimits.FOCUS_WAIT_MILLIS)
+            }
+
+            Launch.REFUSED -> {
+                // Another app reached the exported Share alias without ACTION_SEND: nothing is read or sent.
+                handled = true
+                finishQuietly()
+            }
         }
+    }
+
+    private fun onShare() {
+        handled = true
+        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+        val read =
+            if (text.isEmpty()) {
+                LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, ClipboardValues.SOURCE_SHARE)
+            } else {
+                // API 4 logic 1–3: sent only, never written to the phone's clipboard; no IS_SENSITIVE to read.
+                LocalRead.Text(text, sensitiveExtra = false, source = ClipboardValues.SOURCE_SHARE)
+            }
+        ClipboardFeature.get(this).module.onLocalRead(read)
+        finishQuietly()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -86,7 +100,36 @@ class ClipboardReadActivity : Activity() {
         }
     }
 
+    /** How the activity was started (CLIP-01 API 2, API 4). */
+    internal enum class Launch {
+        /** `ACTION_SEND` from another app's share sheet: only `EXTRA_TEXT` is read. */
+        SHARE,
+
+        /** HandLive's own intent (the activity itself is not exported): `source` and `mode` extras count. */
+        OWN,
+
+        /** Any other start, the exported Share alias without `ACTION_SEND` included: ignored, nothing is read. */
+        REFUSED,
+    }
+
     companion object {
+        /** The exported `activity-alias` of the manifest; every other entry names this activity itself. */
+        internal const val SHARE_ALIAS = "app.handlive.android.feature.clipboard.component.ClipboardShareTarget"
+
+        /**
+         * Only `ACTION_SEND` is handled through the alias, and extras other than `EXTRA_TEXT` are honoured only from
+         * HandLive's own intents, which name the (non-exported) activity directly.
+         */
+        internal fun launchOf(intent: Intent?): Launch =
+            when {
+                intent?.action == Intent.ACTION_SEND -> Launch.SHARE
+
+                // Deny by default: only an intent naming this (non-exported) activity is HandLive's own.
+                intent?.component?.className == ClipboardReadActivity::class.java.name -> Launch.OWN
+
+                else -> Launch.REFUSED
+            }
+
         private const val EXTRA_SOURCE = "source"
         private const val EXTRA_MODE = "mode"
         private const val MODE_VERIFY = "verify"

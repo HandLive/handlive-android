@@ -29,6 +29,9 @@ class CallError(
 
         fun featureDisabled() = CallError(ErrorCode.FEATURE_DISABLED, "Calls are turned off on the phone")
 
+        /** Calls are not in effect for the session that asked (off on either side, or `READ_PHONE_STATE` missing). */
+        fun notInEffect() = CallError(ErrorCode.FEATURE_DISABLED, "Calls are not in effect for this session")
+
         fun badRequest(message: String) = CallError(ErrorCode.BAD_REQUEST, message)
 
         /** CALL-03 E2: `details.action` = the action sent. */

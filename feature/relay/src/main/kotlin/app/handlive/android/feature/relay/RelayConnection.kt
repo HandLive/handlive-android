@@ -216,7 +216,7 @@ internal class RelayConnection(
             }
 
             is RelayIncoming.PairRevoked -> {
-                owner.pairRevoked(message.message.pairId, message.message.by)
+                owner.pairRevoked(message.message)
             }
 
             // rv_joined, unknown ops (0.4.3: ignored) and frames that do not parse.

@@ -4,6 +4,8 @@ import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.protocol.capability.CapabilityFeatures
+import app.handlive.android.core.protocol.capability.SmsFeature
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
@@ -27,6 +29,7 @@ import app.handlive.android.feature.sms.module.SmsTrace
 import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ObserverState
 import app.handlive.android.feature.sms.observe.ReadStateTracker
+import app.handlive.android.feature.sms.send.SendLimiter
 import app.handlive.android.feature.sms.send.SendRegistry
 import app.handlive.android.feature.sms.send.SimChoices
 import app.handlive.android.feature.sms.send.SmsRadio
@@ -105,6 +108,9 @@ class MemoryObserverState : ObserverState {
     }
 }
 
+private fun capabilityWith(sms: Boolean) =
+    CapabilityData(1, "1.0.0 (100)", "macos", "15.0", "Mac15,3", CapabilityFeatures(sms = SmsFeature(sms)))
+
 /** A connected client as the phone sees it: everything Android sends it, decoded. */
 class FakeClient(
     val name: String,
@@ -119,6 +125,9 @@ class FakeClient(
 
     val sent = mutableListOf<Sent>()
     val effective = MutableStateFlow(setOf(Feature.SMS))
+
+    /** The client's latest `capability`: SMS on by default; [smsOff] turns it off on the client side. */
+    val capability = MutableStateFlow<CapabilityData?>(capabilityWith(sms = true))
     var session = newSession(clock, platform)
         private set
 
@@ -129,7 +138,7 @@ class FakeClient(
         PeerSession.PeerInfo(pairId, "$pairId-device", name, platform),
         PeerSession.Channel.LAN,
         effective,
-        MutableStateFlow<CapabilityData?>(null),
+        capability,
         { type, plaintext, _ -> sent += Sent(type, plaintext) },
         clock,
     )
@@ -137,6 +146,11 @@ class FakeClient(
     /** A new `/v1/ctl` session of the same pair (CONN-02 reconnect, CONN-03 switch). */
     fun reconnect(clock: () -> Long) {
         session = newSession(clock, session.peerPlatform)
+    }
+
+    fun smsOff() {
+        capability.value = capabilityWith(sms = false)
+        effective.value = effective.value - Feature.SMS
     }
 
     fun acks(): List<Ack> = sent.filter { it.type == MessageType.ACK }.map { PlaintextCodec.decodeAck(it.plaintext) }
@@ -161,7 +175,10 @@ class SmsHarness(
     private val scope: TestScope,
     trace: SmsTrace = SmsTrace.NONE,
 ) {
-    val wall = { BASE_TS + scope.testScheduler.currentTime }
+    /** The user may set the phone's clock: it moves [wall] only, never the monotonic clock of the send limit. */
+    var wallShift = 0L
+    val wall = { BASE_TS + scope.testScheduler.currentTime + wallShift }
+    private val elapsed = { scope.testScheduler.currentTime }
     val provider = FakeSmsProvider()
     val access = FakeAccess()
     val sims = FakeSims()
@@ -174,7 +191,7 @@ class SmsHarness(
     private val ids = UuidV7Generator(wall)
     private val objects = objectsOf(provider)
     val registry = SendRegistry(wall)
-    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, wall)
+    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, SendLimiter(elapsed))
     private val broadcaster = SmsBroadcaster(sessions, trace)
     private val services =
         SmsServices(
@@ -185,10 +202,18 @@ class SmsHarness(
             broadcaster,
             trace,
         )
+
+    /** Pairs told "HandLive stopped sending messages" (SMS-04 field 12), in order. */
+    val sendLimited = mutableListOf<String>()
     val module =
-        SmsModule(dispatcher, dispatcher, sessions, services) { session, permission ->
-            permissionsAsked += session.pairId to permission
-        }
+        SmsModule(
+            dispatcher,
+            dispatcher,
+            sessions,
+            services,
+            permissionMissing = { session, permission -> permissionsAsked += session.pairId to permission },
+            sendLimited = { session -> sendLimited += session.pairId },
+        )
     val events =
         SmsEvents(
             NewMessageScanner(provider, state, wall),

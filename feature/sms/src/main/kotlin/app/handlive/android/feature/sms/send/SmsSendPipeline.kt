@@ -38,8 +38,14 @@ class SmsSendPipeline(
     private val radio: SmsRadio,
     /** The messages sent for clients, by `local_id` (SMS-04 step 5). */
     val registry: SendRegistry,
-    private val clock: () -> Long,
+    /** The send limit, on a monotonic clock (`SystemClock.elapsedRealtime`): setting the time cannot reset it. */
+    private val limiter: SendLimiter = SendLimiter(registry.clock),
 ) {
+    private val clock = registry.clock
+
+    /** Whether a `RATE_LIMITED` refusal of [pairId] should be told to the user now (SMS-04 field 12). */
+    fun limitNoticeDue(pairId: String): Boolean = limiter.noticeDue(pairId)
+
     /** Checks and records [data] from [pairId]; the caller sends the `ack`, then calls [dispatch] when accepted. */
     fun accept(
         pairId: String,
@@ -128,7 +134,10 @@ class SmsSendPipeline(
             else -> null
         }
 
-    /** `SMS_INVALID_ADDRESS` (E4), then `SMS_SIM_UNAVAILABLE` (E6); otherwise the message joins the registry. */
+    /**
+     * `SMS_INVALID_ADDRESS` (E4), `SMS_SIM_UNAVAILABLE` (E6), then `RATE_LIMITED` (E11); otherwise the message joins
+     * the registry.
+     */
     private fun admit(
         pairId: String,
         request: SmsSendRequest,
@@ -144,7 +153,9 @@ class SmsSendPipeline(
                 SendOutcome.Refused(SmsError.simUnavailable(sim.valid))
             }
 
+            // Logic 8, checked last: the pair's send limit; a refused message is not counted.
             else -> {
+                limiter.tryAcquire(pairId)?.let { wait -> return SendOutcome.Refused(SmsError.rateLimited(wait)) }
                 val parts = radio.divide(sim.subId, request.body).size.coerceAtLeast(1)
                 val entry =
                     SendEntry(request.localId, pairId, OutgoingSms(address, request.body, sim.subId, parts), clock())

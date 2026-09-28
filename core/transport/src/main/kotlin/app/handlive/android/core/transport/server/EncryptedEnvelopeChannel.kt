@@ -38,7 +38,8 @@ internal class EncryptedEnvelopeChannel(
     private val lock = Mutex()
     private val ids = UuidV7Generator(clock)
 
-    suspend fun open(envelope: Envelope): ByteArray = lock.withLock { cipher.open(envelope) }
+    /** Decrypts and runs the epoch-wide replay check (0.5.1 rule 2); throws `DECRYPT_FAILED` like [SessionCipher]. */
+    suspend fun open(envelope: Envelope): SessionCipher.Opened = lock.withLock { cipher.accept(envelope) }
 
     /**
      * Mã hóa và gửi; nếu đến ngưỡng rekey và chưa có rekey đang chờ thì gửi `session/rekey` trước. [id] lets a
@@ -100,11 +101,17 @@ internal class EncryptedEnvelopeChannel(
         }
     }
 
+    /** 0.5.1 rule 2: a duplicate gets the earlier `ack` again, sealed anew under the current keys. */
+    suspend fun resendAck(ack: ByteArray) = lock.withLock { writeLocked(MessageType.ACK.wire, ack, ids.next()) }
+
     private suspend fun writeLocked(
         type: String,
         plaintext: ByteArray,
         id: String,
     ) {
+        if (type == MessageType.ACK.wire) {
+            runCatching { PlaintextCodec.decodeAck(plaintext).re }.getOrNull()?.let { cipher.recordAck(it, plaintext) }
+        }
         val envelope = cipher.seal(EnvelopeHeader(type, id, clock()), plaintext)
         socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
     }

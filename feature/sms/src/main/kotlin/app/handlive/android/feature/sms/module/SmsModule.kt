@@ -1,5 +1,6 @@
 package app.handlive.android.feature.sms.module
 
+import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
@@ -62,6 +63,8 @@ class SmsModule(
     private val sessions: StateFlow<Map<String, PeerSession>>,
     private val services: SmsServices,
     permissionMissing: PermissionMissingListener = PermissionMissingListener { _, _ -> },
+    /** SMS-04 field 12: the phone tells the user a pair went over the send limit, at most once per pair per day. */
+    private val sendLimited: SendLimitListener = SendLimitListener { },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + worker)
     private val replies = SmsReplies(permissionMissing)
@@ -70,6 +73,10 @@ class SmsModule(
     val handler =
         EnvelopeHandler { session, envelope ->
             val payload = runCatching { PlaintextCodec.decodePayload(envelope.plaintext) }.getOrNull()
+            if (payload?.op in REQUESTS && !smsOnForClient(session)) {
+                scope.launch { replies.refuse(session, envelope.id, SmsError.notInEffect) }
+                return@EnvelopeHandler
+            }
             when (payload?.op) {
                 SmsOp.SYNC -> scope.launch(reads) { replies.answer(session, envelope) { syncPage(payload.data) } }
 
@@ -152,6 +159,9 @@ class SmsModule(
         when (val outcome = services.sender.accept(session.pairId, data)) {
             is SendOutcome.Refused -> {
                 replies.refuse(session, envelope.id, outcome.error)
+                if (outcome.error.code == ErrorCode.RATE_LIMITED && services.sender.limitNoticeDue(session.pairId)) {
+                    sendLimited.onSendLimited(session)
+                }
                 services.trace.sendAckSent(localId, session.peerDeviceId, ok = false, code = outcome.error.code.name)
             }
 
@@ -187,8 +197,19 @@ class SmsModule(
         }
     }
 
+    /**
+     * Group 5 rules: SMS must be on for the client that sent the request, per its latest `capability`, whatever other
+     * sessions allow. The phone's own `feature.sms` and its permissions are checked afterwards by [SmsRequests], so a
+     * missing permission keeps `PERMISSION_MISSING`.
+     */
+    private fun smsOnForClient(session: PeerSession): Boolean =
+        session.peerCapability.value
+            ?.features
+            ?.let(Feature.SMS::enabledIn) == true
+
     private companion object {
         const val LOCAL_ID = "local_id"
+        val REQUESTS = setOf(SmsOp.SYNC, SmsOp.HISTORY, SmsOp.SEND)
 
         fun <T> json(
             serializer: KSerializer<T>,

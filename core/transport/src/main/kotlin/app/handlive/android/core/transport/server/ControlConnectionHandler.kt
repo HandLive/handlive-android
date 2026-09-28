@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Vòng đời một kết nối `/v1/ctl` phía S: kiểm soát nhận kết nối (16 kết nối chưa bắt tay, chặn IP — CONN-01 API 3–4),
+ * Vòng đời một kết nối `/v1/ctl` phía S: kiểm soát nhận kết nối (16 kết nối chưa bắt tay, 4 mỗi IP, chặn IP khi sai
+ * `mac` hoặc lỗi trước bắt tay — 4408, `PAIR_UNKNOWN`, 4400 — CONN-01 API 3–4),
  * bắt tay (0.6.3 bước 1–5) trong `HANDSHAKE_TIMEOUT`, rồi vòng nhận envelope mã hóa với bộ canh im lặng 45 s
  * (CONN-02). Không log payload hay plaintext; lỗi chỉ lộ ra qua mã đóng WebSocket (0.8.3).
  */
@@ -41,18 +42,34 @@ internal class ControlConnectionHandler(
             return
         }
         val frames = InboundFrames(socket, Envelope.MAX_BYTES, clock)
+        val progress = Progress()
         val result =
             try {
                 withTimeoutOrNull(
                     config.options.handshakeTimeout,
-                ) { establish(socket, frames, remoteAddress, transport) }
+                ) { establish(socket, frames, remoteAddress, transport, progress) }
             } finally {
                 ticket.release()
             }
+        // CTL_IP_BLOCK: only failures before a session/hello passed its mac check count (a timeout, or 4400).
+        val unauthenticatedFailure =
+            !progress.macVerified &&
+                (result == null || (result as? Result.Closed)?.reason?.code == WsCloseCode.BAD_REQUEST)
+        if (unauthenticatedFailure) admission.recordPreHandshakeFailure(remoteAddress)
         when (result) {
-            null -> socket.close(CloseReason(WsCloseCode.HANDSHAKE_TIMEOUT, "handshake timeout"))
-            is Result.Closed -> result.reason?.let { socket.close(it) }
-            is Result.Established -> serve(socket, frames, result.session)
+            null -> {
+                socket.close(CloseReason(WsCloseCode.HANDSHAKE_TIMEOUT, "handshake timeout"))
+            }
+
+            is Result.Closed -> {
+                result.reason?.let { socket.close(it) }
+            }
+
+            is Result.Established -> {
+                // An established session clears the address's count of pre-handshake failures.
+                admission.clearPreHandshakeFailures(remoteAddress)
+                serve(socket, frames, result.session)
+            }
         }
     }
 
@@ -102,6 +119,12 @@ internal class ControlConnectionHandler(
         socket.cancel()
     }
 
+    /** How far the handshake got; read after a timeout, so it lives outside [establish]. */
+    private class Progress {
+        @Volatile
+        var macVerified = false
+    }
+
     private sealed interface Result {
         class Established(
             val session: ControlSession,
@@ -118,17 +141,26 @@ internal class ControlConnectionHandler(
         frames: InboundFrames,
         remoteAddress: String,
         transport: SessionTransport,
+        progress: Progress,
     ): Result {
         val hello = frames.receive()
         if (hello !is InboundMessage.Text) return Result.Closed(hello.handshakeCloseReason())
         return when (val outcome = handshake.respond(hello.text)) {
             is HandshakeOutcome.Rejected -> {
-                if (outcome.code == ErrorCode.AUTH_FAILED) admission.recordAuthFailure(remoteAddress)
+                when (outcome.code) {
+                    ErrorCode.AUTH_FAILED -> admission.recordAuthFailure(remoteAddress)
+
+                    // `BAD_REQUEST` closes 4400 and is counted by [handle].
+                    ErrorCode.PAIR_UNKNOWN -> admission.recordPreHandshakeFailure(remoteAddress)
+
+                    else -> Unit
+                }
                 outcome.error?.let { socket.send(Frame.Text(EnvelopeCodec.encode(it))) }
                 Result.Closed(CloseReason(outcome.closeCode, outcome.code.name))
             }
 
             is HandshakeOutcome.Accepted -> {
+                progress.macVerified = true
                 socket.send(Frame.Text(EnvelopeCodec.encode(outcome.welcome)))
                 val session =
                     ControlSession(
@@ -168,7 +200,7 @@ internal class ControlConnectionHandler(
         text: String,
     ): CloseReason? {
         val envelope = EnvelopeCodec.decode(text)
-        val plaintext = session.channel.open(envelope)
+        val plaintext = session.channel.open(envelope).plaintext
         val (capability, close) =
             if (ControlSessionDispatcher.isCapabilityHello(envelope, plaintext)) {
                 ControlSessionDispatcher.capabilityOrClose(plaintext)
@@ -185,9 +217,24 @@ internal class ControlConnectionHandler(
     ): CloseReason? =
         try {
             val envelope = EnvelopeCodec.decode(text)
-            val plaintext = session.channel.open(envelope)
-            ControlSessionDispatcher.dispatch(session, envelope, plaintext).also {
-                if (it == null) session.channel.startRekeyIfDue()
+            val opened = session.channel.open(envelope)
+            when {
+                // DEDUP_WINDOW: the rekey did not complete and the direction reached its cap.
+                opened.overflow -> {
+                    CloseReason(WsCloseCode.REKEY_FAILED, "REKEY_FAILED")
+                }
+
+                // 0.5.1 rule 2: the earlier ack again if one was sent; never processed twice.
+                opened.replayed -> {
+                    opened.earlierAck?.let { session.channel.resendAck(it) }
+                    null
+                }
+
+                else -> {
+                    ControlSessionDispatcher.dispatch(session, envelope, opened.plaintext).also {
+                        if (it == null) session.channel.startRekeyIfDue()
+                    }
+                }
             }
         } catch (e: ProtocolException) {
             // `DECRYPT_FAILED` sau bắt tay → 4400, client kết nối lại (CONN-02 E5).

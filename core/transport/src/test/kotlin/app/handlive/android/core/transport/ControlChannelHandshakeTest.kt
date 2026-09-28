@@ -1,8 +1,11 @@
 package app.handlive.android.core.transport
 
+import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.capability.CapabilityOp
 import app.handlive.android.core.protocol.capability.SmsFeature
+import app.handlive.android.core.protocol.envelope.EnvelopeCodec
+import app.handlive.android.core.protocol.envelope.EnvelopeHeader
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.Payload
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
@@ -13,10 +16,12 @@ import app.handlive.android.core.transport.testing.LoopbackServerFixture.Compani
 import app.handlive.android.core.transport.testing.LoopbackServerFixture.Companion.MAC_CAPABILITY
 import app.handlive.android.core.transport.testing.TestClientChannel
 import app.handlive.android.core.transport.testing.TestClientPeer
+import app.handlive.android.core.transport.testing.connect
 import app.handlive.android.core.transport.testing.pinnedWebSocketClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -26,6 +31,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -143,6 +149,48 @@ class ControlChannelHandshakeTest {
                 assertEquals(MessageType.SMS.wire, envelope.type)
                 assertEquals(push, PlaintextCodec.decodePayload(plaintext))
             }
+        }
+
+    @Test
+    fun aRepeatedEnvelopeGetsItsEarlierAckAndIsNeverDeliveredAgain() =
+        runBlocking {
+            val peer = fixture.addPair()
+            val channel = fixture.connect(client, peer)
+            val session = fixture.awaitSession()
+            val push = PlaintextCodec.encodePayload(Payload("push", JsonObject(emptyMap())))
+            val envelope =
+                channel.cipher.seal(EnvelopeHeader(MessageType.CLIPBOARD.wire, peer.ids.next(), 1L), push)
+            val update =
+                channel.cipher.seal(
+                    EnvelopeHeader(MessageType.CAPABILITY.wire, peer.ids.next(), 1L),
+                    PlaintextCodec.encodeOp(
+                        CapabilityOp.UPDATE,
+                        CapabilityData.serializer(),
+                        MAC_CAPABILITY.copy(model = "Replayed"),
+                    ),
+                )
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
+            assertEquals(envelope.id, withTimeout(WAIT_MILLIS) { session.inbound.receive() }.id)
+            session.send(MessageType.ACK, PlaintextCodec.encodeAck(Ack.success(envelope.id)))
+            assertEquals(envelope.id, PlaintextCodec.decodeAck(channel.receive().second).re)
+            // The same envelope again: the phone resends its earlier ack and the feature never sees it twice.
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
+            val (again, plaintext) = withTimeout(WAIT_MILLIS) { channel.receive() }
+            assertEquals(MessageType.ACK.wire, again.type)
+            assertEquals(envelope.id, PlaintextCodec.decodeAck(plaintext).re)
+            assertTrue(session.inbound.tryReceive().isFailure)
+
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(update)))
+            withTimeout(WAIT_MILLIS) {
+                while (session.peerCapability.value?.model != "Replayed") kotlinx.coroutines.delay(10)
+            }
+            // The same capability envelope again: dropped, the session stays open.
+            session.capabilities.apply(MAC_CAPABILITY)
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(update)))
+            channel.sendPlaintext(MessageType.CLIPBOARD.wire, push)
+            withTimeout(WAIT_MILLIS) { session.inbound.receive() }
+            assertEquals(MAC_CAPABILITY.model, session.peerCapability.value?.model)
+            channel.socket.close()
         }
 
     private suspend fun DefaultClientWebSocketSession.handshake(peer: TestClientPeer): TestClientChannel {

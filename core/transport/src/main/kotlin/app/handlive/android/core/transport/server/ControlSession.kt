@@ -23,7 +23,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext]. */
+/**
+ * Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext]. A repeated `id`
+ * of the key epoch never gets here: the transport answers it with the earlier `ack` (0.5.1 rule 2).
+ */
 class InboundEnvelope(
     val type: String,
     val id: String,
@@ -54,7 +57,12 @@ class ControlSession internal constructor(
     val transport: SessionTransport = SessionTransport.LAN,
 ) {
     internal val channel: EncryptedEnvelopeChannel =
-        SessionCipher(keys, PeerRole.SERVER, config.options.clock, config.options.rekeyAfterEnvelopes).let { cipher ->
+        SessionCipher(
+            keys,
+            PeerRole.SERVER,
+            config.options.clock,
+            config.options.rekeyAfterEnvelopes,
+        ).let { cipher ->
             EncryptedEnvelopeChannel(
                 socket,
                 cipher,

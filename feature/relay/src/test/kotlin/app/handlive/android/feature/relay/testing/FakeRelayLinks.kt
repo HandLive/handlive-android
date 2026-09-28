@@ -1,5 +1,6 @@
 package app.handlive.android.feature.relay.testing
 
+import app.handlive.android.core.protocol.relay.RelayPairRevoked
 import app.handlive.android.core.transport.relay.RelayLink
 import app.handlive.android.core.transport.relay.RelayLinkEvent
 import app.handlive.android.core.transport.relay.RelayLinkFactory
@@ -87,11 +88,8 @@ class FakeOwner : RelayOwner {
         awaitCancellation()
     }
 
-    override suspend fun pairRevoked(
-        pairId: String,
-        by: String,
-    ) {
-        revokedPairs += pairId to by
+    override suspend fun pairRevoked(statement: RelayPairRevoked) {
+        revokedPairs += statement.pairId to statement.by
     }
 
     override fun notPaired() {

@@ -17,6 +17,11 @@ fun interface PermissionMissingListener {
     )
 }
 
+/** A pair went over the `sms/send` limit (SMS-04 E11); called at most once per pair per day. */
+fun interface SendLimitListener {
+    fun onSendLimited(session: PeerSession)
+}
+
 /** The data of an `ack`, or the error it carries. */
 sealed interface Reply {
     class Data(

@@ -128,19 +128,31 @@ class ClipReceiver(
     /** A chunked clip whose SHA-256 matched: text is checked as UTF-8, then it is applied like inline text. */
     private suspend fun onVerified(done: Incoming) {
         val push = done.push
-        val file = context.platform.files.clip(push.clipId, push.mime)
+        var file: java.io.File? = null
         val content =
             runCatching {
-                check(done.transfer.file.renameTo(file))
+                // Inside the runCatching: a name ClipFiles refuses ends as this clip's rejection, never a crash.
+                val target =
+                    context.platform.files
+                        .clip(push.clipId, push.mime)
+                        .also { file = it }
+                check(done.transfer.file.renameTo(target))
                 if (push.kind ==
                     ClipboardValues.KIND_TEXT
                 ) {
-                    Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(file.readBytes()))
+                    Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(target.readBytes()))
                 }
-                ClipContent.FileBacked(file, push.mime, file.length(), done.transfer.sha256, push.width, push.height)
+                ClipContent.FileBacked(
+                    target,
+                    push.mime,
+                    target.length(),
+                    done.transfer.sha256,
+                    push.width,
+                    push.height,
+                )
             }.getOrNull()
         if (content == null) {
-            file.delete()
+            file?.delete()
             done.transfer.discard()
             state.ledger.recordRejected(push.clipId)
             reply(

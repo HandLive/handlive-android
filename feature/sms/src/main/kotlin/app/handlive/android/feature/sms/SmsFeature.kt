@@ -1,6 +1,7 @@
 package app.handlive.android.feature.sms
 
 import android.content.Context
+import android.os.SystemClock
 import app.handlive.android.core.data.HandLiveData
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.protocol.capability.CapabilityData
@@ -18,6 +19,7 @@ import app.handlive.android.feature.sms.module.SmsServices
 import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ReadStateTracker
 import app.handlive.android.feature.sms.provider.SmsObjects
+import app.handlive.android.feature.sms.send.SendLimiter
 import app.handlive.android.feature.sms.send.SendRegistry
 import app.handlive.android.feature.sms.send.SmsSendPipeline
 import app.handlive.android.feature.sms.sync.SmsHistoryEngine
@@ -31,6 +33,7 @@ import app.handlive.android.feature.sms.system.PhoneNumberNormalizer
 import app.handlive.android.feature.sms.system.RoomObserverState
 import app.handlive.android.feature.sms.system.SmsContentObserver
 import app.handlive.android.feature.sms.system.SmsPermissionNotifier
+import app.handlive.android.feature.sms.system.SmsSendLimitNotifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +82,7 @@ class SmsFeature private constructor(
             numbers,
             AndroidSmsRadio(appContext),
             registry,
-            clock,
+            SendLimiter(SystemClock::elapsedRealtime),
         )
     private val trace = SmsBenchTrace()
     private val broadcaster = SmsBroadcaster(runtime.sessions, trace)
@@ -117,6 +120,7 @@ class SmsFeature private constructor(
             sessions = runtime.sessions,
             services = services,
             permissionMissing = { session, permission -> permissionMissing.onPermissionMissing(session, permission) },
+            sendLimited = SmsSendLimitNotifier(appContext),
         )
 
     private val events =

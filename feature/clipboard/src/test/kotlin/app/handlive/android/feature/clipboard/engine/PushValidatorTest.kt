@@ -66,6 +66,27 @@ class PushValidatorTest {
     }
 
     @Test
+    fun idsThatAreNotCanonicalUuidV7AreBadRequest() {
+        val bad =
+            listOf(
+                "../../shared_prefs/handlive",
+                "0192F3E0-5A21-7B3C-9D4E-1F2A3B4C5D6E",
+                "0192f3e0-5a21-4b3c-9d4e-1f2a3b4c5d6e",
+                "0192f3e0-5a21-7b3c-1d4e-1f2a3b4c5d6e",
+                "0192f3e05a217b3c9d4e1f2a3b4c5d6e",
+                "",
+            )
+        bad.forEach { id ->
+            assertEquals(id, ErrorCode.BAD_REQUEST, code(text.copy(clipId = id)))
+            assertEquals(id, ErrorCode.BAD_REQUEST, code(image.copy(transfer = transfer.copy(transferId = id))))
+            // Structure comes before activity: a bad id is refused even while clipboard sync is off.
+            assertEquals(id, ErrorCode.BAD_REQUEST, code(text.copy(clipId = id), Acceptance(false, all.mimes)))
+        }
+        assertEquals(true, ClipIds.isValid(text.clipId))
+        assertEquals(false, ClipIds.isValid("../x"))
+    }
+
+    @Test
     fun activityLimitsAndMimeFollowInThatOrder() {
         assertEquals(ErrorCode.FEATURE_DISABLED, code(text, Acceptance(active = false, mimes = all.mimes)))
         val big = "a".repeat(ClipLimits.MAX_TEXT_BYTES.toInt() + 1)

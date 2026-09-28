@@ -3,6 +3,7 @@ package app.handlive.android.feature.relay.testing
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.handlive.android.core.crypto.keystore.SecretSealer
+import app.handlive.android.core.crypto.primitives.Ed25519Keys
 import app.handlive.android.core.data.db.HandLiveDatabase
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.pairing.NewPair
@@ -26,8 +27,17 @@ import app.handlive.android.core.protocol.capability.CallFeature as CallCapabili
 import app.handlive.android.core.protocol.capability.RelayFeature as RelayCapability
 import app.handlive.android.core.protocol.capability.SmsFeature as SmsCapability
 
-/** The phone's device id in these tests. */
+/** The phone's device id in these tests: RFC 8032 TEST 1, as in `revoke.json` and `device-id.json`. */
 const val PHONE_DEVICE_ID = "21fe31df-a154-8261-a26b-f854046fd227"
+
+/** The Ed25519 seed of [PHONE_DEVICE_ID] (RFC 8032 TEST 1), so the phone's signatures verify. */
+val PHONE_SEED: ByteArray =
+    "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+        .chunked(2)
+        .map {
+            it.toInt(16).toByte()
+        }.toByteArray()
+val PHONE_SIGNING_KEY: ByteArray = Ed25519Keys.publicFromSeed(PHONE_SEED)
 
 /** A client's latest capability as `features_json` stores it (the whole `capability` data, CONN-01). */
 object Features {
@@ -165,7 +175,11 @@ class RelayFixture {
     val relayPairs = RelayPairs(database.pairedDevices()) { PlainSealer }
     val http = FakeRelayHttp(clock)
     val auth =
-        RelayAuth(http, RelayIdentity(PHONE_DEVICE_ID, ByteArray(32) { 1 }, "0.0.1 (1)") { ByteArray(64) }, clock)
+        RelayAuth(
+            http,
+            RelayIdentity(PHONE_DEVICE_ID, PHONE_SIGNING_KEY, "0.0.1 (1)") { Ed25519Keys.sign(PHONE_SEED, it) },
+            clock,
+        )
     val api = RelayApi(http, auth)
 
     /** A stored pair; [registered] with the relay, [features] = the client's latest capability. */
@@ -173,14 +187,14 @@ class RelayFixture {
         platform: PeerPlatform = PeerPlatform.IOS,
         registered: Boolean = true,
         features: String = Features.SMS_NOTIFY,
-        prk: ByteArray = ByteArray(32) { 9 },
         peerDeviceId: String = UUID.randomUUID().toString(),
+        peerSigningKey: ByteArray = ByteArray(32) { 3 },
     ): String {
         val pairId = UUID.randomUUID().toString()
         pairs.save(
             NewPair(
                 pairId = pairId,
-                peer = PeerKeys(peerDeviceId, ikSigPub = ByteArray(32) { 3 }, ikDhPub = ByteArray(32) { 4 }),
+                peer = PeerKeys(peerDeviceId, ikSigPub = peerSigningKey, ikDhPub = ByteArray(32) { 4 }),
                 peerName = "iPhone của Lan",
                 peerPlatform = platform,
                 peerModel = null,
@@ -192,7 +206,7 @@ class RelayFixture {
                         createdAt = now,
                     ),
             ),
-            prk,
+            ByteArray(32) { 9 },
         )
         relayPairs.markRegistered(pairId, registered)
         pairs.recordSeen(pairId, features)

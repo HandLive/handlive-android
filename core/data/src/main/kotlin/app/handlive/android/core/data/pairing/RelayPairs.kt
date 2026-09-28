@@ -40,6 +40,22 @@ class RelayPairs(
     /** PAIR-03 E3: tombstones still waiting for `POST /v1/pairs/{pair_id}/revoke`. */
     suspend fun tombstonesToRevoke(): List<String> = dao.tombstonesToRevoke()
 
+    /** Every pair the relay may still hold as unrevoked: the active ones and the tombstones waiting (SET-02 A4). */
+    suspend fun pairsToRevokeOnDelete(): List<String> =
+        (
+            dao.active().map {
+                it.pairId
+            } + dao.tombstonesToRevoke()
+        ).distinct()
+
+    /** The peer of an active pair and its `ik_sig` public key, to check a revocation the relay forwards (PAIR-03). */
+    suspend fun peerOf(pairId: String): PeerKeys? =
+        dao
+            .find(
+                pairId,
+            )?.takeIf { it.revokedAt == null }
+            ?.let { PeerKeys(it.peerDeviceId, it.peerIkSigPub, it.peerIkDhPub) }
+
     /** CONN-03 step 3, SET-02 API 6: pairs to register with `POST /v1/pairs`. */
     suspend fun unregistered(): List<RelayPairRegistration> =
         dao.unregisteredWithRelay().map { row ->

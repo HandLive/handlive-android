@@ -3,8 +3,11 @@ package app.handlive.android.feature.relay
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.data.pairing.RelayPairs
 import app.handlive.android.core.protocol.encoding.Base64Codecs
+import app.handlive.android.core.protocol.relay.DevicesDeleteRequest
 import app.handlive.android.core.protocol.relay.PairRegistrationRequest
+import app.handlive.android.core.protocol.relay.PairRevokeRequest
 import app.handlive.android.core.protocol.relay.RelayErrorCode
+import app.handlive.android.core.protocol.relay.RelayPairRevoked
 import app.handlive.android.core.protocol.relay.RelayValues
 import app.handlive.android.core.transport.relay.RelayApi
 import app.handlive.android.core.transport.relay.RelayAuth
@@ -33,6 +36,7 @@ class RelayRegistrar(
     private val clock: () -> Long,
     private val verdict: PairsVerdict,
 ) {
+    private val revocations = RelayRevocations(auth, api, relayPairs, clock)
     private val retryPairAfter = HashMap<String, Long>()
     private var lastPairsCheck = 0L
     private var pushToken: Pair<String, Long>? = null
@@ -82,7 +86,8 @@ class RelayRegistrar(
     suspend fun deleteDevice(revokePairs: Boolean): ServerDeletion {
         val outcome =
             try {
-                val response = api.deleteThisDevice(revokePairs)
+                val body = if (revokePairs) DevicesDeleteRequest(revocations.forDelete()) else null
+                val response = api.deleteThisDevice(revokePairs, body)
                 if (response.ok || response.errorCode in GONE) ServerDeletion.DONE else ServerDeletion.UNREACHABLE
             } catch (e: RelayRequestException) {
                 if (e.code in GONE) ServerDeletion.DONE else ServerDeletion.UNREACHABLE
@@ -102,9 +107,10 @@ class RelayRegistrar(
     }
 
     /**
-     * PAIR-03 step 8–9: `true` when the relay no longer knows the pair, and the tombstone is gone. A relay that does
-     * not know this device either (404 while authenticating) holds none of its pairs: done as well, and the device is
-     * not registered again for it.
+     * PAIR-03 step 8–9: `true` when the relay no longer knows the pair, and the tombstone is gone. Each attempt signs
+     * a new `HLREVOKE1` statement with the current time, so a retry after E3 is never outside the relay's ±10 minutes.
+     * A relay that does not know this device either (404 while authenticating) holds none of its pairs: done as well,
+     * and the device is not registered again for it.
      */
     suspend fun revoke(
         pairId: String,
@@ -112,7 +118,9 @@ class RelayRegistrar(
     ): Boolean {
         val done =
             try {
-                val response = api.revokePair(pairId, reason)
+                val revokedAt = clock()
+                val request = PairRevokeRequest(revokedAt, revocations.statement(pairId, revokedAt), reason)
+                val response = api.revokePair(pairId, request)
                 response.ok || response.errorCode == RelayErrorCode.DEVICE_NOT_FOUND ||
                     response.errorCode == RelayErrorCode.NOT_PAIRED
             } catch (e: RelayRequestException) {
@@ -136,8 +144,11 @@ class RelayRegistrar(
         for (local in pairs.observeActive().first()) {
             val entry = remote[local.pairId]
             when {
+                // Logic 4: only a statement the peer signed counts; any other revoked row is ignored.
                 entry?.revokedAt != null -> {
-                    verdict.revokedElsewhere(local.pairId)
+                    if (revocations.isSignedByPeer(local.pairId, entry.revokedBy, entry.revokedAt, entry.revokeSig)) {
+                        verdict.revokedElsewhere(local.pairId)
+                    }
                 }
 
                 entry == null && local.relayRegistered -> {
@@ -152,6 +163,9 @@ class RelayRegistrar(
         }
     }
 
+    /** PAIR-03 API 4 logic 1: see [RelayRevocations.isSignedByPeer]. */
+    suspend fun isSignedByPeer(frame: RelayPairRevoked): Boolean = revocations.isSignedByPeer(frame)
+
     /** CONN-04 step 2: a new token, or the same one every 7 days. */
     suspend fun registerPushToken(token: String) {
         val known = pushToken
@@ -163,7 +177,7 @@ class RelayRegistrar(
         if (api.putPushToken(token).ok) pushToken = token to clock()
     }
 
-    private companion object {
+    internal companion object {
         const val HTTP_UNAUTHORIZED = 401
         val CLIENT_ERRORS = 400..499
 

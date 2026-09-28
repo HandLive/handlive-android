@@ -2,16 +2,21 @@ package app.handlive.android.feature.sms.send
 
 import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.envelope.MessageType
+import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.sms.SmsSendAckData
 import app.handlive.android.core.protocol.sms.SmsSendStatus
 import app.handlive.android.core.protocol.sms.SmsStatusData
+import app.handlive.android.core.protocol.testing.JsonSchemaValidation
 import app.handlive.android.feature.connection.capability.SimCard
+import app.handlive.android.feature.sms.testing.FakeClient
 import app.handlive.android.feature.sms.testing.SmsHarness
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,6 +36,10 @@ class SmsSendTest {
         val data = """{"local_id":"$localId","thread_id":42,"addresses":$addresses,"body":"$body"$sim}"""
         return if (id == null) request(mac, "send", data) else request(mac, "send", data, id)
     }
+
+    /** A plain text to one number from [client]. */
+    private suspend fun SmsHarness.sendFrom(client: FakeClient): String =
+        request(client, "send", """{"local_id":"${newLocalId()}","addresses":["0900000123"],"body":"hi"}""")
 
     @Test
     fun anAcceptedMessageIsAckedThenSentThroughTheChosenSimAndReportsSending() =
@@ -224,6 +233,115 @@ class SmsSendTest {
                     .map { it.jsonPrimitive.int }
             assertEquals(listOf(1, 2), sims)
             assertTrue(h.radio.sent.isEmpty())
+        }
+
+    @Test
+    fun aPairMaySendTenMessagesAMinuteAndRetriesAreNotCounted() =
+        runTest {
+            val h = harness()
+            val first = h.newLocalId()
+            h.send(localId = first)
+            repeat(9) {
+                advanceTimeBy(1_000)
+                h.send()
+            }
+            advanceTimeBy(1_000)
+            h.send()
+            val refusal = h.mac.acks().last()
+            assertEquals(ErrorCode.RATE_LIMITED.name, refusal.error?.code)
+            JsonSchemaValidation.assertValid(
+                "sms-send.schema.json#/\$defs/ack-failure",
+                String(PlaintextCodec.encodeAck(refusal)),
+            )
+            // The oldest of the ten was sent 10 s ago: the next one is allowed in 50 s.
+            assertEquals(
+                50_000L,
+                refusal.error
+                    ?.details
+                    ?.get("retry_after_ms")
+                    ?.jsonPrimitive
+                    ?.long,
+            )
+            assertEquals(10, h.radio.sent.size)
+            // A retry of an accepted local_id is not counted again and still gets its ack (logic 4, 8).
+            h.send(localId = first)
+            assertTrue(
+                h.mac
+                    .acks()
+                    .last()
+                    .ok,
+            )
+            // Every pair has its own budget.
+            h.sendFrom(h.iphone)
+            assertTrue(
+                h.iphone
+                    .acks()
+                    .single()
+                    .ok,
+            )
+            advanceTimeBy(50_000)
+            h.send()
+            assertTrue(
+                h.mac
+                    .acks()
+                    .last()
+                    .ok,
+            )
+            assertEquals(12, h.radio.sent.size)
+        }
+
+    @Test
+    fun settingThePhonesClockDoesNotResetTheSendLimit() =
+        runTest {
+            val h = harness()
+            repeat(10) { h.send() }
+            // The user moves the wall clock a day ahead: the limit runs on the monotonic clock.
+            h.wallShift += 24 * 60 * 60 * 1000L
+            h.send()
+            assertEquals(
+                ErrorCode.RATE_LIMITED.name,
+                h.mac
+                    .acks()
+                    .last()
+                    .error
+                    ?.code,
+            )
+        }
+
+    @Test
+    fun aPairMaySendAHundredMessagesADayAndIsToldOncePerDay() =
+        runTest {
+            val h = harness()
+            repeat(100) {
+                h.send()
+                advanceTimeBy(7_000)
+            }
+            h.send()
+            val refusal = h.mac.acks().last()
+            assertEquals(ErrorCode.RATE_LIMITED.name, refusal.error?.code)
+            val day = 24 * 60 * 60 * 1000L
+            assertEquals(
+                day - 100 * 7_000L,
+                refusal.error
+                    ?.details
+                    ?.get("retry_after_ms")
+                    ?.jsonPrimitive
+                    ?.long,
+            )
+            h.send()
+            assertEquals(listOf("pair-mac"), h.sendLimited)
+            advanceTimeBy(day)
+            repeat(10) { h.send() }
+            h.send()
+            assertEquals(
+                ErrorCode.RATE_LIMITED.name,
+                h.mac
+                    .acks()
+                    .last()
+                    .error
+                    ?.code,
+            )
+            assertEquals(listOf("pair-mac", "pair-mac"), h.sendLimited)
         }
 
     @Test

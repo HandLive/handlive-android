@@ -1,5 +1,6 @@
 package app.handlive.android.feature.relay
 
+import app.handlive.android.core.protocol.relay.RelayPairRevoked
 import app.handlive.android.core.transport.relay.RelayPeerLink
 
 /** Where the phone stands with the relay (for the UI and the other relay parts). */
@@ -16,11 +17,11 @@ interface RelayOwner {
         peerDeviceId: String,
     )
 
-    /** `pair_revoked` (PAIR-03 API 4): clean up the pair as its receiver; repeats are ignored. */
-    suspend fun pairRevoked(
-        pairId: String,
-        by: String,
-    )
+    /**
+     * `pair_revoked` (PAIR-03 API 4): clean up the pair as its receiver only when the peer signed the statement;
+     * anything else, and repeats, are ignored.
+     */
+    suspend fun pairRevoked(statement: RelayPairRevoked)
 
     /** `error NOT_PAIRED` (CONN-03 E4): the relay does not see the pair; check `GET /v1/pairs`. */
     fun notPaired()

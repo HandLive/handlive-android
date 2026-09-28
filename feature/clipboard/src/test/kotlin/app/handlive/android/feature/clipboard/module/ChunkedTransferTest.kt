@@ -342,6 +342,29 @@ class ChunkedTransferTest {
         }
 
     @Test
+    fun idsThatAreNotUuidV7AreBadRequestAndNoFileIsCreated() =
+        test { h ->
+            h.connect(h.mac)
+            val bytes = Random(10).nextBytes(200_000)
+            val base = imagePush(h, bytes)
+            val escaping = base.copy(transfer = checkNotNull(base.transfer).copy(transferId = "../../escape"))
+            h.push(h.mac, escaping)
+            h.push(h.mac, imagePush(h, bytes, clipId = "../../escape"))
+            assertEquals(
+                listOf(ErrorCode.BAD_REQUEST, ErrorCode.BAD_REQUEST),
+                h.mac.acks().map { it.error?.errorCode },
+            )
+            assertTrue(
+                folder.root
+                    .walkTopDown()
+                    .none { it.name.startsWith("escape") },
+            )
+            // A cancel or conflict with a malformed id is dropped, like any unknown id.
+            h.cancel(h.mac, "../../escape", ClipboardValues.CANCEL_USER)
+            assertEquals(2, h.mac.acks().size)
+        }
+
+    @Test
     fun noStorageIsInternalWithTheNoSpaceMessage() =
         test { h ->
             h.connect(h.mac)

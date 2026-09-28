@@ -1,10 +1,18 @@
 package app.handlive.android.feature.relay
 
+import app.handlive.android.core.crypto.derivation.RevocationStatement
+import app.handlive.android.core.crypto.primitives.Ed25519Keys
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.protocol.ProtocolJson
+import app.handlive.android.core.protocol.encoding.Base64Codecs
+import app.handlive.android.core.protocol.relay.DevicesDeleteRequest
 import app.handlive.android.core.protocol.relay.PairRegistrationRequest
+import app.handlive.android.core.protocol.relay.PairRevokeRequest
+import app.handlive.android.core.protocol.relay.RelayPairRevoked
 import app.handlive.android.core.protocol.testing.JsonSchemaValidation
 import app.handlive.android.feature.relay.testing.PHONE_DEVICE_ID
+import app.handlive.android.feature.relay.testing.PHONE_SEED
+import app.handlive.android.feature.relay.testing.PHONE_SIGNING_KEY
 import app.handlive.android.feature.relay.testing.RelayFixture
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -16,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.UUID
 
 /** What the relay learns about the phone (CONN-03 step 3, PAIR-01 API 8, PAIR-02 API 1, PAIR-03 E3, CONN-04 API 1). */
 @RunWith(RobolectricTestRunner::class)
@@ -145,12 +154,12 @@ class RelayRegistrarTest {
     @Test
     fun theListOfPairsCleansUpRevokedPairsAndForgottenRegistrations() =
         runTest {
-            val revoked = fixture.addPair()
+            val revoked = fixture.addPair(peerDeviceId = PEER, peerSigningKey = PEER_KEY)
             val forgotten = fixture.addPair()
             val kept = fixture.addPair()
             val entries =
                 listOf(
-                    entry(revoked, revokedAt = fixture.now - 1_000),
+                    entry(revoked, revokedAt = fixture.now - 1_000, signedBy = PEER_SEED),
                     entry(kept, revokedAt = null),
                 ).joinToString(",")
             fixture.http.enqueue("GET", "/v1/pairs", 200, """{"pairs":[$entries]}""")
@@ -166,6 +175,106 @@ class RelayRegistrarTest {
             fixture.http.enqueue("GET", "/v1/pairs", 200, """{"pairs":[]}""")
             registrar.checkPairs(force = true)
             assertEquals(2, fixture.http.calls("GET", "/v1/pairs").size)
+        }
+
+    @Test
+    fun aRevokedRowCountsOnlyWithThePeersSignedStatement() =
+        runTest {
+            // Four clients (one pair per client): each row below is revoked without a valid statement of its peer.
+            val legacy = fixture.addPair(peerSigningKey = PEER_KEY)
+            val forged = fixture.addPair(peerSigningKey = PEER_KEY)
+            val byOther = fixture.addPair(peerSigningKey = PEER_KEY)
+            val byPhone = fixture.addPair(peerSigningKey = PEER_KEY)
+            val entries =
+                listOf(
+                    // Revoked before signed revocation: no statement.
+                    entry(legacy, revokedAt = fixture.now),
+                    // Signed with a key that is not the stored peer key.
+                    entry(forged, revokedAt = fixture.now, signedBy = OTHER_SEED),
+                    // A third device signs for itself.
+                    entry(byOther, revokedAt = fixture.now, signedBy = OTHER_SEED, by = OTHER),
+                    // The relay replays the phone's own statement as if the peer had revoked.
+                    entry(byPhone, revokedAt = fixture.now, signedBy = PHONE_SEED, by = PHONE_DEVICE_ID),
+                ).joinToString(",")
+            fixture.http.enqueue("GET", "/v1/pairs", 200, """{"pairs":[$entries]}""")
+            registrar.checkPairs()
+            assertTrue(revokedElsewhere.isEmpty())
+            assertEquals(4, fixture.pairs.activeCount())
+        }
+
+    @Test
+    fun aRelayPairRevokedFrameIsActedOnOnlyWhenThePeerSignedIt() =
+        runTest {
+            val pairId = fixture.addPair(peerDeviceId = PEER, peerSigningKey = PEER_KEY)
+            val at = fixture.now
+            val good =
+                Base64Codecs.encodeB64u(
+                    Ed25519Keys.sign(PEER_SEED, RevocationStatement.message(pairId, PEER, at)),
+                )
+            val bad =
+                Base64Codecs.encodeB64u(
+                    Ed25519Keys.sign(OTHER_SEED, RevocationStatement.message(pairId, PEER, at)),
+                )
+            assertTrue(
+                registrar.isSignedByPeer(RelayPairRevoked(pairId = pairId, by = PEER, revokedAt = at, sig = good)),
+            )
+            assertFalse(
+                registrar.isSignedByPeer(RelayPairRevoked(pairId = pairId, by = PEER, revokedAt = at, sig = bad)),
+            )
+            assertFalse(registrar.isSignedByPeer(RelayPairRevoked(pairId = pairId, by = PEER)))
+            assertFalse(
+                registrar.isSignedByPeer(RelayPairRevoked(pairId = pairId, by = OTHER, revokedAt = at, sig = good)),
+            )
+            assertFalse(
+                registrar.isSignedByPeer(RelayPairRevoked(pairId = UUID.randomUUID().toString(), by = PEER)),
+            )
+        }
+
+    @Test
+    fun aRevocationCarriesAFreshStatementSignedByThePhone() =
+        runTest {
+            val pairId = fixture.addPair()
+            fixture.pairs.revoke(pairId)
+            fixture.http.enqueue("POST", "/v1/pairs/$pairId/revoke", 503, fixture.http.error("INTERNAL"))
+            registrar.revokeTombstones()
+            // A retry after E3 signs again with the current time.
+            fixture.now += 60 * 60 * 1000L
+            fixture.http.enqueue("POST", "/v1/pairs/$pairId/revoke", 204)
+            registrar.revokeTombstones()
+            val bodies =
+                fixture.http.calls("POST", "/v1/pairs/$pairId/revoke").map {
+                    JsonSchemaValidation.assertValid("relay-rest.schema.json#/\$defs/pair-revoke-request", it.body!!)
+                    ProtocolJson.decodeFromString(PairRevokeRequest.serializer(), it.body!!)
+                }
+            assertEquals(listOf(fixture.now - 60 * 60 * 1000L, fixture.now), bodies.map { it.revokedAt })
+            bodies.forEach { assertSignedByThePhone(pairId, it.revokedAt, it.sig) }
+        }
+
+    @Test
+    fun deletingEverythingSignsEveryLocalPairAndEveryPairTheRelayStillHolds() =
+        runTest {
+            val active = fixture.addPair()
+            val tombstone = fixture.addPair()
+            fixture.pairs.revoke(tombstone)
+            val remoteOnly = UUID.randomUUID().toString()
+            val listed =
+                """{"pair_id":"$remoteOnly","peer_device_id":"$PEER","peer_platform":"ios",""" +
+                    """"created_at":${fixture.now},"revoked_at":null,"peer_online":false}"""
+            fixture.http.enqueue("GET", "/v1/pairs", 200, """{"pairs":[${entry(active, null)},$listed]}""")
+            fixture.http.enqueue("DELETE", "/v1/devices/me?revoke_pairs=true", 204)
+
+            assertEquals(ServerDeletion.DONE, registrar.deleteDevice(revokePairs = true))
+
+            val body =
+                fixture.http
+                    .calls("DELETE", "/v1/devices/me?revoke_pairs=true")
+                    .single()
+                    .body!!
+            JsonSchemaValidation.assertValid("relay-rest.schema.json#/\$defs/devices-delete-request", body)
+            val revocations = ProtocolJson.decodeFromString(DevicesDeleteRequest.serializer(), body).revocations
+            assertEquals(setOf(active, tombstone, remoteOnly), revocations.map { it.pairId }.toSet())
+            assertEquals(3, revocations.size)
+            revocations.forEach { assertSignedByThePhone(it.pairId, it.revokedAt, it.sig) }
         }
 
     @Test
@@ -241,21 +350,49 @@ class RelayRegistrarTest {
             assertEquals(ServerDeletion.UNREACHABLE, registrar.deleteDevice(revokePairs = true))
         }
 
+    /** A `GET /v1/pairs` row; a revoked one carries the statement [signedBy] signs as [by] (none without a seed). */
     private suspend fun entry(
         pairId: String,
         revokedAt: Long?,
+        signedBy: ByteArray? = null,
+        by: String? = null,
     ): String {
         val pair =
             fixture.pairs
                 .observeActive()
                 .first()
                 .single { it.pairId == pairId }
+        val signer = by ?: pair.peerDeviceId
+        val statement =
+            if (revokedAt != null && signedBy != null) {
+                val sig = Ed25519Keys.sign(signedBy, RevocationStatement.message(pairId, signer, revokedAt))
+                ""","revoked_by":"$signer","revoke_sig":"${Base64Codecs.encodeB64u(sig)}""""
+            } else {
+                ""
+            }
         val revoked = revokedAt?.let { ""","revoked_at":$it""" }.orEmpty()
         return """{"pair_id":"$pairId","peer_device_id":"${pair.peerDeviceId}","peer_platform":"ios",""" +
-            """"created_at":${fixture.now}$revoked,"peer_online":false}"""
+            """"created_at":${fixture.now}$revoked$statement,"peer_online":false}"""
     }
 
+    private fun assertSignedByThePhone(
+        pairId: String,
+        revokedAt: Long,
+        sig: String,
+    ) = assertTrue(
+        RevocationStatement.isFromPeer(
+            RevocationStatement.Received(pairId, PHONE_DEVICE_ID, revokedAt, sig),
+            PHONE_DEVICE_ID,
+            PHONE_SIGNING_KEY,
+        ),
+    )
+
     private companion object {
+        /** RFC 8032 TEST 3, the iOS device of `revoke.json`. */
         const val PEER = "dac073e0-123b-8ea5-9dd9-b3bda9cf6037"
+        const val OTHER = "39f713d0-a644-853f-8452-9421b9f51b9b"
+        val PEER_SEED: ByteArray = ByteArray(32) { 7 }
+        val PEER_KEY: ByteArray = Ed25519Keys.publicFromSeed(PEER_SEED)
+        val OTHER_SEED: ByteArray = ByteArray(32) { 8 }
     }
 }
