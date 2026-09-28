@@ -178,14 +178,22 @@ class ControlChannelLimitsTest {
     @Test
     fun aDirectionThatReachesTheTrackedIdCapIsClosedWith4410() =
         runBlocking {
-            LoopbackServerFixture(maxTrackedIds = 3).use { small ->
+            // Rekey after 2 envelopes → cap of 4 ids; the client never answers the phone's session/rekey.
+            LoopbackServerFixture(rekeyAfterEnvelopes = 2).use { small ->
                 small.pairingClient().use { http ->
                     val channel = small.connect(http, small.addPair())
                     small.awaitSession()
-                    // The client's capability/hello took one id; two more envelopes reach the cap of 3.
-                    repeat(2) { channel.sendPlaintext(MessageType.CLIPBOARD.wire, event) }
+                    val started = System.nanoTime()
+                    // The client's capability/hello took one id; three more envelopes reach the cap of 4.
+                    repeat(3) { channel.sendPlaintext(MessageType.CLIPBOARD.wire, event) }
                     val reason = withTimeout(WAIT_MILLIS) { channel.socket.closeReason.await() }
                     assertEquals(WsCloseCode.REKEY_FAILED, reason?.code)
+                    // Closed by the cap at once, not by the 10 s rekey timeout.
+                    val elapsed = (System.nanoTime() - started) / NANOS_PER_MILLI
+                    assertTrue(
+                        "closed after ${elapsed}ms",
+                        elapsed < TransportConstants.REQUEST_TIMEOUT.inWholeMilliseconds,
+                    )
                 }
             }
         }

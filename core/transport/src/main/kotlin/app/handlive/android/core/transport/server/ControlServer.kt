@@ -48,8 +48,6 @@ class ControlServerOptions(
     val rekeyAfterEnvelopes: Long = TransportConstants.REKEY_AFTER_ENVELOPES,
     val clock: () -> Long = System::currentTimeMillis,
     val limits: ControlServerLimits = ControlServerLimits(),
-    /** `DEDUP_WINDOW` cap per direction; tests shrink it. */
-    val maxTrackedIds: Int = TransportConstants.MAX_TRACKED_IDS,
 )
 
 /**

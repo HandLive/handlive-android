@@ -24,8 +24,11 @@ object TransportConstants {
     val REKEY_AFTER_AGE: Duration = 24.hours
     const val REKEY_AFTER_ENVELOPES = 10_000L
 
-    /** `DEDUP_WINDOW` (0.10): a direction that tracks this many ids without a completed rekey is closed 4410. */
-    const val MAX_TRACKED_IDS = 20_000
+    /**
+     * `DEDUP_WINDOW` (0.10): a direction that tracks this many ids without a completed rekey is closed 4410 — twice
+     * `REKEY_AFTER`, the ids a rekey should have emptied plus as many again.
+     */
+    const val MAX_TRACKED_IDS = 2 * REKEY_AFTER_ENVELOPES.toInt()
 
     /** Bytes of earlier `ack`s kept to answer duplicates (oldest dropped first); a memory bound only. */
     const val MAX_TRACKED_ACK_BYTES = 8L * 1024 * 1024

@@ -22,7 +22,6 @@ class SessionCipher(
     private val rekeyAfterEnvelopes: Long = TransportConstants.REKEY_AFTER_ENVELOPES,
     private val rekeyAfterAge: Duration = TransportConstants.REKEY_AFTER_AGE,
     private val oldKeyGrace: Duration = TransportConstants.OLD_KEY_GRACE,
-    maxTrackedIds: Int = TransportConstants.MAX_TRACKED_IDS,
 ) {
     var keys: SessionKeys = initialKeys
         private set
@@ -58,7 +57,8 @@ class SessionCipher(
         val overflow: Boolean = false,
     )
 
-    private val window = ReplayWindow(maxTrackedIds)
+    /** Capped at twice [rekeyAfterEnvelopes] (`MAX_TRACKED_IDS` = 20,000 with the spec values). */
+    private val window = ReplayWindow(TRACKED_IDS_PER_REKEY * rekeyAfterEnvelopes.toInt())
 
     /** Number of `id`s kept for replay checks (current and previous epoch). */
     val trackedIds: Int get() = window.size
@@ -129,5 +129,9 @@ class SessionCipher(
         sentCount = 0
         receivedCount = 0
         keysSince = clock()
+    }
+
+    private companion object {
+        const val TRACKED_IDS_PER_REKEY = 2
     }
 }

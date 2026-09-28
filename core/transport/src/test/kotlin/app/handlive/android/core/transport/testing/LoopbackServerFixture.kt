@@ -9,7 +9,6 @@ import app.handlive.android.core.protocol.capability.ClipboardFeature
 import app.handlive.android.core.protocol.capability.RelayFeature
 import app.handlive.android.core.protocol.capability.SmsFeature
 import app.handlive.android.core.protocol.id.UuidV7Generator
-import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.handshake.PairRecord
 import app.handlive.android.core.transport.server.ControlServer
 import app.handlive.android.core.transport.server.ControlServerConfig
@@ -34,7 +33,6 @@ class LoopbackServerFixture(
     helloCapability: () -> CapabilityData = { ANDROID_CAPABILITY },
     /** Serves `/v1/pair` when given. */
     pairingEndpoint: PairingEndpoint? = null,
-    maxTrackedIds: Int = TransportConstants.MAX_TRACKED_IDS,
 ) : AutoCloseable {
     val serverDeviceId = "39f713d0-a644-853f-8452-9421b9f51b9b"
     val tls: TlsIdentity = sharedIdentity
@@ -60,7 +58,6 @@ class LoopbackServerFixture(
                         handshakeTimeout = handshakeTimeout,
                         rekeyAfterEnvelopes = rekeyAfterEnvelopes,
                         limits = limits,
-                        maxTrackedIds = maxTrackedIds,
                     ),
             )
         server = ControlServer(config)

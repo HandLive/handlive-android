@@ -62,7 +62,6 @@ class ControlSession internal constructor(
             PeerRole.SERVER,
             config.options.clock,
             config.options.rekeyAfterEnvelopes,
-            maxTrackedIds = config.options.maxTrackedIds,
         ).let { cipher ->
             EncryptedEnvelopeChannel(
                 socket,
