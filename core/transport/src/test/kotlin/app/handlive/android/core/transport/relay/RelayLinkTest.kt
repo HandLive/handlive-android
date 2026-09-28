@@ -27,7 +27,10 @@ class RelayLinkTest {
         )
     private val factory = OkHttpRelayLinkFactory(OkHttpRelayTransport.client(config), config)
     private val fromPhone = LinkedBlockingQueue<String>()
-    private var relaySide: WebSocket? = null
+
+    /** The relay's end of the socket; its onOpen may run after the phone already saw Opened, so tests wait for it. */
+    private val relaySides = LinkedBlockingQueue<WebSocket>()
+    private val relaySide: WebSocket by lazy { checkNotNull(relaySides.poll(WAIT, TimeUnit.MILLISECONDS)) }
 
     @After
     fun tearDown() = server.shutdown()
@@ -41,14 +44,14 @@ class RelayLinkTest {
             assertEquals("Bearer jwt-1", server.takeRequest().getHeader("Authorization"))
 
             val presence = """{"op":"presence","pair_id":"$PAIR","peer_device_id":"$PEER","online":true}"""
-            relaySide!!.send(presence)
+            relaySide.send(presence)
             val text = withTimeout(WAIT) { link.events.receive() } as RelayLinkEvent.Text
             assertTrue(RelayWire.decode(text.text) is RelayIncoming.Presence)
 
             assertTrue(link.sendText(RelayWire.outbound(PEER, EnvelopeCodec.decode(ENVELOPE))))
             assertEquals("""{"to":"$PEER","env":$ENVELOPE}""", fromPhone.poll(WAIT, TimeUnit.MILLISECONDS))
 
-            relaySide!!.close(1000, "bye")
+            relaySide.close(1000, "bye")
             val closed = withTimeout(WAIT) { link.events.receive() } as RelayLinkEvent.Closed
             assertEquals(1000, closed.code)
         }
@@ -73,7 +76,7 @@ class RelayLinkTest {
                 webSocket: WebSocket,
                 response: Response,
             ) {
-                relaySide = webSocket
+                relaySides.add(webSocket)
             }
 
             override fun onMessage(
