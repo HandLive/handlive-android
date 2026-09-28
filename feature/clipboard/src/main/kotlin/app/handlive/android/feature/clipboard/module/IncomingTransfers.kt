@@ -49,9 +49,9 @@ class IncomingTransfers(
     ) {
         byPair[session.pairId]?.let { abort(it, cancel = null, reason = ClipboardValues.REASON_CANCELLED) }
         val transfer = checkNotNull(push.transfer)
-        val file = context.platform.files.part(transfer.transferId)
         val opened =
             runCatching {
+                val file = context.platform.files.part(transfer.transferId)
                 if (!context.platform.files.hasRoomFor(transfer.size)) throw IOException("no space")
                 IncomingTransfer(transfer, file, context.clock.elapsed)
             }

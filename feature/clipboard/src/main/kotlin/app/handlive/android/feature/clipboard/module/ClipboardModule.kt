@@ -8,6 +8,7 @@ import app.handlive.android.core.protocol.clipboard.ClipboardConflictData
 import app.handlive.android.core.protocol.clipboard.ClipboardOp
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.transport.server.InboundEnvelope
+import app.handlive.android.feature.clipboard.engine.ClipIds
 import app.handlive.android.feature.clipboard.system.ClipLabel
 import app.handlive.android.feature.connection.session.EnvelopeHandler
 import app.handlive.android.feature.connection.session.PeerSession
@@ -26,7 +27,8 @@ import kotlinx.coroutines.withContext
 /**
  * A-CLIP's engine (`ClipboardModule` of 04-clipboard), one per process: local clips go out through
  * [LocalClipIntake], `type = clipboard` envelopes come in through [handler], and [trace] runs CLIP-05. Everything
- * runs on one serial [dispatcher], so the state needs no locks.
+ * runs on one serial [dispatcher], so the state needs no locks. A `cancel` or `conflict` whose id is not a UUIDv7 is an
+ * event without an `ack`, so it is dropped.
  */
 class ClipboardModule(
     private val dispatcher: CoroutineDispatcher,
@@ -149,12 +151,14 @@ class ClipboardModule(
             ClipboardOp.CANCEL -> {
                 runCatching { ProtocolJson.decodeFromJsonElement(ClipboardCancelData.serializer(), payload.data) }
                     .getOrNull()
+                    ?.takeIf { ClipIds.isValid(it.transferId) }
                     ?.let { receiver.onCancel(session, it) }
             }
 
             ClipboardOp.CONFLICT -> {
                 runCatching { ProtocolJson.decodeFromJsonElement(ClipboardConflictData.serializer(), payload.data) }
                     .getOrNull()
+                    ?.takeIf { ClipIds.isValid(it.clipId) }
                     ?.let { receiver.onConflict(session, it) }
             }
         }

@@ -28,7 +28,7 @@ object PushValidator {
         push: ClipboardPushData,
         acceptance: Acceptance,
     ): Rejection? =
-        (kindProblem(push) ?: contentProblem(push))?.let { Rejection(ErrorCode.BAD_REQUEST, it) }
+        (idProblem(push) ?: kindProblem(push) ?: contentProblem(push))?.let { Rejection(ErrorCode.BAD_REQUEST, it) }
             ?: when {
                 !acceptance.active -> Rejection(ErrorCode.FEATURE_DISABLED, "Clipboard sync is off")
 
@@ -50,6 +50,13 @@ object PushValidator {
 
     /** A Kotlin string decoded from JSON may still hold a lone surrogate, which has no UTF-8 form. */
     fun isWellFormedText(text: String): Boolean = Charsets.UTF_8.newEncoder().canEncode(text)
+
+    private fun idProblem(push: ClipboardPushData): String? =
+        when {
+            !ClipIds.isValid(push.clipId) -> "clip_id is not a UUIDv7"
+            push.transfer?.transferId?.let(ClipIds::isValid) == false -> "transfer_id is not a UUIDv7"
+            else -> null
+        }
 
     private fun kindProblem(push: ClipboardPushData): String? =
         when (push.kind) {
