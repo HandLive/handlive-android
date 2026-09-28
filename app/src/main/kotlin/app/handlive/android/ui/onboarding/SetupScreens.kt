@@ -1,13 +1,16 @@
 package app.handlive.android.ui.onboarding
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import app.handlive.android.core.design.component.HLButton
 import app.handlive.android.core.design.component.HLButtonStyle
 import app.handlive.android.core.design.component.HLStepScreen
 import app.handlive.android.core.design.component.HLSymbol
+import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.ui.system.Manufacturer
 
@@ -72,8 +75,9 @@ fun ServiceFailedScreen(onRetry: () -> Unit) {
 }
 
 /**
- * SET-01 fields 7–9: the manufacturer's autostart instructions and "Pause app activity if unused", with "Open
- * Manufacturer Settings", "Done" and "Skip" (not a permission primer, so it may be skipped).
+ * SET-01 fields 7–9: the reason sentence on every manufacturer, then the manufacturer's autostart instructions and
+ * "Pause app activity if unused", with "Open Manufacturer Settings", "Done" and "Skip" (not a permission primer, so it
+ * may be skipped).
  */
 @Composable
 fun AutostartScreen(
@@ -87,8 +91,18 @@ fun AutostartScreen(
     HLStepScreen(
         symbol = HLSymbol.BatteryFull,
         title = stringResource(R.string.setup_autostart_title),
-        body = manufacturer?.let { stringResource(instructionsOf(it)) },
+        body = stringResource(R.string.setup_autostart_body),
         extra = {
+            manufacturer?.let {
+                BasicText(
+                    text = stringResource(instructionsOf(it)),
+                    style =
+                        HandLiveTheme.typography.body.copy(
+                            color = HandLiveTheme.colors.secondaryLabel,
+                            textAlign = TextAlign.Center,
+                        ),
+                )
+            }
             if (pauseEnabled) {
                 HLButton(stringResource(R.string.setup_pause_app_activity), onOpenPause, style = HLButtonStyle.Tinted)
             }
