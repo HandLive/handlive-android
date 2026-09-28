@@ -37,6 +37,12 @@ object SmsConstants {
     /** Contact names are cached per address, 500 entries, for one sync (SMS-01 API 1 logic 9). */
     const val CONTACT_CACHE_SIZE = 500
 
+    /** `SMS_SEND_LIMIT` (0.10, SMS-04 logic 8): accepted `sms/send` per pair, per rolling minute and rolling day. */
+    const val SEND_LIMIT_PER_MINUTE = 10
+    const val SEND_LIMIT_PER_DAY = 100
+    const val MINUTE_MILLIS = 60_000L
+    const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
     /** A string of 3–8 digits is a short code and is sent as it is (SMS-04 API 1 logic 2). */
     val SHORT_CODE = Regex("^[0-9]{3,8}$")
 }

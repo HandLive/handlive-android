@@ -1,5 +1,6 @@
 package app.handlive.android.feature.sms.module
 
+import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
@@ -62,6 +63,8 @@ class SmsModule(
     private val sessions: StateFlow<Map<String, PeerSession>>,
     private val services: SmsServices,
     permissionMissing: PermissionMissingListener = PermissionMissingListener { _, _ -> },
+    /** SMS-04 field 12: the phone tells the user a pair went over the send limit, at most once per pair per day. */
+    private val sendLimited: SendLimitListener = SendLimitListener { },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + worker)
     private val replies = SmsReplies(permissionMissing)
@@ -156,6 +159,9 @@ class SmsModule(
         when (val outcome = services.sender.accept(session.pairId, data)) {
             is SendOutcome.Refused -> {
                 replies.refuse(session, envelope.id, outcome.error)
+                if (outcome.error.code == ErrorCode.RATE_LIMITED && services.sender.limitNoticeDue(session.pairId)) {
+                    sendLimited.onSendLimited(session)
+                }
                 services.trace.sendAckSent(localId, session.peerDeviceId, ok = false, code = outcome.error.code.name)
             }
 

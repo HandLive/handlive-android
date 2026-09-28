@@ -198,10 +198,18 @@ class SmsHarness(
             broadcaster,
             trace,
         )
+
+    /** Pairs told "HandLive stopped sending messages" (SMS-04 field 12), in order. */
+    val sendLimited = mutableListOf<String>()
     val module =
-        SmsModule(dispatcher, dispatcher, sessions, services) { session, permission ->
-            permissionsAsked += session.pairId to permission
-        }
+        SmsModule(
+            dispatcher,
+            dispatcher,
+            sessions,
+            services,
+            permissionMissing = { session, permission -> permissionsAsked += session.pairId to permission },
+            sendLimited = { session -> sendLimited += session.pairId },
+        )
     val events =
         SmsEvents(
             NewMessageScanner(provider, state, wall),

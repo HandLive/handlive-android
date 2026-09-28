@@ -31,6 +31,7 @@ import app.handlive.android.feature.sms.system.PhoneNumberNormalizer
 import app.handlive.android.feature.sms.system.RoomObserverState
 import app.handlive.android.feature.sms.system.SmsContentObserver
 import app.handlive.android.feature.sms.system.SmsPermissionNotifier
+import app.handlive.android.feature.sms.system.SmsSendLimitNotifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +118,7 @@ class SmsFeature private constructor(
             sessions = runtime.sessions,
             services = services,
             permissionMissing = { session, permission -> permissionMissing.onPermissionMissing(session, permission) },
+            sendLimited = SmsSendLimitNotifier(appContext),
         )
 
     private val events =

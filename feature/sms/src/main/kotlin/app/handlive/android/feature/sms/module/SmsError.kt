@@ -60,6 +60,14 @@ class SmsError(
 
         fun internal() = SmsError(ErrorCode.INTERNAL, "Could not read the SMS provider")
 
+        /** SMS-04 E11: over `SMS_SEND_LIMIT`; `details.retry_after_ms` = the wait until a send is allowed again. */
+        fun rateLimited(retryAfterMillis: Long) =
+            SmsError(
+                ErrorCode.RATE_LIMITED,
+                "Sending limit reached",
+                buildJsonObject { put("retry_after_ms", retryAfterMillis) },
+            )
+
         const val REASON_CURSOR = "cursor"
         const val REASON_PAGE_TOKEN = "page_token"
     }
