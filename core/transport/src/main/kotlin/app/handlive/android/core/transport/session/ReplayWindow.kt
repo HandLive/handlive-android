@@ -23,10 +23,16 @@ internal class ReplayWindow(
 
     private var current = LinkedHashMap<UUID, ByteArray?>()
     private var previous: LinkedHashMap<UUID, ByteArray?>? = null
-    private val ackOrder = ArrayDeque<UUID>()
+
+    /** Stored acks, oldest first, each with the epoch that holds it (an id may be in both epochs). */
+    private val ackOrder = ArrayDeque<Pair<MutableMap<UUID, ByteArray?>, UUID>>()
     private var ackBytes = 0L
 
     val size: Int get() = current.size + (previous?.size ?: 0)
+
+    /** Bytes of the acks kept, and how many (tests: both stay bounded). */
+    val storedAckBytes: Long get() = ackBytes
+    val storedAcks: Int get() = ackOrder.size
 
     /** Records [id] in the epoch whose key opened it ([withPrevious]); a repeat stays recorded where it now is. */
     fun record(
@@ -47,30 +53,35 @@ internal class ReplayWindow(
     ) {
         val epoch = listOfNotNull(current, previous).firstOrNull { it.containsKey(re) && it[re] == null } ?: return
         epoch[re] = ack
-        ackOrder.addLast(re)
+        ackOrder.addLast(epoch to re)
         ackBytes += ack.size
-        while (ackBytes > maxAckBytes && ackOrder.isNotEmpty()) dropAck(ackOrder.removeFirst())
+        while (ackBytes > maxAckBytes && ackOrder.isNotEmpty()) {
+            val (holder, id) = ackOrder.removeFirst()
+            release(holder, id)
+        }
     }
 
-    /** Rekey: a new, empty set; the old one stays with the old key. */
+    /** Rekey: a new, empty set; the old one stays with the old key, the one before it goes. */
     fun rotate() {
-        previous?.keys?.forEach(::dropAck)
+        dropPrevious()
         previous = current
         current = LinkedHashMap()
     }
 
-    /** The previous key is no longer accepted: its ids and acks go. */
+    /** The previous key is no longer accepted: its ids and acks go, and their places in [ackOrder]. */
     fun dropPrevious() {
-        previous?.keys?.forEach(::dropAck)
+        val dropped = previous ?: return
         previous = null
+        ackOrder.removeAll { (holder, id) -> holder === dropped && release(dropped, id) }
     }
 
-    private fun dropAck(id: UUID) {
-        listOfNotNull(current, previous).forEach { epoch ->
-            epoch[id]?.let {
-                ackBytes -= it.size
-                epoch[id] = null
-            }
-        }
+    /** Forgets the ack of [id] in [holder]; always `true`, so it can drive a `removeAll`. */
+    private fun release(
+        holder: MutableMap<UUID, ByteArray?>,
+        id: UUID,
+    ): Boolean {
+        holder[id]?.let { ackBytes -= it.size }
+        holder[id] = null
+        return true
     }
 }
