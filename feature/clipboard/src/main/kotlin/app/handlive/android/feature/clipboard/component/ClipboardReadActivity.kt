@@ -108,7 +108,7 @@ class ClipboardReadActivity : Activity() {
         /** HandLive's own intent (the activity itself is not exported): `source` and `mode` extras count. */
         OWN,
 
-        /** The exported Share alias with any other action: ignored, the clipboard is not read. */
+        /** Any other start, the exported Share alias without `ACTION_SEND` included: ignored, nothing is read. */
         REFUSED,
     }
 
@@ -123,8 +123,11 @@ class ClipboardReadActivity : Activity() {
         internal fun launchOf(intent: Intent?): Launch =
             when {
                 intent?.action == Intent.ACTION_SEND -> Launch.SHARE
-                intent?.component?.className == SHARE_ALIAS -> Launch.REFUSED
-                else -> Launch.OWN
+
+                // Deny by default: only an intent naming this (non-exported) activity is HandLive's own.
+                intent?.component?.className == ClipboardReadActivity::class.java.name -> Launch.OWN
+
+                else -> Launch.REFUSED
             }
 
         private const val EXTRA_SOURCE = "source"
