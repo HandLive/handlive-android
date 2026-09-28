@@ -291,6 +291,24 @@ class SmsSendTest {
         }
 
     @Test
+    fun settingThePhonesClockDoesNotResetTheSendLimit() =
+        runTest {
+            val h = harness()
+            repeat(10) { h.send() }
+            // The user moves the wall clock a day ahead: the limit runs on the monotonic clock.
+            h.wallShift += 24 * 60 * 60 * 1000L
+            h.send()
+            assertEquals(
+                ErrorCode.RATE_LIMITED.name,
+                h.mac
+                    .acks()
+                    .last()
+                    .error
+                    ?.code,
+            )
+        }
+
+    @Test
     fun aPairMaySendAHundredMessagesADayAndIsToldOncePerDay() =
         runTest {
             val h = harness()

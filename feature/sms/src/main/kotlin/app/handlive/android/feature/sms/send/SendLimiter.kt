@@ -8,6 +8,7 @@ import app.handlive.android.feature.sms.SmsConstants
  * messages count: a retried `id` or `local_id` never reaches [tryAcquire]. Not thread-safe (the SMS worker).
  */
 class SendLimiter(
+    /** A monotonic clock in ms: a wall clock the user can set back or forward would reset the windows. */
     private val clock: () -> Long,
 ) {
     private val accepted = HashMap<String, ArrayDeque<Long>>()

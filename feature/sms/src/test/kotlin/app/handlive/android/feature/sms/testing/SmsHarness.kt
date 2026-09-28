@@ -174,7 +174,10 @@ class SmsHarness(
     private val scope: TestScope,
     trace: SmsTrace = SmsTrace.NONE,
 ) {
-    val wall = { BASE_TS + scope.testScheduler.currentTime }
+    /** The user may set the phone's clock: it moves [wall] only, never the monotonic clock of the send limit. */
+    var wallShift = 0L
+    val wall = { BASE_TS + scope.testScheduler.currentTime + wallShift }
+    private val elapsed = { scope.testScheduler.currentTime }
     val provider = FakeSmsProvider()
     val access = FakeAccess()
     val sims = FakeSims()
@@ -187,7 +190,7 @@ class SmsHarness(
     private val ids = UuidV7Generator(wall)
     private val objects = objectsOf(provider)
     val registry = SendRegistry(wall)
-    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, wall)
+    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, wall, limitClock = elapsed)
     private val broadcaster = SmsBroadcaster(sessions, trace)
     private val services =
         SmsServices(

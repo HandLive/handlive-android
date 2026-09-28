@@ -1,6 +1,7 @@
 package app.handlive.android.feature.sms
 
 import android.content.Context
+import android.os.SystemClock
 import app.handlive.android.core.data.HandLiveData
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.protocol.capability.CapabilityData
@@ -81,6 +82,7 @@ class SmsFeature private constructor(
             AndroidSmsRadio(appContext),
             registry,
             clock,
+            limitClock = SystemClock::elapsedRealtime,
         )
     private val trace = SmsBenchTrace()
     private val broadcaster = SmsBroadcaster(runtime.sessions, trace)
