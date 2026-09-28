@@ -42,17 +42,11 @@ internal class InboundFrames(
     /** The next message; [limit] (at most [maxMessageBytes]) caps this one message, such as a small `pair/hello`. */
     suspend fun receive(limit: Int = maxMessageBytes): InboundMessage {
         val message = ByteArrayOutputStream()
+        val cap = minOf(limit, maxMessageBytes)
         var result: InboundMessage? = null
         while (result == null) {
-            val frame = socket.incoming.receiveCatching().getOrNull()
-            result =
-                if (frame ==
-                    null
-                ) {
-                    InboundMessage.Closed(null)
-                } else {
-                    accept(frame, message, minOf(limit, maxMessageBytes))
-                }
+            val frame = socket.incoming.receiveCatching().getOrNull() ?: return InboundMessage.Closed(null)
+            result = accept(frame, message, cap)
         }
         return result
     }
