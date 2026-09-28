@@ -32,7 +32,10 @@ import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-/** Close codes 4400, 4410, 4411 and 4429 on a real Netty/TLS 1.3 server (0.8.3, CONN-01 API 3–4, CONN-02, PAIR-01 API 2). */
+/**
+ * Close codes 4400, 4410, 4411 and 4429 on a real Netty/TLS 1.3 server (0.8.3, CONN-01 API 3–4, CONN-02, PAIR-01
+ * API 2).
+ */
 class ControlChannelLimitsTest {
     private val fixture =
         LoopbackServerFixture(

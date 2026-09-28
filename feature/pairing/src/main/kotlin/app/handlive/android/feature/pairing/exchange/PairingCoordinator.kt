@@ -206,42 +206,14 @@ class PairingCoordinator(
             } finally {
                 if (claimed) synchronized(pinLock) { clientWaiting = false }
             }
-        val failure = (outcome as? PairingOutcome.Failed)?.failure
         // A connection that never took the window (a second client, API 2 rule 4, a wrong or malformed pair/hello,
         // one that left before pair/hello) changes nothing, whatever its failure (API 2 logic 4): only its own socket
         // was refused; the client holding the window, or the PIN being typed, carries on.
         if (window !== current || !claimed) return
-        val pinUsedUp = current is PairingWindow.Pin && current.offersLeft == 0
-        stateFlow.value =
-            when {
-                outcome is PairingOutcome.Paired -> {
-                    closeWindow()
-                    onPaired(outcome.pairId)
-                    PairingState.Paired(outcome.peerName, outcome.safetyCode, firstPair = noPairBefore)
-                }
-
-                // A4, E2: the third offer for this PIN ended without pair/done; the user makes a new PIN.
-                pinUsedUp -> {
-                    closeWindow()
-                    PairingState.Failed(PairingFailure.PIN_EXPIRED)
-                }
-
-                failure == PairingFailure.PIN_INVALID && current is PairingWindow.Pin -> {
-                    current.reset()
-                    // Field 7 shows the phone's own count; the client's `attempts_left` is ignored (API 6).
-                    PairingState.EnterPin(current.offersLeft)
-                }
-
-                // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
-                failure == PairingFailure.DISCONNECTED && current.isOpen(clock()) -> {
-                    current.waitingAgain(shown = stateFlow.value)
-                }
-
-                else -> {
-                    closeWindow()
-                    PairingState.Failed(current.closedAs(failure ?: PairingFailure.INTERNAL))
-                }
-            }
+        val (next, close) = current.after(outcome, shown = stateFlow.value, now = clock(), firstPair = noPairBefore)
+        if (close) closeWindow()
+        if (outcome is PairingOutcome.Paired) onPaired(outcome.pairId)
+        stateFlow.value = next
     }
 
     private fun open(
@@ -279,3 +251,41 @@ private fun PairingWindow.closedAs(failure: PairingFailure): PairingFailure =
 /** After a lost client: waiting for the next one, or the PIN entry [shown] while the PIN is still being typed. */
 private fun PairingWindow.waitingAgain(shown: PairingState): PairingState =
     if (hasSecret) PairingState.Waiting(pinMode = this is PairingWindow.Pin) else shown
+
+/**
+ * What the window's claim holder leaves behind, and whether the window closes: paired, the PIN used up (A4, E2), the
+ * PIN entry again with the phone's own count (the client's `attempts_left` is ignored, API 6), waiting for the client
+ * to come back, or a failure.
+ */
+private fun PairingWindow.after(
+    outcome: PairingOutcome,
+    shown: PairingState,
+    now: Long,
+    firstPair: Boolean,
+): Pair<PairingState, Boolean> {
+    val failure = (outcome as? PairingOutcome.Failed)?.failure
+    return when {
+        outcome is PairingOutcome.Paired -> {
+            PairingState.Paired(outcome.peerName, outcome.safetyCode, firstPair) to true
+        }
+
+        // The third offer for this PIN ended without pair/done: the user makes a new PIN.
+        this is PairingWindow.Pin && offersLeft == 0 -> {
+            PairingState.Failed(PairingFailure.PIN_EXPIRED) to true
+        }
+
+        failure == PairingFailure.PIN_INVALID && this is PairingWindow.Pin -> {
+            reset()
+            PairingState.EnterPin(offersLeft) to false
+        }
+
+        // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
+        failure == PairingFailure.DISCONNECTED && isOpen(now) -> {
+            waitingAgain(shown) to false
+        }
+
+        else -> {
+            PairingState.Failed(closedAs(failure ?: PairingFailure.INTERNAL)) to true
+        }
+    }
+}

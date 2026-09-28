@@ -74,7 +74,7 @@ class SmsModule(
         EnvelopeHandler { session, envelope ->
             val payload = runCatching { PlaintextCodec.decodePayload(envelope.plaintext) }.getOrNull()
             if (payload?.op in REQUESTS && !smsOnForClient(session)) {
-                scope.launch { replies.refuse(session, envelope.id, SmsError.notInEffect()) }
+                scope.launch { replies.refuse(session, envelope.id, SmsError.notInEffect) }
                 return@EnvelopeHandler
             }
             when (payload?.op) {

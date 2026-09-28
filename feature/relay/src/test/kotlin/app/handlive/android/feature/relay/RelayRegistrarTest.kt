@@ -380,7 +380,11 @@ class RelayRegistrarTest {
         revokedAt: Long,
         sig: String,
     ) = assertTrue(
-        RevocationStatement.isFromPeer(pairId, PHONE_DEVICE_ID, revokedAt, sig, PHONE_DEVICE_ID, PHONE_SIGNING_KEY),
+        RevocationStatement.isFromPeer(
+            RevocationStatement.Received(pairId, PHONE_DEVICE_ID, revokedAt, sig),
+            PHONE_DEVICE_ID,
+            PHONE_SIGNING_KEY,
+        ),
     )
 
     private companion object {

@@ -187,7 +187,6 @@ class RelayFixture {
         platform: PeerPlatform = PeerPlatform.IOS,
         registered: Boolean = true,
         features: String = Features.SMS_NOTIFY,
-        prk: ByteArray = ByteArray(32) { 9 },
         peerDeviceId: String = UUID.randomUUID().toString(),
         peerSigningKey: ByteArray = ByteArray(32) { 3 },
     ): String {
@@ -207,7 +206,7 @@ class RelayFixture {
                         createdAt = now,
                     ),
             ),
-            prk,
+            ByteArray(32) { 9 },
         )
         relayPairs.markRegistered(pairId, registered)
         pairs.recordSeen(pairId, features)

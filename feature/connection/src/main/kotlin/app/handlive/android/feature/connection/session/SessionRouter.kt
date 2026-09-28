@@ -24,10 +24,10 @@ fun interface EnvelopeHandler {
 
 /**
  * Routes decrypted envelopes of a session (0.5.1): `ack`s complete the matching request; a repeated `id` gets its
- * old `ack` back (rule 2) — within the key epoch the transport flags repeats ([InboundEnvelope.replayed]), across the
- * sessions of a pair the ledger catches a retried `id`; other types go to the handler registered for them. A type without a handler — a feature
- * Android does not implement in this version — gets `UNSUPPORTED_TYPE` when the message is a request and is
- * ignored when it is an event (rule 3). `ping/ping` (CONN-02 API 2) is answered here.
+ * old `ack` back (rule 2) — within the key epoch the transport flags repeats ([InboundEnvelope.replayed]), across
+ * the sessions of a pair the ledger catches a retried `id`; other types go to the handler registered for them. A type
+ * without a handler — a feature Android does not implement in this version — gets `UNSUPPORTED_TYPE` when the
+ * message is a request and is ignored when it is an event (rule 3). `ping/ping` (CONN-02 API 2) is answered here.
  */
 class SessionRouter(
     private val clock: () -> Long = System::currentTimeMillis,
@@ -45,16 +45,20 @@ class SessionRouter(
         session: PeerSession,
         envelope: InboundEnvelope,
     ) {
-        if (envelope.type == MessageType.ACK.wire) {
-            decodeAck(envelope.plaintext)?.let(session::completeAck)
-            return
-        }
-        if (envelope.replayed) {
+        when {
+            envelope.type == MessageType.ACK.wire -> decodeAck(envelope.plaintext)?.let(session::completeAck)
+
             // 0.5.1 rule 2: already accepted in this key epoch; resend the old ack if it is still kept, never process.
-            session.resendAck(envelope.id)
-            return
+            envelope.replayed -> session.resendAck(envelope.id)
+
+            session.firstDelivery(envelope.id) -> dispatch(session, envelope)
         }
-        if (!session.firstDelivery(envelope.id)) return
+    }
+
+    private suspend fun dispatch(
+        session: PeerSession,
+        envelope: InboundEnvelope,
+    ) {
         val handler = handlers[envelope.type]
         when {
             handler != null -> handler.handle(session, envelope)

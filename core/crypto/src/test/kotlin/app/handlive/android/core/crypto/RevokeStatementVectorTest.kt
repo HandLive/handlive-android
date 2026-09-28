@@ -89,10 +89,7 @@ class RevokeStatementVectorTest {
         val frame = (RelayWire.decode(v.str("pair_revoked")) as RelayIncoming.PairRevoked).message
         assertEquals(v.str("pair_id"), frame.pairId)
         return RevocationStatement.isFromPeer(
-            frame.pairId,
-            frame.by,
-            frame.revokedAt,
-            frame.sig,
+            RevocationStatement.Received(frame.pairId, frame.by, frame.revokedAt, frame.sig),
             peerDeviceId,
             peerKey,
         )

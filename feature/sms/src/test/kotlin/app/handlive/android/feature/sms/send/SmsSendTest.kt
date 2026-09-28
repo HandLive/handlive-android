@@ -31,12 +31,15 @@ class SmsSendTest {
         subId: Int? = null,
         localId: String = newLocalId(),
         id: String? = null,
-        client: FakeClient = mac,
     ): String {
         val sim = subId?.let { ",\"sub_id\":$it" }.orEmpty()
         val data = """{"local_id":"$localId","thread_id":42,"addresses":$addresses,"body":"$body"$sim}"""
-        return if (id == null) request(client, "send", data) else request(client, "send", data, id)
+        return if (id == null) request(mac, "send", data) else request(mac, "send", data, id)
     }
+
+    /** A plain text to one number from [client]. */
+    private suspend fun SmsHarness.sendFrom(client: FakeClient): String =
+        request(client, "send", """{"local_id":"${newLocalId()}","addresses":["0900000123"],"body":"hi"}""")
 
     @Test
     fun anAcceptedMessageIsAckedThenSentThroughTheChosenSimAndReportsSending() =
@@ -269,7 +272,7 @@ class SmsSendTest {
                     .ok,
             )
             // Every pair has its own budget.
-            h.send(client = h.iphone)
+            h.sendFrom(h.iphone)
             assertTrue(
                 h.iphone
                     .acks()

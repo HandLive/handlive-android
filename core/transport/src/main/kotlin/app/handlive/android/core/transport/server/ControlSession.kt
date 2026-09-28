@@ -24,9 +24,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext]. [replayed]: its `id`
- * was already accepted in this key epoch (0.5.1 rule 2); the receiver resends the earlier `ack` if it still has it
- * and never processes the message again.
+ * Envelope ứng dụng đã giải mã, giao cho mô-đun tính năng (clipboard, SMS…). Không log [plaintext].
+ * [replayed]: its `id` was already accepted in this key epoch (0.5.1 rule 2); the receiver resends the earlier `ack`
+ * if it still has it and never processes the message again.
  */
 class InboundEnvelope(
     val type: String,
