@@ -274,8 +274,8 @@ private fun PairingWindow.after(
             PairingState.Failed(PairingFailure.PIN_EXPIRED) to true
         }
 
+        // The exchange already dropped the wrong PIN before releasing the claim; a PIN typed since then stays.
         failure == PairingFailure.PIN_INVALID && this is PairingWindow.Pin -> {
-            reset()
             PairingState.EnterPin(offersLeft) to false
         }
 

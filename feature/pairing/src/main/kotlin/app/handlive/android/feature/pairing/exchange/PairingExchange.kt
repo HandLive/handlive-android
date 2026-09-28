@@ -118,7 +118,12 @@ class PairingExchange(
             }
         // The window goes on after a lost connection (QR and PIN) or a wrong PIN: the next connection may claim it.
         // Any other failure closes the window (the coordinator), so the claim is kept until then.
-        if (holdsClaim && outcome is PairingOutcome.Failed && outcome.failure in WINDOW_GOES_ON) window.release()
+        if (holdsClaim && outcome is PairingOutcome.Failed && outcome.failure in WINDOW_GOES_ON) {
+            // A wrong PIN is dropped before the claim is given back, so the next client waits for a new PIN instead
+            // of getting an offer under the wrong one.
+            if (outcome.failure == PairingFailure.PIN_INVALID && window is PairingWindow.Pin) window.reset()
+            window.release()
+        }
         return outcome
     }
 

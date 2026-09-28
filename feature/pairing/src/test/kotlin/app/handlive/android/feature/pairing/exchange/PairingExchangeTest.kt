@@ -106,6 +106,8 @@ class PairingExchangeTest {
             val failed = result.await() as PairingOutcome.Failed
             assertEquals(PairingFailure.PIN_INVALID, failed.failure)
             assertEquals(2, failed.attemptsLeft)
+            // The wrong PIN is gone before the claim is given back: a client claiming now waits for a new PIN.
+            assertFalse("PIN entry reset before the claim is released", window.hasSecret)
             assertTrue("window can be claimed again", window.claim())
             assertEquals(0, pairs.store.activeCount())
         }
