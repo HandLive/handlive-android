@@ -79,13 +79,35 @@ data class RelayPairEntry(
     @SerialName("peer_platform") val peerPlatform: String,
     @SerialName("created_at") val createdAt: Long,
     @SerialName("revoked_at") val revokedAt: Long? = null,
+    /** `by` of the revocation statement; with [revokeSig] the pair counts as revoked only if the peer signed it. */
+    @SerialName("revoked_by") val revokedBy: String? = null,
+    @SerialName("revoke_sig") val revokeSig: String? = null,
     @SerialName("peer_online") val peerOnline: Boolean = false,
 )
 
-/** `POST /v1/pairs/{pair_id}/revoke` (PAIR-03 API 3): `reason` ∈ {user, reinstall, lost_device}. */
+/**
+ * `POST /v1/pairs/{pair_id}/revoke` (PAIR-03 API 3): the signed `HLREVOKE1` statement ([revokedAt], [sig] b64u of 64
+ * bytes, 0.6.2); `reason` ∈ {user, reinstall, lost_device} is informational, unsigned and optional.
+ */
 @Serializable
 data class PairRevokeRequest(
-    val reason: String,
+    @SerialName("revoked_at") val revokedAt: Long,
+    val sig: String,
+    val reason: String? = null,
+)
+
+/** One statement of `DELETE /v1/devices/me?revoke_pairs=true` (SET-02 API 2): `HLREVOKE1` for [pairId]. */
+@Serializable
+data class Revocation(
+    @SerialName("pair_id") val pairId: String,
+    @SerialName("revoked_at") val revokedAt: Long,
+    val sig: String,
+)
+
+/** Body of `DELETE /v1/devices/me?revoke_pairs=true`: one statement per unrevoked pair (0.7.4). */
+@Serializable
+data class DevicesDeleteRequest(
+    val revocations: List<Revocation>,
 )
 
 /**

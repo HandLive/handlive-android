@@ -79,12 +79,17 @@ data class RelayRvMsg(
     val env: Envelope,
 )
 
-/** `pair_revoked` (PAIR-03 API 4): the pair was revoked by [by]; sent at once and on every new connection. */
+/**
+ * `pair_revoked` (PAIR-03 API 4): the pair was revoked by [by], with its signed statement ([revokedAt], [sig]); sent
+ * at once and on every new connection. A frame without the statement is read, then ignored by the receiver.
+ */
 @Serializable
 data class RelayPairRevoked(
     val op: String = RelayOp.PAIR_REVOKED,
     @SerialName("pair_id") val pairId: String,
     val by: String,
+    @SerialName("revoked_at") val revokedAt: Long? = null,
+    val sig: String? = null,
 )
 
 /** A text frame from the relay, read by its shape: an envelope from a peer, or a control op. */

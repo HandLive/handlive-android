@@ -40,6 +40,9 @@ class RelayAuth(
     /** This phone's `device_id`, the `device_a` of the pairs it registers (PAIR-01 API 8). */
     val deviceId: String get() = identity.deviceId
 
+    /** Signs [message] with this phone's `ik_sig` (the `HLREVOKE1` statements of PAIR-03, SET-02). */
+    fun sign(message: ByteArray): ByteArray = identity.sign(message)
+
     /** The device was registered by this process (CONN-03 step 3: once, then only after E2). */
     @Volatile
     var registered = false

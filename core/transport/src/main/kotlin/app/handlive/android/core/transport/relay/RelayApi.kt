@@ -1,5 +1,6 @@
 package app.handlive.android.core.transport.relay
 
+import app.handlive.android.core.protocol.relay.DevicesDeleteRequest
 import app.handlive.android.core.protocol.relay.PairRegistrationRequest
 import app.handlive.android.core.protocol.relay.PairRevokeRequest
 import app.handlive.android.core.protocol.relay.PairsListResponse
@@ -24,9 +25,9 @@ class RelayApi(
     suspend fun registerPair(request: PairRegistrationRequest): RelayResponse =
         authorized("POST", "/v1/pairs", json(PairRegistrationRequest.serializer(), request))
 
-    /** PAIR-02 API 1. */
-    suspend fun pairs(): PairsListResponse {
-        val response = authorized("GET", "/v1/pairs", null)
+    /** PAIR-02 API 1; with [registerIfUnknown] false an unknown device fails with 404 instead of registering. */
+    suspend fun pairs(registerIfUnknown: Boolean = true): PairsListResponse {
+        val response = authorized("GET", "/v1/pairs", null, registerIfUnknown)
         if (!response.ok) throw response.failure()
         return decode(PairsListResponse.serializer(), response.body)
     }
@@ -37,12 +38,12 @@ class RelayApi(
      */
     suspend fun revokePair(
         pairId: String,
-        reason: String,
+        request: PairRevokeRequest,
     ): RelayResponse =
         authorized(
             "POST",
             "/v1/pairs/$pairId/revoke",
-            json(PairRevokeRequest.serializer(), PairRevokeRequest(reason)),
+            json(PairRevokeRequest.serializer(), request),
             registerIfUnknown = false,
         )
 
@@ -58,9 +59,20 @@ class RelayApi(
     suspend fun push(request: PushRequest): RelayResponse =
         authorized("POST", "/v1/push", json(PushRequest.serializer(), request))
 
-    /** SET-02 API 2: `revoke_pairs=false` (Remove Device from Server) or `true` (Delete All HandLive Data). */
-    suspend fun deleteThisDevice(revokePairs: Boolean): RelayResponse =
-        authorized("DELETE", "/v1/devices/me?revoke_pairs=$revokePairs", null, registerIfUnknown = false)
+    /**
+     * SET-02 API 2: `revoke_pairs=false` (Remove Device from Server) or `true` (Delete All HandLive Data), which
+     * carries one signed statement per pair ([revocations], 0.7.4).
+     */
+    suspend fun deleteThisDevice(
+        revokePairs: Boolean,
+        revocations: DevicesDeleteRequest? = null,
+    ): RelayResponse =
+        authorized(
+            "DELETE",
+            "/v1/devices/me?revoke_pairs=$revokePairs",
+            revocations?.let { json(DevicesDeleteRequest.serializer(), it) },
+            registerIfUnknown = false,
+        )
 
     private suspend fun authorized(
         method: String,

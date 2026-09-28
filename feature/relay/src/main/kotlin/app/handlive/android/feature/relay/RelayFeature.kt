@@ -6,6 +6,7 @@ import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.core.protocol.call.CallStateData
 import app.handlive.android.core.protocol.relay.PushRequest
+import app.handlive.android.core.protocol.relay.RelayPairRevoked
 import app.handlive.android.core.protocol.relay.RelayValues
 import app.handlive.android.core.protocol.sms.SmsNewData
 import app.handlive.android.core.transport.relay.RelayApi
@@ -285,10 +286,11 @@ class RelayFeature private constructor(
             peerDeviceId: String,
         ) = runtime.relayGate.serve(link, peerDeviceId)
 
-        override suspend fun pairRevoked(
-            pairId: String,
-            by: String,
-        ) = PairingFeature.get(appContext).unpair.onRevokedByRelay(pairId, elsewhere = false)
+        override suspend fun pairRevoked(statement: RelayPairRevoked) {
+            if (registrar.isSignedByPeer(statement)) {
+                PairingFeature.get(appContext).unpair.onRevokedByRelay(statement.pairId, elsewhere = false)
+            }
+        }
 
         override fun notPaired() {
             onWorker { registrar.checkPairs(force = true) }
