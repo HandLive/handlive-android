@@ -94,6 +94,32 @@ class ControlChannelLimitsTest {
         }
 
     @Test
+    fun onlyFailuresBeforeTheMacCheckCountAndASessionClearsThem() =
+        runBlocking {
+            LoopbackServerFixture(handshakeTimeout = SHORT_HANDSHAKE).use { quick ->
+                quick.pairingClient().use { http ->
+                    val peer = quick.addPair()
+                    val silent = TransportConstants.PRE_HANDSHAKE_FAILURES_BEFORE_BLOCK - 1
+                    // Nine silent connections, then a paired client that authenticates: the count starts again.
+                    repeat(silent) { http.webSocket(quick.url) { closeReason.await() } }
+                    quick.connect(http, peer).socket.close()
+                    quick.awaitSession()
+                    repeat(silent) { http.webSocket(quick.url) { closeReason.await() } }
+                    // A client whose hello passed the mac check but never sent capability/hello: 4408, not counted.
+                    repeat(3) {
+                        http.webSocket(quick.url) {
+                            send(Frame.Text(peer.hello().first))
+                            assertEquals(WsCloseCode.HANDSHAKE_TIMEOUT, closeReason.await()?.code)
+                        }
+                    }
+                    val channel = quick.connect(http, peer)
+                    assertEquals(peer.pairId, quick.awaitSession().pairId)
+                    channel.socket.close()
+                }
+            }
+        }
+
+    @Test
     fun thePairingPathAdmitsTwoConnectionsPerAddress() =
         runBlocking {
             LoopbackServerFixture(pairingEndpoint = { socket -> socket.receiveText() }).use { pairing ->

@@ -111,6 +111,12 @@ class ConnectionAdmission(
     fun recordPreHandshakeFailure(remoteAddress: String) =
         record(remoteAddress, limits.preHandshakeFailures) { it.preHandshakeFailures }
 
+    /** An established session from [remoteAddress]: its pre-handshake failures no longer count (`CTL_IP_BLOCK`). */
+    @Synchronized
+    fun clearPreHandshakeFailures(remoteAddress: String) {
+        addresses[remoteAddress]?.preHandshakeFailures?.clear()
+    }
+
     @Synchronized
     fun isBlocked(remoteAddress: String): Boolean = (addresses[remoteAddress]?.blockedUntil ?: 0L) > clock()
 

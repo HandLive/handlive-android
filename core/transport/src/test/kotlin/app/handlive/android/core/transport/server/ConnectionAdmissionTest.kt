@@ -69,6 +69,16 @@ class ConnectionAdmissionTest {
     }
 
     @Test
+    fun anEstablishedSessionClearsTheAddressesPreHandshakeFailures() {
+        repeat(TransportConstants.PRE_HANDSHAKE_FAILURES_BEFORE_BLOCK - 1) { admission.recordPreHandshakeFailure(IP_A) }
+        admission.clearPreHandshakeFailures(IP_A)
+        repeat(TransportConstants.PRE_HANDSHAKE_FAILURES_BEFORE_BLOCK - 1) { admission.recordPreHandshakeFailure(IP_A) }
+        assertFalse(admission.isBlocked(IP_A))
+        admission.recordPreHandshakeFailure(IP_A)
+        assertTrue(admission.isBlocked(IP_A))
+    }
+
+    @Test
     fun thePairingEndpointAdmitsFourAtOnceAndTwoPerAddress() {
         val pairing = ConnectionAdmission(ControlServerLimits().pairing, clock = { now })
         assertNotNull(pairing.admit(IP_A))

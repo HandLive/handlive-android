@@ -42,26 +42,32 @@ internal class ControlConnectionHandler(
             return
         }
         val frames = InboundFrames(socket, Envelope.MAX_BYTES, clock)
+        val progress = Progress()
         val result =
             try {
                 withTimeoutOrNull(
                     config.options.handshakeTimeout,
-                ) { establish(socket, frames, remoteAddress, transport) }
+                ) { establish(socket, frames, remoteAddress, transport, progress) }
             } finally {
                 ticket.release()
             }
+        // CTL_IP_BLOCK: only failures before a session/hello passed its mac check count (a timeout, or 4400).
+        val unauthenticatedFailure =
+            !progress.macVerified &&
+                (result == null || (result as? Result.Closed)?.reason?.code == WsCloseCode.BAD_REQUEST)
+        if (unauthenticatedFailure) admission.recordPreHandshakeFailure(remoteAddress)
         when (result) {
             null -> {
-                admission.recordPreHandshakeFailure(remoteAddress)
                 socket.close(CloseReason(WsCloseCode.HANDSHAKE_TIMEOUT, "handshake timeout"))
             }
 
             is Result.Closed -> {
-                if (result.reason?.code == WsCloseCode.BAD_REQUEST) admission.recordPreHandshakeFailure(remoteAddress)
                 result.reason?.let { socket.close(it) }
             }
 
             is Result.Established -> {
+                // An established session clears the address's count of pre-handshake failures.
+                admission.clearPreHandshakeFailures(remoteAddress)
                 serve(socket, frames, result.session)
             }
         }
@@ -113,6 +119,12 @@ internal class ControlConnectionHandler(
         socket.cancel()
     }
 
+    /** How far the handshake got; read after a timeout, so it lives outside [establish]. */
+    private class Progress {
+        @Volatile
+        var macVerified = false
+    }
+
     private sealed interface Result {
         class Established(
             val session: ControlSession,
@@ -129,6 +141,7 @@ internal class ControlConnectionHandler(
         frames: InboundFrames,
         remoteAddress: String,
         transport: SessionTransport,
+        progress: Progress,
     ): Result {
         val hello = frames.receive()
         if (hello !is InboundMessage.Text) return Result.Closed(hello.handshakeCloseReason())
@@ -147,6 +160,7 @@ internal class ControlConnectionHandler(
             }
 
             is HandshakeOutcome.Accepted -> {
+                progress.macVerified = true
                 socket.send(Frame.Text(EnvelopeCodec.encode(outcome.welcome)))
                 val session =
                     ControlSession(
