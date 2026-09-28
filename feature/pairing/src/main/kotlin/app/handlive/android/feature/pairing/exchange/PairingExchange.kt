@@ -26,9 +26,11 @@ import app.handlive.android.core.protocol.pairing.PairOfferData
 import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.core.transport.WsCloseCode
 import app.handlive.android.core.transport.server.TextMessageSocket
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 
 /** This phone as the offer describes it (PAIR-01 API 3). */
 class LocalPairingDevice(
@@ -45,6 +47,9 @@ class LocalPairingDevice(
 enum class PairingFailure {
     QR_INVALID,
     PAIRING_CLOSED,
+
+    /** E2 in the PIN flow: the PIN window closed without a pair; the phone's own reading of `PAIRING_CLOSED`. */
+    PIN_EXPIRED,
     AUTH_FAILED,
     PIN_INVALID,
     LIMIT_REACHED,
@@ -81,6 +86,8 @@ class PairingExchange(
     private val pairs: PairStore,
     private val clock: () -> Long = System::currentTimeMillis,
     private val nonce: () -> ByteArray = { SecureRandomBytes.next(NONCE_SIZE) },
+    /** This connection took the window (API 2 rule 4); a PIN window may still wait for the PIN (A3). */
+    private val onClaimed: () -> Unit = {},
 ) {
     private val wire = PairingWire(clock)
 
@@ -97,7 +104,15 @@ class PairingExchange(
         val outcome =
             try {
                 exchange(socket)
-            } catch (abort: Abort) {
+            } catch (cancelled: CancellationException) {
+                if (holdsClaim) window.release()
+                throw cancelled
+            } catch (
+                @Suppress("TooGenericExceptionCaught") failure: Exception,
+            ) {
+                // Besides the planned aborts, a broken socket is a lost client and anything else ends this exchange
+                // with `pair/error INTERNAL` and a close frame; never a window claim that stays taken (API 2 rule 4).
+                val abort = failure as? Abort ?: unexpected(failure)
                 abort.refusal?.let { wire.refuse(socket, it) }
                 abort.outcome
             }
@@ -129,6 +144,7 @@ class PairingExchange(
     /** One client per window (API 2 rule 4): a second connection gets `PAIRING_CLOSED`. */
     private fun claimOrClosed(): ErrorCode? {
         holdsClaim = window.claim()
+        if (holdsClaim) onClaimed()
         return if (holdsClaim) null else ErrorCode.PAIRING_CLOSED
     }
 
@@ -318,6 +334,13 @@ class PairingExchange(
         val WINDOW_GOES_ON = setOf(PairingFailure.DISCONNECTED, PairingFailure.PIN_INVALID)
 
         fun disconnected() = Abort(PairingOutcome.Failed(PairingFailure.DISCONNECTED))
+
+        fun unexpected(failure: Exception) =
+            if (failure is IOException) {
+                disconnected()
+            } else {
+                Abort(PairingOutcome.Failed(PairingFailure.INTERNAL), ErrorCode.INTERNAL)
+            }
 
         fun refused(code: ErrorCode): Abort {
             val closed = code == ErrorCode.PAIRING_CLOSED

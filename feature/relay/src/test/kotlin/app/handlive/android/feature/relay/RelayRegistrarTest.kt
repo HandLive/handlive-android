@@ -83,6 +83,22 @@ class RelayRegistrarTest {
         }
 
     @Test
+    fun aPairRefusedFor401IsTriedAgainAtTheNextOccasion() =
+        runTest {
+            val pairId = fixture.addPair(registered = false)
+            // Refused with the renewed token as well: nothing about the pair itself, so no 24-hour wait.
+            repeat(2) { fixture.http.enqueue("POST", "/v1/pairs", 401, fixture.http.error("SIGNATURE_INVALID")) }
+            registrar.registerAll()
+            assertEquals(2, fixture.http.calls("POST", "/v1/pairs").size)
+            assertFalse(fixture.pairs.find(pairId)!!.relayRegistered)
+
+            fixture.http.enqueue("POST", "/v1/pairs", 201, """{"pair_id":"$pairId"}""")
+            registrar.registerAll()
+            assertEquals(3, fixture.http.calls("POST", "/v1/pairs").size)
+            assertTrue(fixture.pairs.find(pairId)!!.relayRegistered)
+        }
+
+    @Test
     fun tombstonesAreRevokedOnTheRelayUntilItConfirms() =
         runTest {
             val pairId = fixture.addPair()
@@ -102,6 +118,28 @@ class RelayRegistrarTest {
             fixture.http.enqueue("POST", "/v1/pairs/$pairId/revoke", 404, fixture.http.error("NOT_PAIRED"))
             registrar.revokeTombstones()
             assertTrue(fixture.relayPairs.tombstonesToRevoke().isEmpty())
+        }
+
+    @Test
+    fun anUnknownPairIsRevokedWithoutRegisteringTheDeviceAgain() =
+        runTest {
+            val pairId = fixture.addPair()
+            fixture.pairs.revoke(pairId)
+            // PAIR-03 API 3: an unknown pair_id answers 404 DEVICE_NOT_FOUND, which means revoked.
+            fixture.http.enqueue("POST", "/v1/pairs/$pairId/revoke", 404, fixture.http.error("DEVICE_NOT_FOUND"))
+            registrar.revokeTombstones()
+            assertTrue(fixture.relayPairs.tombstonesToRevoke().isEmpty())
+            assertEquals(1, fixture.http.calls("POST", "/v1/pairs/$pairId/revoke").size)
+
+            // A relay that no longer knows this device holds none of its pairs either.
+            val other = fixture.addPair()
+            fixture.pairs.revoke(other)
+            fixture.auth.forget()
+            fixture.http.enqueue("POST", "/v1/auth/challenge", 404, fixture.http.error("DEVICE_NOT_FOUND"))
+            registrar.revokeTombstones()
+            assertTrue(fixture.relayPairs.tombstonesToRevoke().isEmpty())
+            assertTrue(fixture.http.calls("POST", "/v1/pairs/$other/revoke").isEmpty())
+            assertTrue("never registered for a revocation", fixture.http.calls("POST", "/v1/devices").isEmpty())
         }
 
     @Test

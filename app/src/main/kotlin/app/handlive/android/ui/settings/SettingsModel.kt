@@ -10,7 +10,8 @@ enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
 data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
     val accessibilityServiceOn: Boolean = false,
-    val sms: SmsAccessState = SmsAccessState(),
+    val sms: FeatureAccess = FeatureAccess(),
+    val calls: FeatureAccess = FeatureAccess(),
     /** This build has a relay (`RELAY_HOST`): "Remove Device from Server" makes sense (SET-02 field 26). */
     val relayAvailable: Boolean = false,
     /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */
@@ -29,6 +30,21 @@ data class SettingsUiState(
 
     /** SET-02 field 7 with SET-01 field 10: the SMS switch and its feature card. */
     val smsStatus: FeatureStatus get() = sms.status(settings.smsEnabled)
+
+    /** SET-02 field 10 with SET-01 field 10: the Calls switch and its feature card. */
+    val callStatus: FeatureStatus get() = calls.status(settings.callEnabled)
+
+    fun access(feature: PhoneFeature): FeatureAccess =
+        when (feature) {
+            PhoneFeature.SMS -> sms
+            PhoneFeature.CALLS -> calls
+        }
+
+    fun status(feature: PhoneFeature): FeatureStatus =
+        when (feature) {
+            PhoneFeature.SMS -> smsStatus
+            PhoneFeature.CALLS -> callStatus
+        }
 
     /** Field 15: on only with the setting, the recorded consent and the service turned on. */
     val autoSendStatus: AutoSendStatus
@@ -55,17 +71,23 @@ interface SettingsActions {
 
     fun setInternet(enabled: Boolean)
 
-    /** SET-02 field 7: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
-    fun setSms(enabled: Boolean)
+    /** SET-02 field 7 or 10: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
+    fun setFeature(
+        feature: PhoneFeature,
+        enabled: Boolean,
+    )
 
-    /** SET-01 fields 11 and 16: the SMS primer and its request, or the App info page once denied for good. */
-    fun grantSms()
+    /** SET-01 fields 11 and 16: the feature's primer and its request, or the App info page once denied for good. */
+    fun grantFeature(feature: PhoneFeature)
 
     fun open(page: SettingsPage)
 }
+
+/** The telephony features with a switch, a permission primer and a feature card (SET-02 fields 7 and 10). */
+enum class PhoneFeature { SMS, CALLS }
 
 /** Subscreens and system pages reachable from Settings. */
 enum class SettingsPage { AUTO_CLEAR, PERMISSIONS, LANGUAGE }
 
 /** The system pages the Permissions & Background screen leads to. */
-enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS }
+enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS, CALLS }

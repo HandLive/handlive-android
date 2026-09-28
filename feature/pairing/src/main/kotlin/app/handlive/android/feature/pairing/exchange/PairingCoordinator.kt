@@ -40,6 +40,8 @@ sealed interface PairingState {
     data class Paired(
         val peerName: String,
         val safetyCode: String,
+        /** The phone had no pair before this one: the app goes on to the feature list (SET-01 step 8). */
+        val firstPair: Boolean,
     ) : PairingState
 
     data class Failed(
@@ -80,6 +82,19 @@ class PairingCoordinator(
     private var expiry: Job? = null
     private var rendezvousId: String? = null
 
+    /** Orders a client taking the window against the PIN being confirmed, so "Pairing…" starts exactly once. */
+    private val pinLock = Any()
+
+    /** A client holds the window; in PIN mode it may be waiting for the PIN (A3–A4). Guarded by [pinLock]. */
+    private var clientWaiting = false
+
+    /**
+     * The phone had no pair when this pairing began, read with the limit check of step 4 or A3: before the exchange
+     * stores its pair, which replaces any older pair of the same client (SET-01 step 8).
+     */
+    @Volatile
+    private var noPairBefore = false
+
     /** The relay rendezvous, when the relay is available (Phase 2); without it a code with `rv` pairs on the LAN. */
     @Volatile
     var rendezvous: RendezvousConnector? = null
@@ -93,12 +108,18 @@ class PairingCoordinator(
     /** PAIR-01 step 4: E1 for a code that is not HandLive's, E6 when 8 pairs exist already. */
     suspend fun onScanned(text: String) {
         val invite = PairingInvite.parse(text)
-        stateFlow.value =
-            when {
-                invite == null -> PairingState.Failed(PairingFailure.QR_INVALID)
-                pairs.activeCount() >= PairStore.MAX_ACTIVE_PAIRS -> PairingState.Failed(PairingFailure.LIMIT_REACHED)
-                else -> PairingState.Confirm(invite.clientName).also { scanned = invite }
-            }
+        if (invite == null) {
+            stateFlow.value = PairingState.Failed(PairingFailure.QR_INVALID)
+            return
+        }
+        val existing = pairs.activeCount()
+        if (existing >= PairStore.MAX_ACTIVE_PAIRS) {
+            stateFlow.value = PairingState.Failed(PairingFailure.LIMIT_REACHED)
+            return
+        }
+        scanned = invite
+        noPairBefore = existing == 0
+        stateFlow.value = PairingState.Confirm(invite.clientName)
     }
 
     /** "Pair" in the confirmation (step 5 → 6). */
@@ -117,20 +138,33 @@ class PairingCoordinator(
         stateFlow.value = PairingState.Waiting(pinMode = false)
     }
 
-    /** "Enter PIN" (A3): the window opens in PIN mode before the PIN is typed. */
+    /** "Enter PIN" (A3): the PIN field; the window opens only once the PIN is confirmed (A4). */
     suspend fun startPin() {
-        if (pairs.activeCount() >= PairStore.MAX_ACTIVE_PAIRS) {
+        val existing = pairs.activeCount()
+        if (existing >= PairStore.MAX_ACTIVE_PAIRS) {
             stateFlow.value = PairingState.Failed(PairingFailure.LIMIT_REACHED)
             return
         }
-        open(PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS), PairingAdvert(pinMode = true))
+        closeWindow()
+        noPairBefore = existing == 0
         stateFlow.value = PairingState.EnterPin(attemptsLeft = null)
     }
 
+    /**
+     * The user confirmed the PIN (end of A3). The first PIN opens the 120 s window with TXT `pm = 1` (A4); after
+     * `PIN_INVALID` the window is still open and takes the new PIN.
+     */
     fun submitPin(pin: String) {
-        val current = window as? PairingWindow.Pin ?: return
-        current.submit(pin)
-        stateFlow.value = PairingState.Waiting(pinMode = true)
+        val current =
+            window as? PairingWindow.Pin
+                ?: PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS).also {
+                    open(it, PairingAdvert(pinMode = true))
+                }
+        synchronized(pinLock) {
+            current.submit(pin)
+            // A client that connected while the PIN was typed has been waiting for it: checking starts now.
+            stateFlow.value = if (clientWaiting) PairingState.Verifying else PairingState.Waiting(pinMode = true)
+        }
     }
 
     /** "Cancel" (E5) or leaving the screen: nothing is stored, the secret is dropped. */
@@ -157,31 +191,46 @@ class PairingCoordinator(
             wire.refuse(socket, ErrorCode.PAIRING_CLOSED)
             return
         }
-        stateFlow.value = PairingState.Verifying
-        val outcome = PairingExchange(device, current, pairs, clock).run(socket)
-        if (window !== current) return
+        var claimed = false
+        val outcome =
+            try {
+                // A client took the window. With the key material at hand the check starts (`verifying`); a PIN
+                // window whose PIN is still being typed keeps the PIN entry open, the client waits for submitPin.
+                PairingExchange(device, current, pairs, clock) {
+                    claimed = true
+                    synchronized(pinLock) {
+                        clientWaiting = true
+                        if (current.hasSecret) stateFlow.value = PairingState.Verifying
+                    }
+                }.run(socket)
+            } finally {
+                if (claimed) synchronized(pinLock) { clientWaiting = false }
+            }
+        val failure = (outcome as? PairingOutcome.Failed)?.failure
+        // A connection that never took the window (a second client, API 2 rule 4, or one that left before
+        // pair/hello) changes nothing: the client holding the window, or the PIN being typed, carries on.
+        if (window !== current || notServed(claimed, failure)) return
         stateFlow.value =
             when {
                 outcome is PairingOutcome.Paired -> {
                     closeWindow()
                     onPaired(outcome.pairId)
-                    PairingState.Paired(outcome.peerName, outcome.safetyCode)
+                    PairingState.Paired(outcome.peerName, outcome.safetyCode, firstPair = noPairBefore)
                 }
 
-                outcome is PairingOutcome.Failed && outcome.failure == PairingFailure.PIN_INVALID -> {
+                failure == PairingFailure.PIN_INVALID -> {
                     (current as? PairingWindow.Pin)?.reset()
-                    PairingState.EnterPin(outcome.attemptsLeft)
+                    PairingState.EnterPin((outcome as PairingOutcome.Failed).attemptsLeft)
                 }
 
-                // A client that dropped may come back while the window is open.
-                outcome is PairingOutcome.Failed && outcome.failure == PairingFailure.DISCONNECTED &&
-                    current.isOpen(clock()) -> {
-                    PairingState.Waiting(pinMode = current is PairingWindow.Pin)
+                // A client that dropped may come back while the window is open; a PIN being typed stays on screen.
+                failure == PairingFailure.DISCONNECTED && current.isOpen(clock()) -> {
+                    current.waitingAgain(shown = stateFlow.value)
                 }
 
                 else -> {
                     closeWindow()
-                    PairingState.Failed((outcome as? PairingOutcome.Failed)?.failure ?: PairingFailure.INTERNAL)
+                    PairingState.Failed(current.closedAs(failure ?: PairingFailure.INTERNAL))
                 }
             }
     }
@@ -198,7 +247,7 @@ class PairingCoordinator(
                 delay(next.expiresAt - clock())
                 if (window === next) {
                     closeWindow()
-                    stateFlow.value = PairingState.Failed(PairingFailure.PAIRING_CLOSED)
+                    stateFlow.value = PairingState.Failed(next.closedAs(PairingFailure.PAIRING_CLOSED))
                 }
             }
     }
@@ -213,3 +262,19 @@ class PairingCoordinator(
         advertise(PairingAdvert.NONE)
     }
 }
+
+/** Ends of a connection that did not take the window; AUTH_FAILED still closes it (E4). */
+private val NOT_SERVED = setOf(PairingFailure.PAIRING_CLOSED, PairingFailure.DISCONNECTED)
+
+private fun notServed(
+    claimed: Boolean,
+    failure: PairingFailure?,
+) = !claimed && failure in NOT_SERVED
+
+/** E2: a closed PIN window says the PIN expired, not that a QR code changed. */
+private fun PairingWindow.closedAs(failure: PairingFailure): PairingFailure =
+    if (failure == PairingFailure.PAIRING_CLOSED && this is PairingWindow.Pin) PairingFailure.PIN_EXPIRED else failure
+
+/** After a lost client: waiting for the next one, or the PIN entry [shown] while the PIN is still being typed. */
+private fun PairingWindow.waitingAgain(shown: PairingState): PairingState =
+    if (hasSecret) PairingState.Waiting(pinMode = this is PairingWindow.Pin) else shown

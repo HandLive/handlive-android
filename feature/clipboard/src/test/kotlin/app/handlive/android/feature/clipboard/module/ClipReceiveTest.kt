@@ -5,12 +5,14 @@ import app.handlive.android.core.protocol.clipboard.ClipboardConflictData
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.transport.capability.Feature
+import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.testing.ClipboardHarness
 import app.handlive.android.feature.clipboard.testing.IPAD_ID
 import app.handlive.android.feature.clipboard.testing.MAC_ID
 import app.handlive.android.feature.clipboard.testing.PHONE_ID
 import app.handlive.android.feature.clipboard.testing.PHONE_NAME
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,6 +50,23 @@ class ClipReceiveTest {
             )
             assertEquals(listOf(push), h.ipad.pushes().map { it.second })
             assertTrue(h.mac.pushes().isEmpty())
+        }
+
+    @Test
+    fun theSameContentAgainWithinFiveSecondsIsAppliedWithoutASecondWrite() =
+        test { h ->
+            h.connect(h.mac, h.ipad)
+            h.push(h.mac, h.macText("https://example.com/echo"))
+            h.push(h.mac, h.macText("https://example.com/echo"))
+            assertEquals(1, h.writer.writes.size)
+            assertEquals(
+                listOf(ClipboardValues.STATUS_APPLIED, ClipboardValues.STATUS_APPLIED),
+                h.mac.ackData().map { it.status },
+            )
+            assertEquals(1, h.ipad.pushes().size)
+            advanceTimeBy(ClipLimits.LOOP_WINDOW_MILLIS + 1)
+            h.push(h.mac, h.macText("https://example.com/echo"))
+            assertEquals(2, h.writer.writes.size)
         }
 
     @Test

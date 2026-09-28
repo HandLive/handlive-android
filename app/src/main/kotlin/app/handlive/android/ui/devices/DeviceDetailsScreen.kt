@@ -24,6 +24,7 @@ import app.handlive.android.core.design.component.HLStatusIndicator
 import app.handlive.android.core.design.component.HLValueRow
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.pairing.devices.CallAvailability
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.SmsAvailability
@@ -55,10 +56,14 @@ fun DeviceDetailsScreen(
                     row { HLValueRow(stringResource(R.string.pairing_app_version), version) }
                 }
             }
-            if (item.clipboard != ClipboardAvailability.UNKNOWN || item.sms != SmsAvailability.UNKNOWN) {
+            val known =
+                item.clipboard != ClipboardAvailability.UNKNOWN || item.sms != SmsAvailability.UNKNOWN ||
+                    item.calls != CallAvailability.UNKNOWN
+            if (known) {
                 section(title = featuresTitle) {
                     if (item.clipboard != ClipboardAvailability.UNKNOWN) row { ClipboardRow(item) }
                     if (item.sms != SmsAvailability.UNKNOWN) row { SmsRow(item) }
+                    if (item.calls != CallAvailability.UNKNOWN) row { CallsRow(item) }
                 }
             }
             section { row { SecurityCodeRow(item.safetyCode) } }
@@ -114,6 +119,19 @@ private fun SmsRow(item: DeviceListItem) {
             else -> stringResource(R.string.common_off)
         }
     HLValueRow(stringResource(R.string.settings_sms_messages), value)
+}
+
+/** PAIR-02 field 8 and SET-02 field 24 for calls: "On", "Off on <device>", "Off" or the missing permission. */
+@Composable
+private fun CallsRow(item: DeviceListItem) {
+    val value =
+        when (item.calls) {
+            CallAvailability.ON -> stringResource(R.string.common_on)
+            CallAvailability.OFF_ON_PEER -> stringResource(R.string.pairing_reason_off_on_device, item.name)
+            CallAvailability.MISSING_PERMISSION -> stringResource(R.string.pairing_reason_missing_permission)
+            else -> stringResource(R.string.common_off)
+        }
+    HLValueRow(stringResource(R.string.settings_calls), value)
 }
 
 /** PAIR-02 field 10: 8 lowercase hex digits shown as two groups ("fc64 7e0b"), selectable and copyable. */

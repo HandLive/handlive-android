@@ -32,7 +32,7 @@ import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.ServiceLauncher
 import app.handlive.android.feature.connection.ServiceState
-import app.handlive.android.feature.sms.system.SmsPermissionNotifier
+import app.handlive.android.feature.connection.notification.OpenRequest
 import app.handlive.android.ui.AppDependencies
 import app.handlive.android.ui.system.SystemPages
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,7 +120,7 @@ private fun UnpairedByPeerNotice(main: MainContext) {
     }
 }
 
-/** A notification's screen: the SMS primer of the permission suggestion (SET-01 field 17). */
+/** A notification's screen: the SMS or calls primer of the permission suggestion (SET-01 field 17). */
 @Composable
 private fun OpenRequests(
     main: MainContext,
@@ -128,9 +128,13 @@ private fun OpenRequests(
 ) {
     val request by requests.collectAsStateWithLifecycle()
     LaunchedEffect(request) {
-        if (request == SmsPermissionNotifier.OPEN_SMS_PERMISSION && main.stack.lastOrNull() != Route.SmsPermission) {
-            main.push(Route.SmsPermission)
-        }
+        val route =
+            when (request) {
+                OpenRequest.SMS_PERMISSION -> Route.SmsPermission
+                OpenRequest.CALL_PERMISSION -> Route.CallPermission
+                else -> null
+            }
+        if (route != null && main.stack.lastOrNull() != route) main.push(route)
         requests.value = null
     }
 }

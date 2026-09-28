@@ -22,8 +22,11 @@ object RelayConstants {
     /** CONN-04 step 2: the push token goes to the relay again every 7 days. */
     const val PUSH_TOKEN_REFRESH_MILLIS = 7 * 24 * 60 * 60 * 1000L
 
-    /** CONN-04 5b: an SMS push waits in `push_outbox` for 24 h at most. */
+    /** CONN-04 5b: an SMS or missed-call push waits in `push_outbox` for 24 h at most. */
     const val SMS_PUSH_EXPIRY_MILLIS = 24 * 60 * 60 * 1000L
+
+    /** CONN-04 5b, CALL-01 E5: an incoming-call push waits 30 s at most. */
+    const val CALL_INCOMING_PUSH_EXPIRY_MILLIS = 30_000L
 
     /** `push_outbox` retries: 5 s, 15 s, 45 s… at most 5 minutes apart, until the push expires. */
     const val PUSH_RETRY_FIRST_MILLIS = 5_000L

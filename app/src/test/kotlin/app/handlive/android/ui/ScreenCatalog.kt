@@ -19,6 +19,7 @@ import app.handlive.android.ui.pairing.PairingProgressScreen
 import app.handlive.android.ui.pairing.PinEntryScreen
 import app.handlive.android.ui.pairing.ScannerFrame
 import app.handlive.android.ui.settings.AutoClearScreen
+import app.handlive.android.ui.settings.CallsPrimerScreen
 import app.handlive.android.ui.settings.ConsentScreen
 import app.handlive.android.ui.settings.DataAction
 import app.handlive.android.ui.settings.DataActionDialogs
@@ -57,6 +58,9 @@ object ScreenCatalog {
             "settings sms needs permission" to {
                 SettingsScreen(UiSamples.smsNeedsPermission, StatusBanners(), UiSamples.NoActions, "English")
             },
+            "settings calls denied" to {
+                SettingsScreen(UiSamples.callsDenied, StatusBanners(), UiSamples.NoActions, "English")
+            },
             "settings relay certificate" to {
                 SettingsScreen(UiSamples.relayPinMismatch, StatusBanners(), UiSamples.NoActions, "English")
             },
@@ -68,18 +72,27 @@ object ScreenCatalog {
             "auto-clear" to { AutoClearScreen(60, {}, {}) },
             "language" to { LanguageScreen(AppLanguage.Vietnamese, {}, {}) },
             "permissions" to {
-                PermissionsScreen(UiSamples.environment, UiSamples.settings.autoSendStatus, FeatureStatus.ON, {}, {})
+                PermissionsScreen(
+                    UiSamples.environment,
+                    UiSamples.settings.autoSendStatus,
+                    FeatureStatus.ON,
+                    FeatureStatus.ON,
+                    {},
+                    {},
+                )
             },
             "permissions sms denied" to {
                 PermissionsScreen(
                     UiSamples.environment,
                     UiSamples.settings.autoSendStatus,
                     FeatureStatus.PERMISSION_DENIED,
+                    FeatureStatus.NEEDS_PERMISSION,
                     {},
                     {},
                 )
             },
             "sms primer" to { SmsPrimerScreen {} },
+            "calls primer" to { CallsPrimerScreen {} },
             "consent" to { ConsentScreen({}, {}) },
             "restricted setting" to { RestrictedSettingScreen {} },
         )

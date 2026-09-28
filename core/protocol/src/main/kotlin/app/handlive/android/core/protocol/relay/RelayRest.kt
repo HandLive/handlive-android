@@ -122,6 +122,11 @@ object RelayValues {
     const val KIND_WAKE = "wake"
     const val KIND_ALERT = "alert"
     const val REASON_SMS_NEW = "sms_new"
+    const val REASON_CALL_INCOMING = "call_incoming"
+    const val REASON_CALL_MISSED = "call_missed"
+
+    /** The `wake` an iPhone or iPad sends so that a "Decline" from its notification reaches the phone (CALL-02 B2). */
+    const val REASON_CALL_ACTION = "call_action"
     const val REVOKE_USER = "user"
     const val REVOKE_REINSTALL = "reinstall"
     const val REVOKE_LOST_DEVICE = "lost_device"

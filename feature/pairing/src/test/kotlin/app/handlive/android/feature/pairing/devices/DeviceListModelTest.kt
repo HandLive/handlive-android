@@ -2,6 +2,7 @@ package app.handlive.android.feature.pairing.devices
 
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.pairing.PairedDevice
+import app.handlive.android.core.protocol.capability.CallFeature
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.capability.CapabilityFeatures
 import app.handlive.android.core.protocol.capability.ClipboardFeature
@@ -77,16 +78,47 @@ class DeviceListModelTest {
         assertEquals(SmsAvailability.OFF_ON_PEER, DeviceListModel.item(device, null, true, local(sms = true)).sms)
     }
 
+    @Test
+    fun callsFollowBothSwitchesAndThePhoneStatePermissionOfThisPhone() {
+        val on = session(setOf(Feature.CALL), clipboardOnPeer = true, callsOnPeer = true)
+        val offOnPeer = session(emptySet(), clipboardOnPeer = true, callsOnPeer = false)
+
+        assertEquals(
+            CallAvailability.ON,
+            DeviceListModel.item(device, on, true, local(sms = false, calls = true)).calls,
+        )
+        assertEquals(CallAvailability.OFF_HERE, DeviceListModel.item(device, on, true, local(sms = true)).calls)
+        assertEquals(
+            CallAvailability.OFF_ON_PEER,
+            DeviceListModel.item(device, offOnPeer, true, local(sms = false, calls = true)).calls,
+        )
+        assertEquals(
+            CallAvailability.MISSING_PERMISSION,
+            DeviceListModel
+                .item(device, on, true, local(sms = false, calls = true, missing = listOf("READ_PHONE_STATE")))
+                .calls,
+        )
+        // The caller id and answer permissions only narrow calls down; they stay on.
+        assertEquals(
+            CallAvailability.ON,
+            DeviceListModel
+                .item(device, on, true, local(sms = false, calls = true, missing = listOf("READ_CALL_LOG")))
+                .calls,
+        )
+        assertEquals(CallAvailability.UNKNOWN, DeviceListModel.item(device, on, true, local = null).calls)
+    }
+
     private fun local(
         sms: Boolean,
         missing: List<String>? = null,
+        calls: Boolean = false,
     ) = CapabilityData(
         protocol = 1,
         appVersion = "0.0.1 (1)",
         platform = "android",
         osVersion = "16",
         model = "Pixel 9",
-        features = CapabilityFeatures(sms = SmsFeature(enabled = sms)),
+        features = CapabilityFeatures(sms = SmsFeature(enabled = sms), call = CallFeature(enabled = calls)),
         permissionsMissing = missing,
     )
 
@@ -94,6 +126,7 @@ class DeviceListModelTest {
         effective: Set<Feature>,
         clipboardOnPeer: Boolean,
         smsOnPeer: Boolean = false,
+        callsOnPeer: Boolean = false,
     ) = PeerSession(
         peer = PeerSession.PeerInfo(device.pairId, device.peerDeviceId, device.peerName, device.peerPlatform),
         channel = PeerSession.Channel.LAN,
@@ -110,6 +143,7 @@ class DeviceListModelTest {
                         CapabilityFeatures(
                             clipboard = ClipboardFeature(enabled = clipboardOnPeer),
                             sms = SmsFeature(enabled = smsOnPeer),
+                            call = CallFeature(enabled = callsOnPeer),
                         ),
                 ),
             ),

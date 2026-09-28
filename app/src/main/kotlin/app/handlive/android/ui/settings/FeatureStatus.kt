@@ -15,20 +15,20 @@ enum class FeatureStatus(
     /** Every missing permission was denied for good: "Open Settings" (field 16, E5). */
     PERMISSION_DENIED(R.string.permission_status_denied),
 
-    /** The phone has no telephony (SET-01 step 8): the capability reports SMS off. */
+    /** The phone has no telephony (SET-01 step 8): the capability reports SMS and calls off. */
     UNSUPPORTED(R.string.permission_status_unsupported),
 }
 
 /**
- * The SMS permissions of SET-01 API 2 on this phone: whether it has telephony, which of `READ_SMS`, `SEND_SMS`,
- * `READ_CONTACTS`, `READ_PHONE_STATE` are missing (short names), and which of those the system will not ask for again.
+ * The permissions of one telephony feature (SET-01 API 2) on this phone — SMS or calls: whether it has telephony,
+ * which of the feature's permissions are missing (short names), and which of those the system will not ask for again.
  */
-data class SmsAccessState(
+data class FeatureAccess(
     val telephony: Boolean = true,
     val missing: Set<String> = emptySet(),
     val deniedForGood: Set<String> = emptySet(),
 ) {
-    /** SET-02 field 7 [enabled] combined with the permissions (SET-01 steps 8 and 10). */
+    /** The feature's switch (SET-02 field 7 or 10) [enabled], with the permissions (SET-01 steps 8 and 10). */
     fun status(enabled: Boolean): FeatureStatus =
         when {
             !telephony -> FeatureStatus.UNSUPPORTED

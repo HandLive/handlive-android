@@ -55,6 +55,29 @@ class RelayConnectorTest {
         }
 
     @Test
+    fun aRingingCallHoldsTheRelayThenFiveIdleMinutesApply() =
+        runTest {
+            val connector = connector()
+            connector.hold("call-1", on = true)
+            runCurrent()
+            val link = links.opened.single()
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+
+            // CALL-01 API 4 logic 4: at least until the call stops ringing, however long that is.
+            advanceTimeBy(20 * MINUTE)
+            assertNull(link.closedWith)
+            connector.hold("call-2", on = false)
+            runCurrent()
+            connector.hold("call-1", on = false)
+            runCurrent()
+            advanceTimeBy(4 * MINUTE)
+            assertNull(link.closedWith)
+            advanceTimeBy(MINUTE + IDLE_CHECK)
+            assertEquals(1000 to "idle", link.closedWith)
+            assertEquals(1, links.opened.size)
+        }
+
+    @Test
     fun aDroppedLinkIsReopenedAfterTheFirstBackoffStep() =
         runTest {
             val connector = connector()
@@ -97,6 +120,20 @@ class RelayConnectorTest {
             // Registered once per process at the first token, then again for the unknown device (E2).
             assertEquals(2, http.calls("POST", "/v1/devices").size)
             assertEquals(listOf("jwt-1", "jwt-2", "jwt-2", "jwt-3"), links.opened.map { it.bearer })
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+        }
+
+    @Test
+    fun aTokenTheRelayNoLongerAcceptsRegistersAgainAndIsRenewedOnce() =
+        runTest {
+            val http = FakeRelayHttp { currentTime }
+            val connector = connector(http)
+            links.refuseNext(RelayLinkEvent.Closed(null, 401, RelayErrorCode.SIGNATURE_INVALID))
+            connector.demand()
+            runCurrent()
+            // Registered once per process at the first token, then again for the refused signature (E2).
+            assertEquals(2, http.calls("POST", "/v1/devices").size)
+            assertEquals(listOf("jwt-1", "jwt-2"), links.opened.map { it.bearer })
             assertEquals(RelayLinkState.CONNECTED, connector.state.value)
         }
 

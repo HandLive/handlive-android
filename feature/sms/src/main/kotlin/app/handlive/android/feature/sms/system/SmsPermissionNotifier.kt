@@ -7,6 +7,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.notification.NotificationChannels
+import app.handlive.android.feature.connection.notification.OpenRequest
 import app.handlive.android.feature.connection.session.PeerSession
 import app.handlive.android.feature.sms.module.PermissionMissingListener
 import app.handlive.android.core.design.R as DesignR
@@ -34,7 +35,7 @@ class SmsPermissionNotifier(
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
                 )
-                putExtra(EXTRA_OPEN, OPEN_SMS_PERMISSION)
+                putExtra(OpenRequest.EXTRA, OpenRequest.SMS_PERMISSION)
             } ?: return
         val text = context.getString(R.string.notification_permission_sms_read, session.peerName)
         val notification =
@@ -67,14 +68,10 @@ class SmsPermissionNotifier(
         return true
     }
 
-    companion object {
-        /** The launch intent's extra naming the screen to open, and its value for the SMS primer. */
-        const val EXTRA_OPEN = "app.handlive.extra.OPEN"
-        const val OPEN_SMS_PERMISSION = "sms_permission"
-
-        private const val TAG = "permission-sms"
-        private const val ID = 1
-        private const val REQUEST_CODE = 17
-        private const val INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
+    private companion object {
+        const val TAG = "permission-sms"
+        const val ID = 1
+        const val REQUEST_CODE = 17
+        const val INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
     }
 }

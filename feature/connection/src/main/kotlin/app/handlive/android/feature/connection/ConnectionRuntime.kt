@@ -173,7 +173,7 @@ class ConnectionRuntime private constructor(
             }
         certificateSha256 = tls.certificateSha256()
         BenchLog.setDevice(identity.deviceId)
-        val capabilityState =
+        val phoneCapability =
             capability.state(
                 runtimeScope,
                 data.settings.current(),
@@ -187,15 +187,18 @@ class ConnectionRuntime private constructor(
                     tls = tls,
                     localDeviceId = identity.deviceId,
                     pairs = { pairId -> data.pairs.pairRecord(pairId) },
-                    localCapability = { capabilityState.value },
+                    localCapability = { phoneCapability.state.value },
+                    // SET-01 API 2 logic 4: permissions granted while the app stayed off screen count from the next
+                    // session on, and a change reaches the open sessions as capability/update.
+                    helloCapability = phoneCapability::refresh,
                     onSessionEstablished = { session -> runtimeScope.launch { table.attach(session, runtimeScope) } },
                     pairingEndpoint = { socket -> pairingEndpoint?.handle(socket) },
                 ),
             )
         val port = controlServer.start()
         server = controlServer
-        capabilityState.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
-        capability.publishUpdates(runtimeScope, capabilityState) { controlServer.sessions.all() }
+        phoneCapability.state.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
+        capability.publishUpdates(runtimeScope, phoneCapability.state) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
         simWatcher.start()
     }

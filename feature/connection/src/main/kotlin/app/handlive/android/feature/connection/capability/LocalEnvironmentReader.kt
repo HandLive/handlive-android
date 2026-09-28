@@ -30,7 +30,7 @@ class LocalEnvironmentReader(
             notificationsMissing = notificationsMissing,
             telephony = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY),
             missingPermissions =
-                AndroidPermissions.SMS
+                AndroidPermissions.RUNTIME
                     .filterNot { granted(AndroidPermissions.fullName(it)) }
                     .toSet(),
             sims = sims.activeSims().map { SimInfo(it.subId, it.slot, it.label) },
@@ -48,9 +48,17 @@ object AndroidPermissions {
     const val SEND_SMS = "SEND_SMS"
     const val READ_CONTACTS = "READ_CONTACTS"
     const val READ_PHONE_STATE = "READ_PHONE_STATE"
+    const val READ_CALL_LOG = "READ_CALL_LOG"
+    const val ANSWER_PHONE_CALLS = "ANSWER_PHONE_CALLS"
 
     /** What the SMS feature asks for, in one request (SET-01 API 2 example). */
     val SMS = listOf(READ_SMS, SEND_SMS, READ_CONTACTS, READ_PHONE_STATE)
+
+    /** What the calls feature asks for, in one request (SET-01 part B; public Telecom APIs only, C12). */
+    val CALLS = listOf(READ_PHONE_STATE, READ_CALL_LOG, ANSWER_PHONE_CALLS, READ_CONTACTS)
+
+    /** Every runtime permission of the features above, in the order of the SET-01 API 2 table. */
+    val RUNTIME = listOf(READ_SMS, SEND_SMS, READ_CONTACTS, READ_PHONE_STATE, READ_CALL_LOG, ANSWER_PHONE_CALLS)
 
     /** `android.permission.READ_SMS`: the form of `details.permission` in `PERMISSION_MISSING` (SMS-01 E2). */
     fun fullName(short: String): String = "android.permission.$short"

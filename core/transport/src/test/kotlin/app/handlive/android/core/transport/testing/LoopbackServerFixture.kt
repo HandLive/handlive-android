@@ -28,6 +28,8 @@ class LoopbackServerFixture(
     handshakeTimeout: Duration = 5.seconds,
     rekeyAfterEnvelopes: Long = 10_000,
     limits: ControlServerLimits = ControlServerLimits(),
+    /** The phone's capability for each new session's `capability/hello`; later snapshots stay [ANDROID_CAPABILITY]. */
+    helloCapability: () -> CapabilityData = { ANDROID_CAPABILITY },
 ) : AutoCloseable {
     val serverDeviceId = "39f713d0-a644-853f-8452-9421b9f51b9b"
     val tls: TlsIdentity = sharedIdentity
@@ -43,6 +45,7 @@ class LoopbackServerFixture(
                 localDeviceId = serverDeviceId,
                 pairs = { pairs[it] },
                 localCapability = { ANDROID_CAPABILITY },
+                helloCapability = helloCapability,
                 onSessionEstablished = { established.add(it) },
                 options =
                     ControlServerOptions(

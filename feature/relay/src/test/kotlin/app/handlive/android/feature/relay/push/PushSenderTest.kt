@@ -28,7 +28,9 @@ class PushSenderTest {
     private val sent = mutableListOf<Pair<String, String>>()
     private val outbox = fixture.database.pushOutbox()
     private val sender =
-        PushSender(fixture.api, fixture.relayPairs, outbox, fixture.clock, sent = { key, peer -> sent += key to peer })
+        PushSender(fixture.api, fixture.relayPairs, outbox, fixture.clock, { request, status ->
+            if (status == 202) sent += request.collapseKey!! to request.to
+        })
 
     @After
     fun tearDown() = fixture.close()
@@ -114,6 +116,30 @@ class PushSenderTest {
             fixture.http.unreachable = false
             // 5 s after the first attempt, then 15 s after the second.
             assertEquals(fixture.now + 15_000, outbox.nextAttemptAt(fixture.now))
+        }
+
+    @Test
+    fun aPushWhoseTokenIsRefusedIsRenewedThenQueued() =
+        runTest {
+            fixture.addPair(PeerPlatform.IOS, peerDeviceId = PEER)
+            // A token signed before the relay changed its key: renewed once, then the push goes.
+            fixture.http.enqueue("POST", "/v1/push", 401, fixture.http.error("SIGNATURE_INVALID"))
+            fixture.http.enqueue("POST", "/v1/push", 202, """{"accepted":true}""")
+            sender.smsNew(NEW, connected = emptySet())
+            assertEquals(listOf("jwt-1", "jwt-2"), fixture.http.calls("POST", "/v1/push").map { it.bearer })
+            assertEquals(listOf("sms:12847" to PEER), sent)
+            assertNull(outbox.nextAttemptAt(fixture.now))
+
+            // Refused again with the new token: the push waits in the outbox instead of being dropped.
+            repeat(2) { fixture.http.enqueue("POST", "/v1/push", 401, fixture.http.error("SIGNATURE_INVALID")) }
+            sender.smsNew(NEW, connected = emptySet())
+            assertEquals(fixture.now + 5_000, outbox.nextAttemptAt(fixture.now))
+
+            fixture.now += 5_000
+            fixture.http.enqueue("POST", "/v1/push", 202, """{"accepted":true}""")
+            sender.retryDue()
+            assertEquals(2, sent.size)
+            assertNull(outbox.nextAttemptAt(fixture.now))
         }
 
     @Test

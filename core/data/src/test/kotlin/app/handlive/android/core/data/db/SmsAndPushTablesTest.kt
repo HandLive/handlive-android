@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** `sms_observer_state` (SMS-02) and `push_outbox` (CONN-04) with the queries of 0.9.1. */
+/** `sms_observer_state` (SMS-02) and `push_outbox` (CONN-04) with the queries of 0.9.1 and the call pushes. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class SmsAndPushTablesTest {
@@ -54,6 +54,26 @@ class SmsAndPushTablesTest {
         }
 
     @Test
+    fun aQueuedPushIsDroppedByItsCollapseKeyAndReason() =
+        runTest {
+            insertPair("pair-a")
+            val outbox = database.pushOutbox()
+            val incoming = "call_incoming"
+            outbox.insert(push("in", "pair-a", nextAttemptAt = 0, expiresAt = 10).copyWith(incoming, "call:c1"))
+            outbox.insert(
+                push("missed", "pair-a", nextAttemptAt = 0, expiresAt = 10).copyWith("call_missed", "call:c1"),
+            )
+            outbox.insert(push("other", "pair-a", nextAttemptAt = 0, expiresAt = 10).copyWith(incoming, "call:c2"))
+
+            assertEquals(1, outbox.deleteQueued("call:c1", incoming))
+            assertEquals(listOf("missed", "other"), outbox.due(now = 5, limit = 20).map { it.id }.sorted())
+            assertEquals(
+                listOf("call_missed", incoming),
+                outbox.due(now = 5, limit = 20).sortedBy { it.id }.map { it.reason },
+            )
+        }
+
+    @Test
     fun unpairingDeletesThePairsPushes() =
         runTest {
             insertPair("pair-a")
@@ -89,6 +109,11 @@ class SmsAndPushTablesTest {
         nextAttemptAt: Long,
         expiresAt: Long,
     ) = PushOutboxEntity(id, pairId, PushKind.ALERT, "e30=", "sms:42", 0, nextAttemptAt, expiresAt)
+
+    private fun PushOutboxEntity.copyWith(
+        reason: String,
+        collapseKey: String,
+    ) = PushOutboxEntity(id, pairId, kind, bodyB64, collapseKey, attempts, nextAttemptAt, expiresAt, reason)
 
     private companion object {
         const val KEY_SIZE = 32

@@ -17,7 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 
-/** A Phase 1 `handlive.db` (version 1, `paired_device` only) opens as version 2 with its pairs intact. */
+/** Older `handlive.db` files open as the current version with their rows intact (Room auto-migrations). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class HandLiveDatabaseMigrationTest {
@@ -28,7 +28,7 @@ class HandLiveDatabaseMigrationTest {
         runTest {
             val file = context.getDatabasePath("migration-test.db").apply { parentFile?.mkdirs() }
             file.delete()
-            createVersionOne(file)
+            createVersion(file, SCHEMA_V1, version = 1)
 
             val database = Room.databaseBuilder(context, HandLiveDatabase::class.java, file.absolutePath).build()
             try {
@@ -42,11 +42,49 @@ class HandLiveDatabaseMigrationTest {
             }
         }
 
-    /** The tables of the exported schema `1.json`, as a Phase 1 install left them. */
-    private fun createVersionOne(file: File) {
+    @Test
+    fun versionTwoGainsThePushReasonAndKeepsItsQueuedSmsPushes() =
+        runTest {
+            val file = context.getDatabasePath("migration-test-2.db").apply { parentFile?.mkdirs() }
+            file.delete()
+            createVersion(file, SCHEMA_V2, version = 2) { db ->
+                db.insert(
+                    "push_outbox",
+                    null,
+                    ContentValues().apply {
+                        put("id", "0192f3e4-7a10-7b20-8c30-9d40ae50bf60")
+                        put("pair_id", PAIR_ID)
+                        put("kind", "alert")
+                        put("body_b64", "e30=")
+                        put("collapse_key", "sms:12847")
+                        put("attempts", 2)
+                        put("next_attempt_at", 1_000L)
+                        put("expires_at", 90_000L)
+                    },
+                )
+            }
+
+            val database = Room.databaseBuilder(context, HandLiveDatabase::class.java, file.absolutePath).build()
+            try {
+                val queued = database.pushOutbox().due(now = 2_000, limit = LIMIT).single()
+                assertEquals("sms_new", queued.reason)
+                assertEquals("sms:12847", queued.collapseKey)
+                assertEquals(2, queued.attempts)
+            } finally {
+                database.close()
+            }
+        }
+
+    /** The tables of the exported schema [schemaPath] with one pair, as an install of that [version] left them. */
+    private fun createVersion(
+        file: File,
+        schemaPath: String,
+        version: Int,
+        rows: (SQLiteDatabase) -> Unit = {},
+    ) {
         val schema =
             Json
-                .parseToJsonElement(File(SCHEMA_V1).readText())
+                .parseToJsonElement(File(schemaPath).readText())
                 .jsonObject
                 .getValue("database")
                 .jsonObject
@@ -75,7 +113,8 @@ class HandLiveDatabaseMigrationTest {
                 arrayOf(schema.getValue("identityHash").jsonPrimitive.content),
             )
             db.insert("paired_device", null, pairRow())
-            db.version = 1
+            rows(db)
+            db.version = version
         } finally {
             db.close()
         }
@@ -98,6 +137,7 @@ class HandLiveDatabaseMigrationTest {
 
     private companion object {
         const val SCHEMA_V1 = "schemas/app.handlive.android.core.data.db.HandLiveDatabase/1.json"
+        const val SCHEMA_V2 = "schemas/app.handlive.android.core.data.db.HandLiveDatabase/2.json"
         const val PAIR_ID = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
         const val KEY_SIZE = 32
         const val LIMIT = 20

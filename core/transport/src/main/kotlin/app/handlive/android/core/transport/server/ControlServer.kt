@@ -25,8 +25,13 @@ data class ControlServerConfig(
     val tls: TlsIdentity,
     val localDeviceId: String,
     val pairs: PairRegistry,
-    /** Capability hiện tại của Android (0.7.2); gọi mỗi lần gửi `capability/hello|update`. */
+    /** This phone's current capability (0.7.2): read for each `capability/update` and for the effective features. */
     val localCapability: () -> CapabilityData,
+    /**
+     * This phone's capability for the `capability/hello` of each new session, read again from the phone rather than
+     * taken from the last snapshot: a permission granted since then counts (SET-01 API 2 logic 4).
+     */
+    val helloCapability: () -> CapabilityData = localCapability,
     val onSessionEstablished: (ControlSession) -> Unit = {},
     val options: ControlServerOptions = ControlServerOptions(),
     /** Serves `/v1/pair` on the same port (PAIR-01); without it the path answers 404. */

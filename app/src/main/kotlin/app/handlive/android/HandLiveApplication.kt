@@ -2,6 +2,7 @@ package app.handlive.android
 
 import android.app.Application
 import app.handlive.android.core.transport.relay.RelayConfig
+import app.handlive.android.feature.call.CallFeature
 import app.handlive.android.feature.clipboard.ClipboardFeature
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.notification.NotificationChannels
@@ -22,6 +23,7 @@ class HandLiveApplication : Application() {
         PairingFeature.install(this)
         ClipboardFeature.install(this)
         SmsFeature.install(this)
+        CallFeature.install(this)
         RelayFeature.install(this, relayConfig())
         PushBootstrap.start(this)
     }

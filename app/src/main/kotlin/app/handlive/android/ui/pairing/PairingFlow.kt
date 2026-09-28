@@ -36,7 +36,7 @@ private enum class PairingEntry { CHOOSE, CAMERA_PRIMER, SCANNING }
 @Composable
 fun PairingFlow(
     coordinator: PairingCoordinator,
-    onPaired: (String) -> Unit,
+    onPaired: (PairingState.Paired) -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -78,7 +78,7 @@ fun PairingFlow(
         }
 
         is PairingState.Paired -> {
-            PairedScreen(current.peerName, current.safetyCode) { onPaired(current.peerName) }
+            PairedScreen(current.peerName, current.safetyCode) { onPaired(current) }
         }
 
         is PairingState.Failed -> {

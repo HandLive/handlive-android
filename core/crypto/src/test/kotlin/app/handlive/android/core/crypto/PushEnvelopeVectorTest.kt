@@ -50,7 +50,7 @@ class PushEnvelopeVectorTest {
             assertEquals(name, v.str("env_b64"), PushEnvelopes.envB64(sealed))
             assertTrue(name, PushEnvelopes.envB64(sealed).length <= ENV_B64_MAX)
         }
-        assertEquals(8, envelopes.size)
+        assertEquals(12, envelopes.size)
     }
 
     @Test
@@ -68,7 +68,7 @@ class PushEnvelopeVectorTest {
         val stale = invalid.single { it.str("reason") == "stale" }
         val json = Base64Codecs.decodeB64(stale.str("env_b64")).toString(Charsets.UTF_8)
         assertNotEquals(0, EnvelopeCipher.open(stale.hex("key"), EnvelopeCodec.decode(json)).size)
-        assertEquals(9, invalid.size)
+        assertEquals(12, invalid.size)
     }
 
     private companion object {

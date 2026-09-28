@@ -1,6 +1,7 @@
 package app.handlive.android.feature.connection.capability
 
 import app.handlive.android.core.data.settings.HandLiveSettings
+import app.handlive.android.core.protocol.capability.CallFeature
 import app.handlive.android.core.protocol.capability.SimInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,9 +39,63 @@ class LocalCapabilityBuilderTest {
     @Test
     fun featuresThePhoneDoesNotImplementYetAreAbsent() {
         val features = LocalCapabilityBuilder.build(HandLiveSettings(), environment).features
-        assertNull(features.call)
         assertNull(features.callAudio)
         assertNull(features.camera)
+    }
+
+    @Test
+    fun callsFollowTheSettingTelephonyAndTheirPermissions() {
+        val phone = environment.copy(telephony = true)
+        assertEquals(
+            CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true),
+            LocalCapabilityBuilder.build(HandLiveSettings(), phone).features.call,
+        )
+        val noControl = phone.copy(missingPermissions = setOf("ANSWER_PHONE_CALLS"))
+        assertEquals(
+            CallFeature(enabled = true, canAnswer = false, canEnd = false, callerId = true),
+            LocalCapabilityBuilder.build(HandLiveSettings(), noControl).features.call,
+        )
+        val noNumber = phone.copy(missingPermissions = setOf("READ_CALL_LOG"))
+        assertEquals(
+            false,
+            LocalCapabilityBuilder
+                .build(HandLiveSettings(), noNumber)
+                .features.call
+                ?.callerId,
+        )
+        assertFalse(
+            LocalCapabilityBuilder
+                .build(HandLiveSettings(callEnabled = false), phone)
+                .features.call!!
+                .enabled,
+        )
+        val tablet = LocalCapabilityBuilder.build(HandLiveSettings(), environment).features.call!!
+        assertFalse("no FEATURE_TELEPHONY (SET-01 step 8)", tablet.enabled)
+        assertNull("notify is sent by iPhone and iPad only", tablet.notify)
+    }
+
+    @Test
+    fun missingCallPermissionsCountOnlyWhileCallsAreOnAndOnceWithSms() {
+        val missing = setOf("READ_PHONE_STATE", "READ_CONTACTS", "READ_CALL_LOG", "ANSWER_PHONE_CALLS", "READ_SMS")
+        val phone = environment.copy(telephony = true, missingPermissions = missing)
+        assertEquals(
+            listOf("READ_CONTACTS", "READ_PHONE_STATE", "READ_CALL_LOG", "ANSWER_PHONE_CALLS"),
+            LocalCapabilityBuilder.build(HandLiveSettings(smsEnabled = false), phone).permissionsMissing,
+        )
+        assertEquals(
+            listOf("READ_SMS", "READ_CONTACTS", "READ_PHONE_STATE", "READ_CALL_LOG", "ANSWER_PHONE_CALLS"),
+            LocalCapabilityBuilder.build(HandLiveSettings(), phone).permissionsMissing,
+        )
+        assertEquals(
+            listOf("READ_SMS", "READ_CONTACTS", "READ_PHONE_STATE"),
+            LocalCapabilityBuilder.build(HandLiveSettings(callEnabled = false), phone).permissionsMissing,
+        )
+        assertEquals(
+            emptyList<String>(),
+            LocalCapabilityBuilder
+                .build(HandLiveSettings(), environment.copy(missingPermissions = missing))
+                .permissionsMissing,
+        )
     }
 
     @Test
@@ -74,7 +129,9 @@ class LocalCapabilityBuilderTest {
         )
         assertEquals(
             listOf("POST_NOTIFICATIONS"),
-            LocalCapabilityBuilder.build(HandLiveSettings(smsEnabled = false), phone).permissionsMissing,
+            LocalCapabilityBuilder
+                .build(HandLiveSettings(smsEnabled = false, callEnabled = false), phone)
+                .permissionsMissing,
         )
         assertEquals(
             listOf("READ_CONTACTS"),

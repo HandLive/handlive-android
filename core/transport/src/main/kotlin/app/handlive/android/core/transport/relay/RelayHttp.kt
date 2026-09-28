@@ -40,13 +40,30 @@ fun interface RelayHttp {
     ): RelayResponse
 }
 
+/**
+ * This client, telling [onRefused] of every call that met a refused certificate (CONN-03 E7) before that call fails:
+ * a REST call then reports E7 as the `/v1/relay` link does.
+ */
+fun RelayHttp.reportingRefusedCertificates(onRefused: () -> Unit): RelayHttp =
+    RelayHttp { method, path, body, bearer ->
+        try {
+            send(method, path, body, bearer)
+        } catch (e: RelayPinMismatchException) {
+            onRefused()
+            throw e
+        }
+    }
+
 /** No HTTP response: no network, a timeout, a TLS failure (CONN-03 E1). */
 open class RelayUnreachableException(
     message: String,
     cause: Throwable? = null,
 ) : IOException(message, cause)
 
-/** The relay's certificate chain matches none of the pins (CONN-03 E7): never connect, report a security error. */
+/**
+ * The relay's certificate was refused (CONN-03 E7): its chain matches none of the pins, or the platform does not trust
+ * it. Never connect; report a security error.
+ */
 class RelayPinMismatchException(
     cause: Throwable? = null,
 ) : RelayUnreachableException("relay certificate pin mismatch", cause)

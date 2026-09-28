@@ -1,6 +1,7 @@
 package app.handlive.android.ui.main
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -10,18 +11,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.connection.capability.AndroidPermissions
 import app.handlive.android.feature.pairing.revoke.UnpairResult
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DeviceDetailsScreen
 import app.handlive.android.ui.pairing.PairingFlow
 import app.handlive.android.ui.settings.AutoClearScreen
+import app.handlive.android.ui.settings.CallsPrimerScreen
 import app.handlive.android.ui.settings.ConsentScreen
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
 import app.handlive.android.ui.settings.PermissionTarget
 import app.handlive.android.ui.settings.PermissionsScreen
+import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.RestrictedSettingScreen
 import app.handlive.android.ui.settings.SettingsUiState
+import app.handlive.android.ui.settings.SmsPrimerScreen
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.SystemPages
 import kotlinx.coroutines.launch
@@ -50,8 +55,8 @@ fun RouteContent(
             LanguageScreen(AppLanguageSetting.current(), AppLanguageSetting::apply, main::pop)
         }
 
-        Route.Permissions -> {
-            PermissionsRoute(main, environment)
+        is Route.Permissions -> {
+            PermissionsRoute(main, environment, route.backLabel)
         }
 
         Route.Consent -> {
@@ -67,7 +72,11 @@ fun RouteContent(
         }
 
         Route.SmsPermission -> {
-            SmsPermissionRoute(main)
+            PermissionPrimerRoute(main, AndroidPermissions.SMS) { onContinue -> SmsPrimerScreen(onContinue) }
+        }
+
+        Route.CallPermission -> {
+            PermissionPrimerRoute(main, AndroidPermissions.CALLS) { onContinue -> CallsPrimerScreen(onContinue) }
         }
     }
 }
@@ -77,9 +86,9 @@ private fun PairingRoute(main: MainContext) {
     val paired = stringResource(R.string.pairing_paired)
     PairingFlow(
         coordinator = main.dependencies.pairing.coordinator,
-        onPaired = {
+        onPaired = { result ->
             main.feedback.show(HLFeedback(paired))
-            main.pop()
+            main.stack.closePairing(result.firstPair)
         },
         onClose = main::pop,
     )
@@ -134,6 +143,7 @@ private fun AutoClearRoute(main: MainContext) {
 private fun PermissionsRoute(
     main: MainContext,
     environment: PhoneEnvironment,
+    @StringRes backLabel: Int,
 ) {
     val context = LocalContext.current
     val settings = rememberSettings(main)
@@ -141,13 +151,21 @@ private fun PermissionsRoute(
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
-    val state = SettingsUiState(settings, serviceOn, rememberSmsAccess(settings.permissionsRequested))
+    val state =
+        SettingsUiState(
+            settings,
+            serviceOn,
+            rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
+        )
     PermissionsScreen(
         environment = environment,
         autoSend = state.autoSendStatus,
         sms = state.smsStatus,
+        calls = state.callStatus,
         onOpen = { target -> openPermissionTarget(context, main, environment, state, target) },
         onBack = main::pop,
+        backLabel = stringResource(backLabel),
     )
 }
 
@@ -184,12 +202,26 @@ private fun openPermissionTarget(
         }
 
         PermissionTarget.SMS -> {
-            if (state.smsStatus == FeatureStatus.PERMISSION_DENIED) {
-                SystemPages.open(context, SystemPages.appDetails(context))
-            } else {
-                main.push(Route.SmsPermission)
-            }
+            grant(context, main, state, PhoneFeature.SMS)
         }
+
+        PermissionTarget.CALLS -> {
+            grant(context, main, state, PhoneFeature.CALLS)
+        }
+    }
+}
+
+/** SET-01 fields 11 and 16: the feature's primer, or the App info page once its permission is denied for good. */
+private fun grant(
+    context: Context,
+    main: MainContext,
+    state: SettingsUiState,
+    feature: PhoneFeature,
+) {
+    if (state.status(feature) == FeatureStatus.PERMISSION_DENIED) {
+        SystemPages.open(context, SystemPages.appDetails(context))
+    } else {
+        main.push(primerOf(feature))
     }
 }
 

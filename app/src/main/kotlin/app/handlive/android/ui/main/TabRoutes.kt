@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.design.component.HLSymbol
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.connection.capability.AndroidPermissions
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DevicesScreen
 import app.handlive.android.ui.settings.DataActionDialogs
@@ -31,8 +32,8 @@ fun DevicesTab(main: MainContext) {
 }
 
 /**
- * The Settings tab bound to the settings keys, the Accessibility service state, the SMS permissions and the relay,
- * with the dialogs and the result of SET-02 A1–A6.
+ * The Settings tab bound to the settings keys, the Accessibility service state, the SMS and call permissions and the
+ * relay, with the dialogs and the result of SET-02 A1–A6.
  */
 @Composable
 fun SettingsTab(main: MainContext) {
@@ -49,7 +50,8 @@ fun SettingsTab(main: MainContext) {
         SettingsUiState(
             settings,
             serviceOn,
-            rememberSmsAccess(settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
+            rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
             relayAvailable = relay.available,
             relayDeviceRevoked = relay.deviceRevoked,
             relayPinMismatch = relay.pinMismatch,

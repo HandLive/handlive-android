@@ -9,7 +9,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
-import javax.net.ssl.SSLPeerUnverifiedException
 
 /** What happens on the `/v1/relay` WebSocket (CONN-03 API 4). */
 sealed interface RelayLinkEvent {
@@ -25,8 +24,9 @@ sealed interface RelayLinkEvent {
     ) : RelayLinkEvent
 
     /**
-     * The link ended: closed by either side ([code]), refused at the upgrade ([httpStatus] 401 `TOKEN_EXPIRED`, 404
-     * `DEVICE_NOT_FOUND`, 410 `DEVICE_REVOKED`, with [errorCode]), or failed ([pinMismatch] for CONN-03 E7).
+     * The link ended: closed by either side ([code]), refused at the upgrade ([httpStatus] 401 `TOKEN_EXPIRED` or
+     * `SIGNATURE_INVALID`, 404 `DEVICE_NOT_FOUND`, 410 `DEVICE_REVOKED`, with [errorCode]), or failed ([pinMismatch]:
+     * the relay's certificate was refused, CONN-03 E7).
      */
     class Closed(
         val code: Int?,
@@ -134,7 +134,7 @@ class OkHttpRelayLinkFactory(
             val body = response?.let { runCatching { it.body?.string() }.getOrNull() }.orEmpty()
             val errorCode = response?.let { RelayResponse(it.code, body).errorCode }
             events.trySend(
-                RelayLinkEvent.Closed(null, response?.code, errorCode, pinMismatch = t is SSLPeerUnverifiedException),
+                RelayLinkEvent.Closed(null, response?.code, errorCode, pinMismatch = t.refusesCertificate()),
             )
             events.close()
         }

@@ -8,14 +8,16 @@ import androidx.compose.ui.unit.Density
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.design.theme.HandLiveTheme
+import app.handlive.android.feature.pairing.devices.CallAvailability
 import app.handlive.android.feature.pairing.devices.ClipboardAvailability
 import app.handlive.android.feature.pairing.devices.DeviceLink
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.SmsAvailability
+import app.handlive.android.ui.settings.FeatureAccess
+import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.SettingsActions
 import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
-import app.handlive.android.ui.settings.SmsAccessState
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.UnusedAppPause
@@ -36,6 +38,7 @@ object UiSamples {
             clipboard = ClipboardAvailability.OFF_ON_PEER,
             safetyCode = "fc647e0b",
             sms = SmsAvailability.MISSING_PERMISSION,
+            calls = CallAvailability.MISSING_PERMISSION,
         )
 
     val ipad =
@@ -65,10 +68,14 @@ object UiSamples {
      */
     val smsNeedsPermission =
         settings.copy(
-            sms = SmsAccessState(missing = setOf("READ_CONTACTS")),
+            sms = FeatureAccess(missing = setOf("READ_CONTACTS")),
             relayAvailable = true,
             relayDeviceRevoked = true,
         )
+
+    /** Calls on with the call log denied for good ("Permission denied" with "Open Settings", SET-01 E5). */
+    val callsDenied =
+        settings.copy(calls = FeatureAccess(missing = setOf("READ_CALL_LOG"), deniedForGood = setOf("READ_CALL_LOG")))
 
     /** CONN-03 E7 under Internet Connection: the longest text field 21 shows. */
     val relayPinMismatch = settings.copy(relayAvailable = true, relayPinMismatch = true)
@@ -86,9 +93,12 @@ object UiSamples {
 
         override fun setInternet(enabled: Boolean) = Unit
 
-        override fun setSms(enabled: Boolean) = Unit
+        override fun setFeature(
+            feature: PhoneFeature,
+            enabled: Boolean,
+        ) = Unit
 
-        override fun grantSms() = Unit
+        override fun grantFeature(feature: PhoneFeature) = Unit
 
         override fun open(page: SettingsPage) = Unit
     }

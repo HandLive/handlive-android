@@ -15,9 +15,9 @@ import kotlin.random.Random
 /**
  * The phone's presence on `/v1/relay` (CONN-03). The phone keeps no permanent connection: it connects while there is
  * [demand] — a client may be waiting on the relay (after a lost LAN session, a network change, an SMS for a client
- * without a session, an FCM wake-up) — or a relayed session or a pairing rendezvous is open, and it leaves after
- * 5 idle minutes ([RelayConnection]). Failed connections are retried with `RECONNECT_BACKOFF`. Everything runs on the
- * serial [scope]; the public functions may be called from any thread.
+ * without a session, an FCM wake-up) — a [hold] (a call ringing), or a relayed session or a pairing rendezvous is
+ * open, and it leaves after 5 idle minutes ([RelayConnection]). Failed connections are retried with
+ * `RECONNECT_BACKOFF`. Everything runs on the serial [scope]; the public functions may be called from any thread.
  */
 class RelayConnector(
     private val scope: CoroutineScope,
@@ -29,7 +29,9 @@ class RelayConnector(
 ) {
     private val stateFlow = MutableStateFlow(RelayLinkState.OFF)
     private val rendezvous: RelayRendezvousTable = RelayRendezvousTable(scope) { text -> connection.send(text) }
-    private val connection: RelayConnection = RelayConnection(scope, clock, auth, links, owner, rendezvous)
+    private val holds = mutableSetOf<String>()
+    private val connection: RelayConnection =
+        RelayConnection(scope, clock, auth, links, owner, rendezvous).also { it.held = { holds.isNotEmpty() } }
     private var runner: Job? = null
     private var demandUntil = 0L
     private var attempt = 0
@@ -39,6 +41,21 @@ class RelayConnector(
     /** A client may be waiting on the relay: connect, and stay at least `RELAY_IDLE_DISCONNECT`. */
     fun demand() {
         scope.launch { demandNow() }
+    }
+
+    /**
+     * [on]: connects and stays while [key] holds the relay, however long that takes — a call that rings, so a
+     * "Decline" from an iPhone notification arrives quickly (CALL-01 API 4 logic 4). Off: [key] no longer needs the
+     * relay, and `RELAY_IDLE_DISCONNECT` applies again from now.
+     */
+    fun hold(
+        key: String,
+        on: Boolean,
+    ) {
+        scope.launch {
+            val changed = if (on) holds.add(key) else holds.remove(key)
+            if (on || changed) demandNow()
+        }
     }
 
     /**
@@ -60,6 +77,7 @@ class RelayConnector(
     fun stop() {
         scope.launch {
             demandUntil = 0
+            holds.clear()
             rendezvous.endAll()
             runner?.cancel()
             runner = null
@@ -118,7 +136,8 @@ class RelayConnector(
     }
 
     private fun wanted(): Boolean =
-        owner.allowed() && (demandUntil > clock() || !rendezvous.isEmpty || connection.peerCount > 0)
+        owner.allowed() &&
+            (demandUntil > clock() || holds.isNotEmpty() || !rendezvous.isEmpty || connection.peerCount > 0)
 
     private companion object {
         const val OFF_REASON = "off"

@@ -50,6 +50,24 @@ enum class SmsAvailability {
     UNKNOWN,
 }
 
+/** The Calls row of the details (PAIR-02 field 8, SET-02 field 24). */
+enum class CallAvailability {
+    /** Effective between the two devices. */
+    ON,
+
+    /** Turned off on the client ("Off on <device>"), or the client has no calls. */
+    OFF_ON_PEER,
+
+    /** Turned off on this phone, or no telephony. */
+    OFF_HERE,
+
+    /** On at both ends but `READ_PHONE_STATE` is missing on this phone ("Missing permission on the phone"). */
+    MISSING_PERMISSION,
+
+    /** Not connected, or the service is not running: nothing is effective right now. */
+    UNKNOWN,
+}
+
 /** One row and its details screen (PAIR-02 fields 1–10). No `pair_id`, keys or addresses are shown. */
 data class DeviceListItem(
     val pairId: String,
@@ -62,6 +80,7 @@ data class DeviceListItem(
     val clipboard: ClipboardAvailability,
     val safetyCode: String,
     val sms: SmsAvailability = SmsAvailability.UNKNOWN,
+    val calls: CallAvailability = CallAvailability.UNKNOWN,
 )
 
 /**
@@ -72,7 +91,7 @@ data class DeviceListItem(
 object DeviceListModel {
     /**
      * Rows update when a pair, a session, a session's capability, the local clipboard switch or this phone's
-     * capability ([localCapability]: SMS on, `READ_SMS` granted) changes.
+     * capability ([localCapability]: SMS and calls on, `READ_SMS` and `READ_PHONE_STATE` granted) changes.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observe(
@@ -117,8 +136,26 @@ object DeviceListModel {
             clipboard = clipboardAvailability(session, capability, clipboardEnabledHere),
             safetyCode = device.safetyCode,
             sms = smsAvailability(session, capability, local),
+            calls = callAvailability(session, capability, local),
         )
     }
+
+    private fun callAvailability(
+        session: PeerSession?,
+        peer: CapabilityData?,
+        local: CapabilityData?,
+    ): CallAvailability =
+        when {
+            local == null -> CallAvailability.UNKNOWN
+            local.features.call?.enabled != true -> CallAvailability.OFF_HERE
+            peer != null && peer.features.call?.enabled != true -> CallAvailability.OFF_ON_PEER
+            local.missing(READ_PHONE_STATE) -> CallAvailability.MISSING_PERMISSION
+            session?.isEffective(Feature.CALL) == true -> CallAvailability.ON
+            else -> CallAvailability.UNKNOWN
+        }
+
+    private fun CapabilityData.missing(permission: String): Boolean =
+        permissionsMissing.orEmpty().any { it.substringAfterLast('.') == permission }
 
     private fun smsAvailability(
         session: PeerSession?,
@@ -138,7 +175,7 @@ object DeviceListModel {
                 SmsAvailability.OFF_ON_PEER
             }
 
-            local.permissionsMissing.orEmpty().any { it.substringAfterLast('.') == READ_SMS } -> {
+            local.missing(READ_SMS) -> {
                 SmsAvailability.MISSING_PERMISSION
             }
 
@@ -173,6 +210,7 @@ object DeviceListModel {
         }
 
     private const val READ_SMS = "READ_SMS"
+    private const val READ_PHONE_STATE = "READ_PHONE_STATE"
 
     private fun PeerSession.Channel.toLink() =
         when (this) {

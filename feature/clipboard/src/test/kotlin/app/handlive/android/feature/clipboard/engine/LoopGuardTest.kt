@@ -35,6 +35,19 @@ class LoopGuardTest {
     }
 
     @Test
+    fun theClipboardHoldsTheWrittenAndTheSentClipForFiveSeconds() {
+        assertFalse(guard.alreadyHolds(written))
+        guard.onOwnWrite(written, "MacBook của Lan")
+        guard.onSent(sent)
+        assertTrue(guard.alreadyHolds(written))
+        assertTrue(guard.alreadyHolds(sent))
+        assertFalse(guard.alreadyHolds(byteArrayOf(7, 8, 9)))
+        elapsed += ClipLimits.LOOP_WINDOW_MILLIS + 1
+        assertFalse(guard.alreadyHolds(written))
+        assertFalse(guard.alreadyHolds(sent))
+    }
+
+    @Test
     fun copySignalsAreIgnoredForOneSecondAfterAWrite() {
         assertFalse(guard.ignoresSignals())
         guard.onOwnWrite(written, "MacBook của Lan")

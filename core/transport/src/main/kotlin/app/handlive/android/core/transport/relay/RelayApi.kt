@@ -10,9 +10,11 @@ import app.handlive.android.core.protocol.relay.RelayValues
 
 /**
  * The relay endpoints that need the device JWT (0.7.4). An expired token (401 `TOKEN_EXPIRED`) is renewed and the
- * call retried once (0.6.4 step 3); an unknown device (404 `DEVICE_NOT_FOUND`) registers again and retries once
- * (CONN-03 E2) — except for `DELETE /v1/devices/me`, where it already means "done" (SET-02 E6). Callers read the
- * status and `error.code` of the returned [RelayResponse].
+ * call retried once (0.6.4 step 3); a token the relay no longer accepts (401 `SIGNATURE_INVALID`, such as one signed
+ * before the relay's key changed) and an unknown device (404 `DEVICE_NOT_FOUND`) register the device again first
+ * (CONN-03 E2). Where 404 already means "done" — `DELETE /v1/devices/me` (SET-02 E6) and a pair's revocation (PAIR-03
+ * API 3) — nothing registers again: a refused token is only renewed. Callers read the status and `error.code` of the
+ * returned [RelayResponse].
  */
 class RelayApi(
     private val http: RelayHttp,
@@ -29,12 +31,20 @@ class RelayApi(
         return decode(PairsListResponse.serializer(), response.body)
     }
 
-    /** PAIR-03 API 3: 204, or 404 when the pair never reached the relay — both mean revoked. */
+    /**
+     * PAIR-03 API 3: 204, or 404 `DEVICE_NOT_FOUND` when the relay does not know the pair — both mean revoked. That
+     * 404 names the unknown pair, so the device is not registered again for it.
+     */
     suspend fun revokePair(
         pairId: String,
         reason: String,
     ): RelayResponse =
-        authorized("POST", "/v1/pairs/$pairId/revoke", json(PairRevokeRequest.serializer(), PairRevokeRequest(reason)))
+        authorized(
+            "POST",
+            "/v1/pairs/$pairId/revoke",
+            json(PairRevokeRequest.serializer(), PairRevokeRequest(reason)),
+            registerIfUnknown = false,
+        )
 
     /** CONN-04 API 1: the FCM registration token of this phone. */
     suspend fun putPushToken(token: String): RelayResponse =
@@ -59,22 +69,12 @@ class RelayApi(
         registerIfUnknown: Boolean = true,
     ): RelayResponse {
         val first = http.send(method, path, body, auth.token(registerIfUnknown))
-        return when {
-            first.status == HTTP_UNAUTHORIZED && first.errorCode == RelayErrorCode.TOKEN_EXPIRED -> {
-                auth.forget()
-                http.send(method, path, body, auth.token(registerIfUnknown))
-            }
-
-            registerIfUnknown && first.isUnknownDevice() -> {
-                auth.register()
-                auth.forget()
-                http.send(method, path, body, auth.token())
-            }
-
-            else -> {
-                first
-            }
-        }
+        val refusedToken = first.status == HTTP_UNAUTHORIZED && first.errorCode in REFUSED_TOKEN
+        if (!refusedToken && !(registerIfUnknown && first.isUnknownDevice())) return first
+        // CONN-03 E2 registers again, except for a token that only expired (0.6.4 step 3).
+        if (registerIfUnknown && first.errorCode != RelayErrorCode.TOKEN_EXPIRED) auth.register()
+        auth.forget()
+        return http.send(method, path, body, auth.token(registerIfUnknown))
     }
 
     private fun RelayResponse.isUnknownDevice() =
@@ -83,5 +83,8 @@ class RelayApi(
     private companion object {
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_NOT_FOUND = 404
+
+        /** A 401 that a new token may cure: expired, or signed with a key the relay no longer uses. */
+        val REFUSED_TOKEN = setOf(RelayErrorCode.TOKEN_EXPIRED, RelayErrorCode.SIGNATURE_INVALID)
     }
 }

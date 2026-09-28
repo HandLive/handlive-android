@@ -25,7 +25,9 @@ enum class PushKind(
 /**
  * One row of `push_outbox` (0.9.1): a push the relay refused for a temporary reason (CONN-04 E2), retried until
  * [expiresAt]. [bodyB64] is the envelope sealed with `K_push` (never the plaintext); the row goes with its pair.
- * The `pair_id` index serves the cascade delete and is not part of the 0.9.1 design.
+ * The `pair_id` index serves the cascade delete and is not part of the 0.9.1 design; neither is [reason], the
+ * `reason` of `POST /v1/push` the retry needs again: `call_incoming` and `call_missed` share their collapse key
+ * `call:<call_id>` (CALL-01 API 4, CALL-04 API 5), so the key alone cannot tell them apart.
  */
 @Entity(
     tableName = "push_outbox",
@@ -57,7 +59,14 @@ class PushOutboxEntity(
     val nextAttemptAt: Long,
     @ColumnInfo(name = "expires_at")
     val expiresAt: Long,
-)
+    @ColumnInfo(name = "reason", defaultValue = REASON_SMS_NEW)
+    val reason: String = REASON_SMS_NEW,
+) {
+    companion object {
+        /** The rows of version 2 were all new SMS messages (SMS-02 API 2). */
+        const val REASON_SMS_NEW = "sms_new"
+    }
+}
 
 /** Queries of CONN-04 (step 5b, E2) and SET-02 (A4, A5) on `push_outbox`. */
 @Dao
@@ -96,6 +105,13 @@ interface PushOutboxDao {
 
     @Query("DELETE FROM push_outbox WHERE expires_at <= :now")
     suspend fun deleteExpired(now: Long)
+
+    /** A push that no longer makes sense, such as an incoming call that stopped ringing (CALL-01 API 4). */
+    @Query("DELETE FROM push_outbox WHERE collapse_key = :collapseKey AND reason = :reason")
+    suspend fun deleteQueued(
+        collapseKey: String,
+        reason: String,
+    ): Int
 
     /** SET-02 A4/A5. */
     @Query("DELETE FROM push_outbox")

@@ -4,6 +4,7 @@ import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.pairing.PairErrorData
 import app.handlive.android.core.protocol.pairing.PairHelloData
 import app.handlive.android.core.protocol.pairing.PairOp
+import app.handlive.android.core.transport.server.TextMessageSocket
 import app.handlive.android.feature.pairing.invite.PairingInvite
 import app.handlive.android.feature.pairing.testing.FakePairingClient
 import app.handlive.android.feature.pairing.testing.FakeTextSocket
@@ -195,6 +196,46 @@ class PairingExchangeTest {
     @Test
     fun badClientSignatureIsAuthFailedAndNothingIsStored() =
         assertConfirmRefused { offer -> client.confirm(offer, tamper = FakePairingClient.Tamper.SIGNATURE) }
+
+    @Test
+    fun aBrokenConnectionGivesTheWindowBackAsALostClient() =
+        runBlocking {
+            val window = qrWindow()
+            val socket = FakeTextSocket()
+            socket.toPhone.send(client.hello())
+            val broken = FailingSendSocket(socket, java.io.IOException("Broken pipe"))
+            val failed = exchange(window).run(broken) as PairingOutcome.Failed
+            assertEquals(PairingFailure.DISCONNECTED, failed.failure)
+            assertTrue("the next connection may take the window", window.claim())
+        }
+
+    @Test
+    fun anUnexpectedErrorEndsTheExchangeWithInternalAndClosesTheSocket() =
+        runBlocking {
+            val window = qrWindow()
+            val socket = FakeTextSocket()
+            socket.toPhone.send(client.hello())
+            val failing = FailingSendSocket(socket, IllegalStateException("unexpected"), failures = 1)
+            val failed = exchange(window).run(failing) as PairingOutcome.Failed
+            assertEquals(PairingFailure.INTERNAL, failed.failure)
+            assertEquals(
+                ErrorCode.INTERNAL.name,
+                client.read(socket.toClient.receive(), PairErrorData.serializer())?.code,
+            )
+            assertTrue("the socket is closed with a close frame", socket.closeCode != null)
+        }
+
+    /** Fails the first [failures] sends with [error], as a dropped network or an unexpected bug would. */
+    private class FailingSendSocket(
+        private val socket: FakeTextSocket,
+        private val error: Exception,
+        private var failures: Int = Int.MAX_VALUE,
+    ) : TextMessageSocket by socket {
+        override suspend fun sendText(text: String) {
+            if (failures-- > 0) throw error
+            socket.sendText(text)
+        }
+    }
 
     private fun assertRefused(
         window: PairingWindow,

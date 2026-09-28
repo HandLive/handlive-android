@@ -155,6 +155,8 @@ val PairingFailure.message: Int
 
             PairingFailure.PAIRING_CLOSED -> R.string.error_pairing_closed
 
+            PairingFailure.PIN_EXPIRED -> R.string.error_pin_expired
+
             // Field 10: failures without their own text (lost connection, internal error).
             PairingFailure.DISCONNECTED, PairingFailure.INTERNAL -> R.string.error_pairing_failed
         }

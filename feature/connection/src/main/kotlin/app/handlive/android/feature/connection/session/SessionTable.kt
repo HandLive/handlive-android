@@ -14,9 +14,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import java.util.concurrent.ConcurrentHashMap
 
@@ -68,20 +65,20 @@ class SessionTable(
             ).also { it.ledger = ledgers.getOrPut(control.pairId) { EnvelopeLedger(clock) } }
         sessionsFlow.update { it + (control.pairId to peer) }
         val recorder =
-            control.peerCapability
-                .filterNotNull()
-                .onEach {
-                    pairs.recordSeen(
-                        control.pairId,
-                        ProtocolJson.encodeToString(CapabilityData.serializer(), it),
-                    )
-                }.launchIn(scope)
+            CapabilityRecorder(control.peerCapability) {
+                pairs.recordSeen(control.pairId, ProtocolJson.encodeToString(CapabilityData.serializer(), it))
+            }
+        recorder.start(scope)
         try {
             for (message in control.inbound) router.route(peer, message)
         } finally {
-            recorder.cancel()
-            sessionsFlow.update { open -> if (open[control.pairId] === peer) open - control.pairId else open }
-            endedFlow.tryEmit(SessionEnded(control.pairId, control.byeReason.value, channel))
+            try {
+                // Before the session leaves the table, so a push to this client already reads its capability.
+                recorder.finish()
+            } finally {
+                sessionsFlow.update { open -> if (open[control.pairId] === peer) open - control.pairId else open }
+                endedFlow.tryEmit(SessionEnded(control.pairId, control.byeReason.value, channel))
+            }
         }
     }
 
