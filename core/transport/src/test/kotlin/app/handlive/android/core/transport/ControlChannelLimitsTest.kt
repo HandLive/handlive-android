@@ -150,6 +150,21 @@ class ControlChannelLimitsTest {
         }
 
     @Test
+    fun aDirectionThatReachesTheTrackedIdCapIsClosedWith4410() =
+        runBlocking {
+            LoopbackServerFixture(maxTrackedIds = 3).use { small ->
+                small.pairingClient().use { http ->
+                    val channel = small.connect(http, small.addPair())
+                    small.awaitSession()
+                    // The client's capability/hello took one id; two more envelopes reach the cap of 3.
+                    repeat(2) { channel.sendPlaintext(MessageType.CLIPBOARD.wire, event) }
+                    val reason = withTimeout(WAIT_MILLIS) { channel.socket.closeReason.await() }
+                    assertEquals(WsCloseCode.REKEY_FAILED, reason?.code)
+                }
+            }
+        }
+
+    @Test
     fun sessionWithoutAnyFrameForTheIdleTimeoutIsClosedWith4411() =
         runBlocking {
             val channel = fixture.connect(client, fixture.addPair())

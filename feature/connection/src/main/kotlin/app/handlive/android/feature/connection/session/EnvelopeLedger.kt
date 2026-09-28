@@ -30,7 +30,4 @@ class EnvelopeLedger(
         }
 
     suspend fun recordAck(ack: Ack) = lock.withLock { cache.recordAck(ack) }
-
-    /** The `ack` sent for [id], if it is still kept. */
-    suspend fun ackFor(id: String): Ack? = lock.withLock { cache.find(id)?.ack }
 }

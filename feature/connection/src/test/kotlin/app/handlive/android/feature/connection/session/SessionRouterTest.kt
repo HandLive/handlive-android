@@ -134,39 +134,6 @@ class SessionRouterTest {
         }
 
     @Test
-    fun anEnvelopeReplayedLaterInTheKeyEpochIsNeverProcessedAgain() =
-        runTest {
-            // The relay captured an sms/send and plays it back an hour later on the same session keys: the transport
-            // flags the id as already accepted in the epoch; its old ack is gone from the ledger, so nothing answers.
-            var handled = 0
-            router.register(MessageType.CLIPBOARD) { s, envelope ->
-                handled++
-                s.sendAck(Ack.success(envelope.id))
-            }
-            val request = inbound(MessageType.CLIPBOARD, op("push"))
-            router.route(session, request)
-            now += ProcessedEnvelopeCache.WINDOW_MILLIS + 60 * 60 * 1000L
-            router.route(session, request.replayed())
-            assertEquals(1, handled)
-            assertEquals(1, sent.size)
-        }
-
-    @Test
-    fun aFlaggedRetryStillGetsItsOldAckWhileTheLedgerHasIt() =
-        runTest {
-            var handled = 0
-            router.register(MessageType.CLIPBOARD) { s, envelope ->
-                handled++
-                s.sendAck(Ack.success(envelope.id))
-            }
-            val request = inbound(MessageType.CLIPBOARD, op("push"))
-            router.route(session, request)
-            router.route(session, request.replayed())
-            assertEquals(1, handled)
-            assertEquals(listOf(request.id, request.id), sent.map { PlaintextCodec.decodeAck(it.plaintext).re })
-        }
-
-    @Test
     fun unknownRequestIsRefusedWithUnsupportedTypeAndUnknownEventIsIgnored() =
         runTest {
             val request = inbound(MessageType.SMS, op("send"))
@@ -207,8 +174,6 @@ class SessionRouterTest {
         name: String,
         data: JsonObject = JsonObject(emptyMap()),
     ) = PlaintextCodec.encodePayload(Payload(name, data))
-
-    private fun InboundEnvelope.replayed() = InboundEnvelope(type, id, ts, plaintext, replayed = true)
 
     private fun inbound(
         type: MessageType,

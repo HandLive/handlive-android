@@ -1,5 +1,6 @@
 package app.handlive.android.core.transport
 
+import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.capability.CapabilityOp
 import app.handlive.android.core.protocol.capability.SmsFeature
@@ -30,6 +31,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -150,7 +152,7 @@ class ControlChannelHandshakeTest {
         }
 
     @Test
-    fun aRepeatedEnvelopeIsDeliveredFlaggedAsReplayedAndARepeatedCapabilityIsDropped() =
+    fun aRepeatedEnvelopeGetsItsEarlierAckAndIsNeverDeliveredAgain() =
         runBlocking {
             val peer = fixture.addPair()
             val channel = fixture.connect(client, peer)
@@ -167,11 +169,16 @@ class ControlChannelHandshakeTest {
                         MAC_CAPABILITY.copy(model = "Replayed"),
                     ),
                 )
-            repeat(2) { channel.socket.send(Frame.Text(EnvelopeCodec.encode(envelope))) }
-            val first = withTimeout(WAIT_MILLIS) { session.inbound.receive() }
-            val second = withTimeout(WAIT_MILLIS) { session.inbound.receive() }
-            assertEquals(listOf(false, true), listOf(first.replayed, second.replayed))
-            assertEquals(envelope.id, second.id)
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
+            assertEquals(envelope.id, withTimeout(WAIT_MILLIS) { session.inbound.receive() }.id)
+            session.send(MessageType.ACK, PlaintextCodec.encodeAck(Ack.success(envelope.id)))
+            assertEquals(envelope.id, PlaintextCodec.decodeAck(channel.receive().second).re)
+            // The same envelope again: the phone resends its earlier ack and the feature never sees it twice.
+            channel.socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
+            val (again, plaintext) = withTimeout(WAIT_MILLIS) { channel.receive() }
+            assertEquals(MessageType.ACK.wire, again.type)
+            assertEquals(envelope.id, PlaintextCodec.decodeAck(plaintext).re)
+            assertTrue(session.inbound.tryReceive().isFailure)
 
             channel.socket.send(Frame.Text(EnvelopeCodec.encode(update)))
             withTimeout(WAIT_MILLIS) {

@@ -27,33 +27,16 @@ internal object ControlSessionDispatcher {
         session: ControlSession,
         envelope: Envelope,
         plaintext: ByteArray,
-        replayed: Boolean = false,
     ): CloseReason? =
         try {
-            val type = MessageType.fromWire(envelope.type)
-            when {
-                // A repeated `id` (0.5.1 rule 2): an application message goes up flagged so the earlier `ack` of a
-                // request can be resent; a repeated `capability`, `session` or `ack` is dropped.
-                replayed && type in TRANSPORT_TYPES -> null
-
-                else -> dispatchFresh(session, envelope, plaintext, type, replayed)
+            when (MessageType.fromWire(envelope.type)) {
+                MessageType.CAPABILITY -> onCapability(session, plaintext)
+                MessageType.SESSION -> onSession(session, envelope, plaintext)
+                MessageType.ACK -> onAck(session, envelope, plaintext)
+                else -> deliver(session, envelope, plaintext)
             }
         } catch (_: ProtocolException) {
             CloseReason(WsCloseCode.BAD_REQUEST, "bad request")
-        }
-
-    private suspend fun dispatchFresh(
-        session: ControlSession,
-        envelope: Envelope,
-        plaintext: ByteArray,
-        type: MessageType?,
-        replayed: Boolean,
-    ): CloseReason? =
-        when (type) {
-            MessageType.CAPABILITY -> onCapability(session, plaintext)
-            MessageType.SESSION -> onSession(session, envelope, plaintext)
-            MessageType.ACK -> onAck(session, envelope, plaintext)
-            else -> deliver(session, envelope, plaintext, replayed)
         }
 
     /** `capability/hello|update`: ảnh chụp đầy đủ thay bản cũ; `protocol` khác major → 4426. */
@@ -134,14 +117,12 @@ internal object ControlSessionDispatcher {
         session: ControlSession,
         envelope: Envelope,
         plaintext: ByteArray,
-        replayed: Boolean = false,
     ): CloseReason? {
-        session.deliver(InboundEnvelope(envelope.type, envelope.id, envelope.ts, plaintext, replayed))
+        session.deliver(InboundEnvelope(envelope.type, envelope.id, envelope.ts, plaintext))
         return null
     }
 
     private const val BYE_REPLACED = "replaced"
-    private val TRANSPORT_TYPES = setOf(MessageType.CAPABILITY, MessageType.SESSION, MessageType.ACK)
 
     private fun <T> decode(
         serializer: KSerializer<T>,

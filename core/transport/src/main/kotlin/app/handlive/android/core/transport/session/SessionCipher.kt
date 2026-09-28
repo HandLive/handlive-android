@@ -22,6 +22,7 @@ class SessionCipher(
     private val rekeyAfterEnvelopes: Long = TransportConstants.REKEY_AFTER_ENVELOPES,
     private val rekeyAfterAge: Duration = TransportConstants.REKEY_AFTER_AGE,
     private val oldKeyGrace: Duration = TransportConstants.OLD_KEY_GRACE,
+    maxTrackedIds: Int = TransportConstants.MAX_TRACKED_IDS,
 ) {
     var keys: SessionKeys = initialKeys
         private set
@@ -46,18 +47,21 @@ class SessionCipher(
         plaintext: ByteArray,
     ): Envelope = EnvelopeCipher.seal(keys.sendKey(role), header, plaintext).also { sentCount++ }
 
-    /** A decrypted envelope; [replayed] = its `id` was already accepted in this epoch or the previous one. */
+    /**
+     * A decrypted envelope. [replayed]: its `id` was already accepted in this epoch or the previous one; [earlierAck]
+     * is the `ack` plaintext sent for it, if kept. [overflow]: the direction reached `MAX_TRACKED_IDS` (close 4410).
+     */
     class Opened(
         val plaintext: ByteArray,
         val replayed: Boolean,
+        val earlierAck: ByteArray? = null,
+        val overflow: Boolean = false,
     )
 
-    /** `id`s accepted with the current keys, and with the previous keys while those are still accepted (0.5.1). */
-    private var currentIds = HashSet<UUID>()
-    private var previousIds: HashSet<UUID>? = null
+    private val window = ReplayWindow(maxTrackedIds)
 
     /** Number of `id`s kept for replay checks (current and previous epoch). */
-    val trackedIds: Int get() = currentIds.size + (previousIds?.size ?: 0)
+    val trackedIds: Int get() = window.size
 
     /** Giải mã bằng khóa nhận hiện tại, rồi khóa cũ nếu còn hạn; không được → `DECRYPT_FAILED`. */
     fun open(envelope: Envelope): ByteArray = decrypt(envelope).first
@@ -65,17 +69,21 @@ class SessionCipher(
     /**
      * Decrypts like [open], then checks the `id` against every `id` accepted in the key epoch (0.5.1 rule 2,
      * `DEDUP_WINDOW`): the current epoch's set, emptied at rekey, and the previous epoch's while its key is still
-     * accepted. The `id` is recorded only after the envelope decrypted, so a forged one never takes it. The set is
-     * bounded by `REKEY_AFTER` (10,000 envelopes per direction, plus what arrives while a rekey is in flight).
+     * accepted. The `id` is recorded only after the envelope decrypted, so a forged one never takes it, and in the
+     * epoch whose key opened it, even when repeated (a copy sealed with the new key stays a replay later).
      */
     fun accept(envelope: Envelope): Opened {
         val (plaintext, withPrevious) = decrypt(envelope)
-        val id = UUID.fromString(envelope.id)
-        val replayed = id in currentIds || previousIds?.contains(id) == true
-        // Recorded in the epoch whose key opened it, even when repeated: a copy sealed with the new key must stay a
-        // replay after the previous epoch is dropped.
-        (if (withPrevious) checkNotNull(previousIds) else currentIds).add(id)
-        return Opened(plaintext, replayed)
+        val seen = window.record(UUID.fromString(envelope.id), withPrevious)
+        return Opened(plaintext, seen.replayed, seen.earlierAck, seen.overflow)
+    }
+
+    /** The `ack` this side sends for request [re], kept to answer a duplicate for the whole epoch. */
+    fun recordAck(
+        re: String,
+        ack: ByteArray,
+    ) {
+        runCatching { UUID.fromString(re) }.getOrNull()?.let { window.recordAck(it, ack) }
     }
 
     private fun decrypt(envelope: Envelope): Pair<ByteArray, Boolean> {
@@ -95,7 +103,7 @@ class SessionCipher(
     private fun dropExpiredPrevious() {
         if (previousReceiveKey != null && clock() >= previousKeyExpiresAt) {
             previousReceiveKey = null
-            previousIds = null
+            window.dropPrevious()
         }
     }
 
@@ -115,8 +123,7 @@ class SessionCipher(
     ) {
         previousReceiveKey = keys.receiveKey(role)
         previousKeyExpiresAt = clock() + oldKeyGrace.inWholeMilliseconds
-        previousIds = currentIds
-        currentIds = HashSet()
+        window.rotate()
         keys = newKeys
         epoch = newEpoch
         sentCount = 0

@@ -204,8 +204,23 @@ internal class ControlConnectionHandler(
         try {
             val envelope = EnvelopeCodec.decode(text)
             val opened = session.channel.open(envelope)
-            ControlSessionDispatcher.dispatch(session, envelope, opened.plaintext, opened.replayed).also {
-                if (it == null) session.channel.startRekeyIfDue()
+            when {
+                // DEDUP_WINDOW: the rekey did not complete and the direction reached its cap.
+                opened.overflow -> {
+                    CloseReason(WsCloseCode.REKEY_FAILED, "REKEY_FAILED")
+                }
+
+                // 0.5.1 rule 2: the earlier ack again if one was sent; never processed twice.
+                opened.replayed -> {
+                    opened.earlierAck?.let { session.channel.resendAck(it) }
+                    null
+                }
+
+                else -> {
+                    ControlSessionDispatcher.dispatch(session, envelope, opened.plaintext).also {
+                        if (it == null) session.channel.startRekeyIfDue()
+                    }
+                }
             }
         } catch (e: ProtocolException) {
             // `DECRYPT_FAILED` sau bắt tay → 4400, client kết nối lại (CONN-02 E5).

@@ -24,6 +24,12 @@ object TransportConstants {
     val REKEY_AFTER_AGE: Duration = 24.hours
     const val REKEY_AFTER_ENVELOPES = 10_000L
 
+    /** `DEDUP_WINDOW` (0.10): a direction that tracks this many ids without a completed rekey is closed 4410. */
+    const val MAX_TRACKED_IDS = 20_000
+
+    /** Bytes of earlier `ack`s kept to answer duplicates (oldest dropped first); a memory bound only. */
+    const val MAX_TRACKED_ACK_BYTES = 8L * 1024 * 1024
+
     /** Khóa nhận cũ giữ thêm 30 s sau rekey cho envelope đang bay (0.6.3 bước 6). */
     val OLD_KEY_GRACE: Duration = 30.seconds
 

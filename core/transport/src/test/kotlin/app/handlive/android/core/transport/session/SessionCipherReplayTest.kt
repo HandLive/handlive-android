@@ -75,6 +75,29 @@ class SessionCipherReplayTest {
     }
 
     @Test
+    fun aDuplicateGetsItsEarlierAckForTheWholeEpoch() {
+        val request = seal()
+        assertTrue(server.accept(request).earlierAck == null)
+        val ack = "{\"re\":\"${request.id}\",\"ok\":true}".toByteArray()
+        server.recordAck(request.id, ack)
+        now += 23.hours.inWholeMilliseconds
+        assertArrayEquals(ack, server.accept(request).earlierAck)
+        // After a rekey the previous epoch's acks stay while its key is accepted.
+        val keys = SessionKeys(SecureRandomBytes.next(SessionKeys.SECRET_SIZE))
+        server.install(keys, 1)
+        assertArrayEquals(ack, server.accept(request).earlierAck)
+        // An ack for an id the phone never accepted is not kept.
+        server.recordAck(ids.next(), ack)
+        assertTrue(server.trackedIds == 1)
+    }
+
+    @Test
+    fun aDirectionThatReaches20000IdsWithoutARekeyOverflows() {
+        repeat(TransportConstants.MAX_TRACKED_IDS - 1) { assertFalse(server.accept(seal()).overflow) }
+        assertTrue(server.accept(seal()).overflow)
+    }
+
+    @Test
     fun aRekeyEmptiesTheSetOnceThePreviousEpochIsGone() {
         val first = seal()
         server.accept(first)
