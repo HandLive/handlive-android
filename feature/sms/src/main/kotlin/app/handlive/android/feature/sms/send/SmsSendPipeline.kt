@@ -38,11 +38,10 @@ class SmsSendPipeline(
     private val radio: SmsRadio,
     /** The messages sent for clients, by `local_id` (SMS-04 step 5). */
     val registry: SendRegistry,
-    private val clock: () -> Long,
-    /** Monotonic ms (`SystemClock.elapsedRealtime`) for the send limit, so setting the phone's clock cannot reset it. */
-    limitClock: () -> Long = clock,
+    /** The send limit, on a monotonic clock (`SystemClock.elapsedRealtime`): setting the time cannot reset it. */
+    private val limiter: SendLimiter = SendLimiter(registry.clock),
 ) {
-    private val limiter = SendLimiter(limitClock)
+    private val clock = registry.clock
 
     /** Whether a `RATE_LIMITED` refusal of [pairId] should be told to the user now (SMS-04 field 12). */
     fun limitNoticeDue(pairId: String): Boolean = limiter.noticeDue(pairId)

@@ -29,6 +29,7 @@ import app.handlive.android.feature.sms.module.SmsTrace
 import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ObserverState
 import app.handlive.android.feature.sms.observe.ReadStateTracker
+import app.handlive.android.feature.sms.send.SendLimiter
 import app.handlive.android.feature.sms.send.SendRegistry
 import app.handlive.android.feature.sms.send.SimChoices
 import app.handlive.android.feature.sms.send.SmsRadio
@@ -190,7 +191,7 @@ class SmsHarness(
     private val ids = UuidV7Generator(wall)
     private val objects = objectsOf(provider)
     val registry = SendRegistry(wall)
-    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, wall, limitClock = elapsed)
+    val sender = SmsSendPipeline(access, sims, FakeNumbers(), radio, registry, SendLimiter(elapsed))
     private val broadcaster = SmsBroadcaster(sessions, trace)
     private val services =
         SmsServices(

@@ -72,7 +72,8 @@ class SendEntry(
  * belong to (API 4 logic 1). Lost when the service restarts. Not thread-safe: the SMS module serializes access.
  */
 class SendRegistry(
-    private val clock: () -> Long,
+    /** Wall clock of the entries and their statuses; the send pipeline uses it too. */
+    val clock: () -> Long,
     private val capacity: Int = SmsConstants.REGISTRY_CAPACITY,
     private val ttlMillis: Long = SmsConstants.REGISTRY_TTL_MILLIS,
 ) {

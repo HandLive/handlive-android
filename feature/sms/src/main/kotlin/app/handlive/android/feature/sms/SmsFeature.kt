@@ -19,6 +19,7 @@ import app.handlive.android.feature.sms.module.SmsServices
 import app.handlive.android.feature.sms.observe.NewMessageScanner
 import app.handlive.android.feature.sms.observe.ReadStateTracker
 import app.handlive.android.feature.sms.provider.SmsObjects
+import app.handlive.android.feature.sms.send.SendLimiter
 import app.handlive.android.feature.sms.send.SendRegistry
 import app.handlive.android.feature.sms.send.SmsSendPipeline
 import app.handlive.android.feature.sms.sync.SmsHistoryEngine
@@ -81,8 +82,7 @@ class SmsFeature private constructor(
             numbers,
             AndroidSmsRadio(appContext),
             registry,
-            clock,
-            limitClock = SystemClock::elapsedRealtime,
+            SendLimiter(SystemClock::elapsedRealtime),
         )
     private val trace = SmsBenchTrace()
     private val broadcaster = SmsBroadcaster(runtime.sessions, trace)
