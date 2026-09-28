@@ -115,19 +115,25 @@ class RelayConnector(
         runner = scope.launch { run() }
     }
 
-    /** Connects while wanted; waits `RECONNECT_BACKOFF` between failed tries. */
+    /**
+     * Connects while wanted; waits `RECONNECT_BACKOFF` between tries. The backoff goes back to its first step only
+     * after a link stayed open for `BACKOFF_STABLE_MILLIS`; a link that drops sooner counts as a failed try, so a
+     * relay that accepts and then drops at once is not retried every 0.5 s.
+     */
     private suspend fun run() {
         while (wanted()) {
             stateFlow.value = RelayLinkState.CONNECTING
+            var openedAt: Long? = null
             val outcome =
                 connection.connect {
                     stateFlow.value = RelayLinkState.CONNECTED
-                    attempt = 0
+                    openedAt = clock()
                     owner.connected()
                 }
+            val stable = openedAt?.let { clock() - it >= RelayConstants.BACKOFF_STABLE_MILLIS } ?: false
+            if (stable) attempt = 0
             if (outcome == RelayOutcome.IDLE) demandUntil = 0
             if (outcome == RelayOutcome.STOP || !wanted()) break
-            if (outcome == RelayOutcome.CLOSED) attempt = 0
             stateFlow.value = RelayLinkState.BACKOFF
             delay(RelayBackoff.delayMillis(attempt, random))
             attempt++

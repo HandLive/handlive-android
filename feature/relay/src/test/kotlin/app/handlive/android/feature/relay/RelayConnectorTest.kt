@@ -104,6 +104,50 @@ class RelayConnectorTest {
     }
 
     @Test
+    fun aLinkThatDropsWithinThirtySecondsKeepsClimbingTheBackoff() =
+        runTest {
+            val connector = connector()
+            connector.demand()
+            runCurrent()
+            // Accepted, then dropped at once: 0.5 s, then 1 s, then 2 s (each ±20 %), never back to 0.5 s.
+            links.opened.last().end()
+            advanceTimeBy(601)
+            assertEquals(2, links.opened.size)
+            links.opened.last().end()
+            advanceTimeBy(799)
+            assertEquals(2, links.opened.size)
+            advanceTimeBy(402)
+            assertEquals(3, links.opened.size)
+            advanceTimeBy(29_000)
+            links.opened.last().end()
+            advanceTimeBy(1_599)
+            assertEquals(3, links.opened.size)
+            advanceTimeBy(802)
+            assertEquals(4, links.opened.size)
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+        }
+
+    @Test
+    fun aLinkThatStaysThirtySecondsResetsTheBackoff() =
+        runTest {
+            val connector = connector()
+            connector.demand()
+            runCurrent()
+            links.opened.last().end()
+            advanceTimeBy(601)
+            links.opened.last().end()
+            advanceTimeBy(1_201)
+            assertEquals(3, links.opened.size)
+
+            // Connected for 30 s: the next drop starts again at 0.5 s.
+            advanceTimeBy(30_000)
+            links.opened.last().end()
+            advanceTimeBy(601)
+            assertEquals(4, links.opened.size)
+            assertEquals(RelayLinkState.CONNECTED, connector.state.value)
+        }
+
+    @Test
     fun anExpiredTokenIsRenewedOnceAndAnUnknownDeviceRegisteredOnce() =
         runTest {
             val http = FakeRelayHttp { currentTime }
