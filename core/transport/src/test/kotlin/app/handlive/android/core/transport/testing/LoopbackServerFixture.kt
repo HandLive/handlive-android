@@ -15,6 +15,7 @@ import app.handlive.android.core.transport.server.ControlServerConfig
 import app.handlive.android.core.transport.server.ControlServerLimits
 import app.handlive.android.core.transport.server.ControlServerOptions
 import app.handlive.android.core.transport.server.ControlSession
+import app.handlive.android.core.transport.server.PairingEndpoint
 import app.handlive.android.core.transport.tls.TlsIdentity
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -30,6 +31,8 @@ class LoopbackServerFixture(
     limits: ControlServerLimits = ControlServerLimits(),
     /** The phone's capability for each new session's `capability/hello`; later snapshots stay [ANDROID_CAPABILITY]. */
     helloCapability: () -> CapabilityData = { ANDROID_CAPABILITY },
+    /** Serves `/v1/pair` when given. */
+    pairingEndpoint: PairingEndpoint? = null,
 ) : AutoCloseable {
     val serverDeviceId = "39f713d0-a644-853f-8452-9421b9f51b9b"
     val tls: TlsIdentity = sharedIdentity
@@ -47,6 +50,7 @@ class LoopbackServerFixture(
                 localCapability = { ANDROID_CAPABILITY },
                 helloCapability = helloCapability,
                 onSessionEstablished = { established.add(it) },
+                pairingEndpoint = pairingEndpoint,
                 options =
                     ControlServerOptions(
                         host = "127.0.0.1",
@@ -61,6 +65,11 @@ class LoopbackServerFixture(
     }
 
     val url: String get() = "wss://127.0.0.1:$port/v1/ctl"
+
+    val pairUrl: String get() = "wss://127.0.0.1:$port/v1/pair"
+
+    /** A client that pins this fixture's certificate. */
+    fun pairingClient() = pinnedWebSocketClient(tls.certificateSha256())
 
     /** Thêm một cặp mới với `PRK` ngẫu nhiên và trả client C tương ứng. */
     fun addPair(revoked: Boolean = false): TestClientPeer {

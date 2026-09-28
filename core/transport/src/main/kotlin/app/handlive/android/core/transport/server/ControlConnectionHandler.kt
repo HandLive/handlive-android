@@ -18,7 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Vòng đời một kết nối `/v1/ctl` phía S: kiểm soát nhận kết nối (16 kết nối chưa bắt tay, chặn IP — CONN-01 API 3–4),
+ * Vòng đời một kết nối `/v1/ctl` phía S: kiểm soát nhận kết nối (16 kết nối chưa bắt tay, 4 mỗi IP, chặn IP khi sai
+ * `mac` hoặc lỗi trước bắt tay — 4408, `PAIR_UNKNOWN`, 4400 — CONN-01 API 3–4),
  * bắt tay (0.6.3 bước 1–5) trong `HANDSHAKE_TIMEOUT`, rồi vòng nhận envelope mã hóa với bộ canh im lặng 45 s
  * (CONN-02). Không log payload hay plaintext; lỗi chỉ lộ ra qua mã đóng WebSocket (0.8.3).
  */
@@ -50,9 +51,19 @@ internal class ControlConnectionHandler(
                 ticket.release()
             }
         when (result) {
-            null -> socket.close(CloseReason(WsCloseCode.HANDSHAKE_TIMEOUT, "handshake timeout"))
-            is Result.Closed -> result.reason?.let { socket.close(it) }
-            is Result.Established -> serve(socket, frames, result.session)
+            null -> {
+                admission.recordPreHandshakeFailure(remoteAddress)
+                socket.close(CloseReason(WsCloseCode.HANDSHAKE_TIMEOUT, "handshake timeout"))
+            }
+
+            is Result.Closed -> {
+                if (result.reason?.code == WsCloseCode.BAD_REQUEST) admission.recordPreHandshakeFailure(remoteAddress)
+                result.reason?.let { socket.close(it) }
+            }
+
+            is Result.Established -> {
+                serve(socket, frames, result.session)
+            }
         }
     }
 
@@ -123,7 +134,14 @@ internal class ControlConnectionHandler(
         if (hello !is InboundMessage.Text) return Result.Closed(hello.handshakeCloseReason())
         return when (val outcome = handshake.respond(hello.text)) {
             is HandshakeOutcome.Rejected -> {
-                if (outcome.code == ErrorCode.AUTH_FAILED) admission.recordAuthFailure(remoteAddress)
+                when (outcome.code) {
+                    ErrorCode.AUTH_FAILED -> admission.recordAuthFailure(remoteAddress)
+
+                    // `BAD_REQUEST` closes 4400 and is counted by [handle].
+                    ErrorCode.PAIR_UNKNOWN -> admission.recordPreHandshakeFailure(remoteAddress)
+
+                    else -> Unit
+                }
                 outcome.error?.let { socket.send(Frame.Text(EnvelopeCodec.encode(it))) }
                 Result.Closed(CloseReason(outcome.closeCode, outcome.code.name))
             }

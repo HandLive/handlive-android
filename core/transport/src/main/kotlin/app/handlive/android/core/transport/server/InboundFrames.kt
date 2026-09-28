@@ -39,12 +39,20 @@ internal class InboundFrames(
     var lastFrameAt: Long = clock()
         private set
 
-    suspend fun receive(): InboundMessage {
+    /** The next message; [limit] (at most [maxMessageBytes]) caps this one message, such as a small `pair/hello`. */
+    suspend fun receive(limit: Int = maxMessageBytes): InboundMessage {
         val message = ByteArrayOutputStream()
         var result: InboundMessage? = null
         while (result == null) {
             val frame = socket.incoming.receiveCatching().getOrNull()
-            result = if (frame == null) InboundMessage.Closed(null) else accept(frame, message)
+            result =
+                if (frame ==
+                    null
+                ) {
+                    InboundMessage.Closed(null)
+                } else {
+                    accept(frame, message, minOf(limit, maxMessageBytes))
+                }
         }
         return result
     }
@@ -53,6 +61,7 @@ internal class InboundFrames(
     private suspend fun accept(
         frame: Frame,
         message: ByteArrayOutputStream,
+        limit: Int,
     ): InboundMessage? {
         lastFrameAt = clock()
         return when (frame) {
@@ -74,7 +83,7 @@ internal class InboundFrames(
             }
 
             is Frame.Text -> {
-                appendText(frame, message)
+                appendText(frame, message, limit)
             }
         }
     }
@@ -82,8 +91,9 @@ internal class InboundFrames(
     private fun appendText(
         frame: Frame.Text,
         message: ByteArrayOutputStream,
+        limit: Int,
     ): InboundMessage? {
-        if (message.size() + frame.data.size > maxMessageBytes) return InboundMessage.Violation(TOO_BIG)
+        if (message.size() + frame.data.size > limit) return InboundMessage.Violation(TOO_BIG)
         message.write(frame.data)
         return if (frame.fin) InboundMessage.Text(String(message.toByteArray(), Charsets.UTF_8)) else null
     }

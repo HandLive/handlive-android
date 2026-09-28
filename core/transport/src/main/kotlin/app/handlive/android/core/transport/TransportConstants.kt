@@ -36,6 +36,21 @@ object TransportConstants {
     /** At most this many `/v1/ctl` connections may be waiting for their handshake; the next one is closed 4429. */
     const val MAX_UNAUTHENTICATED_CONNECTIONS = 16
 
+    /** Of those, at most this many from one IP (`CTL_PREAUTH_LIMIT`, CONN-01 API 3). */
+    const val MAX_UNAUTHENTICATED_PER_ADDRESS = 4
+
+    /**
+     * Handshake timeouts (4408), `PAIR_UNKNOWN` and `BAD_REQUEST` before the handshake: this many within
+     * [PRE_HANDSHAKE_FAILURE_WINDOW] from one IP block it for [IP_BLOCK_DURATION] (`CTL_IP_BLOCK`, CONN-01 API 4).
+     */
+    const val PRE_HANDSHAKE_FAILURES_BEFORE_BLOCK = 10
+    val PRE_HANDSHAKE_FAILURE_WINDOW: Duration = 5.minutes
+
+    /** `/v1/pair` admission (`PAIR_CONN_LIMIT`, PAIR-01 API 2): connections at once, per IP, first-message cap. */
+    const val PAIR_CONNECTIONS = 4
+    const val PAIR_CONNECTIONS_PER_ADDRESS = 2
+    const val PAIR_HELLO_MAX_BYTES = 8 * 1024
+
     /** Wrong `mac` this many times within [AUTH_FAILURE_WINDOW] from one IP blocks that IP (CONN-01 API 4). */
     const val AUTH_FAILURES_BEFORE_BLOCK = 5
     val AUTH_FAILURE_WINDOW: Duration = 1.minutes

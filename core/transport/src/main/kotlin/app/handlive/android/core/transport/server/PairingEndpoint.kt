@@ -1,6 +1,8 @@
 package app.handlive.android.core.transport.server
 
 import app.handlive.android.core.protocol.envelope.Envelope
+import app.handlive.android.core.transport.TransportConstants
+import app.handlive.android.core.transport.WsCloseCode
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
@@ -27,15 +29,36 @@ fun interface PairingEndpoint {
     suspend fun handle(socket: TextMessageSocket)
 }
 
-/** [TextMessageSocket] over a raw Ktor session, reusing the `/v1/ctl` frame reader (pings answered, 256 KiB cap). */
+/**
+ * [TextMessageSocket] over a raw Ktor session, reusing the `/v1/ctl` frame reader (pings answered, 256 KiB cap). The
+ * first message (`pair/hello`) is read with an 8 KiB cap; a larger one closes the socket 4400 (PAIR-01 API 2).
+ */
 internal class RawTextMessageSocket(
     private val socket: WebSocketSession,
     override val remoteAddress: String,
     clock: () -> Long,
 ) : TextMessageSocket {
     private val frames = InboundFrames(socket, Envelope.MAX_BYTES, clock)
+    private var first = true
 
-    override suspend fun receiveText(): String? = (frames.receive() as? InboundMessage.Text)?.text
+    override suspend fun receiveText(): String? {
+        val limit = if (first) TransportConstants.PAIR_HELLO_MAX_BYTES else Envelope.MAX_BYTES
+        first = false
+        return when (val message = frames.receive(limit)) {
+            is InboundMessage.Text -> {
+                message.text
+            }
+
+            is InboundMessage.Violation -> {
+                socket.close(CloseReason(WsCloseCode.BAD_REQUEST, "BAD_REQUEST"))
+                null
+            }
+
+            is InboundMessage.Closed -> {
+                null
+            }
+        }
+    }
 
     override suspend fun sendText(text: String) = socket.send(Frame.Text(text))
 

@@ -16,6 +16,8 @@ import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocketRaw
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import kotlinx.coroutines.CancellationException
 import java.net.BindException
 import kotlin.time.Duration
@@ -57,6 +59,7 @@ class ControlServer(
 ) {
     val sessions = ActiveSessionRegistry()
     private val handler = ControlConnectionHandler(config, sessions)
+    private val pairAdmission = ConnectionAdmission(config.options.limits.pairing, config.options.clock)
 
     /** Connections admitted but still in their handshake (CONN-01 API 3: at most 16). */
     val pendingHandshakes: Int get() = handler.admission.pendingHandshakes
@@ -146,9 +149,18 @@ class ControlServer(
                 webSocketRaw(TransportConstants.CTL_PATH) { handler.handle(this, call.request.local.remoteAddress) }
                 config.pairingEndpoint?.let { endpoint ->
                     webSocketRaw(TransportConstants.PAIR_PATH) {
-                        endpoint.handle(
-                            RawTextMessageSocket(this, call.request.local.remoteAddress, config.options.clock),
-                        )
+                        val address = call.request.local.remoteAddress
+                        // PAIR-01 API 2 logic 5: own admission, held for the whole connection.
+                        val ticket = pairAdmission.admit(address)
+                        if (ticket == null) {
+                            close(CloseReason(WsCloseCode.RATE_LIMITED, "RATE_LIMITED"))
+                        } else {
+                            try {
+                                endpoint.handle(RawTextMessageSocket(this, address, config.options.clock))
+                            } finally {
+                                ticket.release()
+                            }
+                        }
                     }
                 }
             }
