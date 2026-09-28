@@ -23,6 +23,9 @@ class SmsError(
     companion object {
         fun featureDisabled() = SmsError(ErrorCode.FEATURE_DISABLED, "SMS is turned off on the phone")
 
+        /** SMS is off on the client that asked (its latest `capability`), group 5 rules. */
+        fun notInEffect() = SmsError(ErrorCode.FEATURE_DISABLED, "SMS is not in effect for this session")
+
         /** SMS-01 E2, SMS-04 E3: `details.permission` is the full name, `android.permission.READ_SMS`. */
         fun permissionMissing(shortName: String) =
             SmsError(

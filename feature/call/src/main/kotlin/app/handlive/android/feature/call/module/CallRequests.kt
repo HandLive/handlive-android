@@ -5,6 +5,7 @@ import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.call.CallLogSyncResponse
+import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.call.log.LogSyncReply
 import app.handlive.android.feature.connection.session.PeerSession
 import kotlinx.coroutines.CancellationException
@@ -25,7 +26,9 @@ fun interface CallPermissionListener {
  * The `ack`s of the call requests: `call_event/action` (CALL-02 API 1, on the A-CALL thread) and
  * `call_event/log_sync` (CALL-04 API 1, on the IO pool). An unexpected failure becomes `INTERNAL`; a
  * `PERMISSION_MISSING` also asks the phone to suggest the permission. A session that closed meanwhile gets nothing —
- * the client retries on its next session.
+ * the client retries on its next session. Both requests are refused with `FEATURE_DISABLED` first when calls are not
+ * in effect for the session that sent them (group 6 rules: off on either side, or `READ_PHONE_STATE` missing),
+ * whatever other sessions allow.
  */
 class CallRequests(
     private val services: CallServices,
@@ -40,8 +43,12 @@ class CallRequests(
         val action = (data[ACTION] as? JsonPrimitive)?.contentOrNull.orEmpty()
         services.trace.actionReceived(callId, re, session, action)
         val error =
-            guarded({ CallError.internal("The call could not be controlled") }) {
-                services.actions.perform(data, mac = session.peerPlatform == PeerPlatform.MACOS)
+            if (!session.isEffective(Feature.CALL)) {
+                CallError.notInEffect()
+            } else {
+                guarded({ CallError.internal("The call could not be controlled") }) {
+                    services.actions.perform(data, mac = session.peerPlatform == PeerPlatform.MACOS)
+                }
             }
         reply(session, error?.ack(re) ?: Ack.success(re))
         services.trace.actionAckSent(callId, re, session, error?.code?.name)
@@ -54,7 +61,12 @@ class CallRequests(
         data: JsonObject,
     ) {
         // CALL-04 E6: the call log could not be read (SecurityException, SQLiteException…).
-        val reply = guarded({ LogSyncReply.Refused(CallError.internal()) }) { services.logs.requests.answer(data) }
+        val reply =
+            if (!session.isEffective(Feature.CALL)) {
+                LogSyncReply.Refused(CallError.notInEffect())
+            } else {
+                guarded({ LogSyncReply.Refused(CallError.internal()) }) { services.logs.requests.answer(data) }
+            }
         when (reply) {
             is LogSyncReply.Page -> {
                 reply(session, Ack.success(re, json(reply.page)))

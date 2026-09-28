@@ -70,6 +70,10 @@ class SmsModule(
     val handler =
         EnvelopeHandler { session, envelope ->
             val payload = runCatching { PlaintextCodec.decodePayload(envelope.plaintext) }.getOrNull()
+            if (payload?.op in REQUESTS && !smsOnForClient(session)) {
+                scope.launch { replies.refuse(session, envelope.id, SmsError.notInEffect()) }
+                return@EnvelopeHandler
+            }
             when (payload?.op) {
                 SmsOp.SYNC -> scope.launch(reads) { replies.answer(session, envelope) { syncPage(payload.data) } }
 
@@ -187,8 +191,19 @@ class SmsModule(
         }
     }
 
+    /**
+     * Group 5 rules: SMS must be on for the client that sent the request, per its latest `capability`, whatever other
+     * sessions allow. The phone's own `feature.sms` and its permissions are checked afterwards by [SmsRequests], so a
+     * missing permission keeps `PERMISSION_MISSING`.
+     */
+    private fun smsOnForClient(session: PeerSession): Boolean =
+        session.peerCapability.value
+            ?.features
+            ?.let(Feature.SMS::enabledIn) == true
+
     private companion object {
         const val LOCAL_ID = "local_id"
+        val REQUESTS = setOf(SmsOp.SYNC, SmsOp.HISTORY, SmsOp.SEND)
 
         fun <T> json(
             serializer: KSerializer<T>,

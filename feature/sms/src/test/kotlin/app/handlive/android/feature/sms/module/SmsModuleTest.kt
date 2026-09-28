@@ -82,6 +82,37 @@ class SmsModuleTest {
         }
 
     @Test
+    fun everyRequestFromASessionWithoutSmsIsFeatureDisabledWhateverOtherSessionsAllow() =
+        runTest {
+            val h = SmsHarness(this)
+            h.connect(h.mac, h.iphone)
+            h.iphone.smsOff()
+            // A missing permission does not hide the session check: SMS off on the client comes first.
+            h.access.missing += "SEND_SMS"
+            h.request(h.iphone, "sync", """{"thread_limit":200,"per_thread_limit":50}""")
+            h.request(h.iphone, "history", """{"thread_id":42,"before_ts":1,"limit":50}""")
+            h.request(
+                h.iphone,
+                "send",
+                """{"local_id":"${h.newLocalId()}","addresses":["+84901234567"],"text":"hi"}""",
+            )
+            assertEquals(
+                List(3) { ErrorCode.FEATURE_DISABLED.name },
+                h.iphone.acks().map { it.error?.code },
+            )
+            assertTrue(h.radio.sent.isEmpty())
+            assertTrue(h.permissionsAsked.isEmpty())
+            // The Mac, with SMS in effect, is still answered.
+            h.request(h.mac, "sync", """{"thread_limit":200,"per_thread_limit":50}""")
+            assertTrue(
+                h.mac
+                    .acks()
+                    .single()
+                    .ok,
+            )
+        }
+
+    @Test
     fun eventsAndUnknownOpsFromAClientAreIgnored() =
         runTest {
             val h = SmsHarness(this)

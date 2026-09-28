@@ -108,6 +108,21 @@ class CallActionTest {
         }
 
     @Test
+    fun aSessionWithoutCallsIsRefusedWhateverOtherSessionsAllow() =
+        runTest {
+            val h = CallHarness(this)
+            h.connect(h.mac, h.iphone)
+            h.iphone.effective.value = emptySet()
+            // Checked before the permissions: nothing is suggested to the phone.
+            h.access.granted.clear()
+            assertError(ErrorCode.FEATURE_DISABLED, h.action(h.iphone, "", "end"))
+            val sync = h.request(h.iphone, "log_sync", """{"limit":200}""")
+            assertError(ErrorCode.FEATURE_DISABLED, h.iphone.acks().last { it.re == sync })
+            assertTrue(h.permissionsAsked.isEmpty())
+            assertTrue(h.telecom.calls.isEmpty())
+        }
+
+    @Test
     fun malformedActionsAreBadRequests() =
         runTest {
             val h = CallHarness(this)

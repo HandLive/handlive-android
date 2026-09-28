@@ -4,6 +4,8 @@ import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.protocol.capability.CapabilityFeatures
+import app.handlive.android.core.protocol.capability.SmsFeature
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
@@ -105,6 +107,9 @@ class MemoryObserverState : ObserverState {
     }
 }
 
+private fun capabilityWith(sms: Boolean) =
+    CapabilityData(1, "1.0.0 (100)", "macos", "15.0", "Mac15,3", CapabilityFeatures(sms = SmsFeature(sms)))
+
 /** A connected client as the phone sees it: everything Android sends it, decoded. */
 class FakeClient(
     val name: String,
@@ -119,6 +124,9 @@ class FakeClient(
 
     val sent = mutableListOf<Sent>()
     val effective = MutableStateFlow(setOf(Feature.SMS))
+
+    /** The client's latest `capability`: SMS on by default; [smsOff] turns it off on the client side. */
+    val capability = MutableStateFlow<CapabilityData?>(capabilityWith(sms = true))
     var session = newSession(clock, platform)
         private set
 
@@ -129,7 +137,7 @@ class FakeClient(
         PeerSession.PeerInfo(pairId, "$pairId-device", name, platform),
         PeerSession.Channel.LAN,
         effective,
-        MutableStateFlow<CapabilityData?>(null),
+        capability,
         { type, plaintext, _ -> sent += Sent(type, plaintext) },
         clock,
     )
@@ -137,6 +145,11 @@ class FakeClient(
     /** A new `/v1/ctl` session of the same pair (CONN-02 reconnect, CONN-03 switch). */
     fun reconnect(clock: () -> Long) {
         session = newSession(clock, session.peerPlatform)
+    }
+
+    fun smsOff() {
+        capability.value = capabilityWith(sms = false)
+        effective.value = effective.value - Feature.SMS
     }
 
     fun acks(): List<Ack> = sent.filter { it.type == MessageType.ACK }.map { PlaintextCodec.decodeAck(it.plaintext) }
