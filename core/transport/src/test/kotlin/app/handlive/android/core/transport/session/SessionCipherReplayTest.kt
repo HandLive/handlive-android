@@ -10,6 +10,7 @@ import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.transport.TransportConstants
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -87,14 +88,21 @@ class SessionCipherReplayTest {
         server.install(keys, 1)
         assertArrayEquals(ack, server.accept(request).earlierAck)
         // An ack for an id the phone never accepted is not kept.
-        server.recordAck(ids.next(), ack)
-        assertTrue(server.trackedIds == 1)
+        val unknown = seal()
+        server.recordAck(unknown.id, ack)
+        assertNull(server.accept(unknown).earlierAck)
     }
 
     @Test
     fun aDirectionThatReaches20000IdsWithoutARekeyOverflows() {
         repeat(TransportConstants.MAX_TRACKED_IDS - 1) { assertFalse(server.accept(seal()).overflow) }
         assertTrue(server.accept(seal()).overflow)
+    }
+
+    @Test
+    fun aHugeRekeyThresholdDoesNotOverflowTheIdCap() {
+        val lax = SessionCipher(initial, PeerRole.SERVER, { now }, rekeyAfterEnvelopes = Long.MAX_VALUE)
+        assertFalse(lax.accept(seal()).overflow)
     }
 
     @Test

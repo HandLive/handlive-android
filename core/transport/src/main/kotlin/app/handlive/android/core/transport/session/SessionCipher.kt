@@ -58,7 +58,10 @@ class SessionCipher(
     )
 
     /** Capped at twice [rekeyAfterEnvelopes] (`MAX_TRACKED_IDS` = 20,000 with the spec values). */
-    private val window = ReplayWindow(TRACKED_IDS_PER_REKEY * rekeyAfterEnvelopes.toInt())
+    private val window =
+        ReplayWindow(
+            (rekeyAfterEnvelopes.coerceIn(1L, Int.MAX_VALUE / TRACKED_IDS_PER_REKEY) * TRACKED_IDS_PER_REKEY).toInt(),
+        )
 
     /** Number of `id`s kept for replay checks (current and previous epoch). */
     val trackedIds: Int get() = window.size
@@ -132,6 +135,6 @@ class SessionCipher(
     }
 
     private companion object {
-        const val TRACKED_IDS_PER_REKEY = 2
+        const val TRACKED_IDS_PER_REKEY = 2L
     }
 }
