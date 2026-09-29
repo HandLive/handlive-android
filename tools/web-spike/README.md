@@ -49,21 +49,24 @@ Turn it off again after the test, the same way.
 ## Log format
 
 ```
-HLWEB ts=… ev=active browser=chrome ver=129.0.… api=35 host=en.wikipedia.org hash=3fa1… host_only=true private=false via=id source=com.android.chrome:id/url_bar secure=no
+HLWEB ts=… ev=active browser=chrome ver=129.0.… api=35 host=en.wikipedia.org hash=3fa1… host_only=true scheme=assumed private=false via=id source=com.android.chrome:id/url_bar secure=no
 HLWEB ts=… ev=private browser=chrome ver=… api=35 private=true marker=id:incognito_badge via=id source=… secure=yes
-HLWEB ts=… ev=inactive browser=chrome hash=3fa1… reason=left|screen_off|private
+HLWEB ts=… ev=inactive browser=chrome hash=3fa1… reason=left|screen_off|private [front=<package>|none]
 HLWEB ts=… ev=nobar browser=firefox … reason=no_url_bar
 HLWEB ts=… ev=stats events=1234 cpu_ms=210 nodes=5821
 ```
 
 - `ev=active`: the address was stable for 1.5 s (`WEB_SETTLE`) and the bar was not focused. `host_only=true`: the bar
-  showed only the host (the real path is unknown). `via=id`: found by a known view id; `via=fallback`: by the first
+  showed only the host (the real path is unknown). `scheme=assumed`: the bar hid the scheme and `https://` was
+  assumed (Chrome hides `http://` as well, so a plain http page would be sent as https). `via=id`: found by a known view id; `via=fallback`: by the first
   editable field holding an address (then `private=unknown`: the product would not send).
 - `ev=private`: a private marker (view id or content description) was found, or `secure=yes` — no host is logged.
 - `secure` (API 34+ only): `yes` when the window has FLAG_SECURE (a window screenshot fails with the secure-window
   error; the picture is discarded at once), `no`, `err<code>`, or `n/a` below API 34.
 - `ev=inactive`: the browser left the foreground (checked every 2 s while a page is active), the screen went off, or
-  the page turned private.
+  the page turned private. With `reason=left`, `front=` names the package now in front; a missing active window
+  (`front=none`) ends the page only when it is seen twice in a row, because the root is briefly null while the
+  keyboard closes.
 - `ev=stats` every 5 minutes, or on demand: events received, main-thread CPU ms spent by the service, nodes read.
 
 Where to read it: `adb logcat -s HLWEB`, `adb pull /sdcard/Android/data/app.handlive.spike.web/files/hlweb.log`, the
