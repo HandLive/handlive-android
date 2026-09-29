@@ -15,6 +15,7 @@ import android.view.accessibility.AccessibilityEvent
 import app.handlive.spike.web.logic.BrowserAdapter
 import app.handlive.spike.web.logic.BrowserAdapters
 import app.handlive.spike.web.logic.ForegroundCheck
+import app.handlive.spike.web.logic.FrontPackage
 import app.handlive.spike.web.logic.NormalizedUrl
 import app.handlive.spike.web.logic.PageLogLine
 import app.handlive.spike.web.logic.PrivateState
@@ -25,8 +26,8 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * "HandLive Browser Pages" spike service (W3). It hears only from the supported browsers (`android:packageNames`)
- * and only window state and content changes, reads the URL bar through a per-browser adapter, waits until the
+ * "HandLive Browser Pages" spike service (W3). It hears window changes from every package (so HOME can end a page
+ * on Android 16), reads the URL bar only for supported browsers through a per-browser adapter, waits until the
  * address has been stable for `WEB_SETTLE`, checks the private mode, and logs one `HLWEB` line per page. It sends
  * nothing anywhere: the app has no network permission.
  */
@@ -103,9 +104,15 @@ class BrowserPagesService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         events++
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED
         ) {
             return
+        }
+        // Another app (or the launcher after HOME) can arrive as WINDOWS_CHANGED only: end the page at once.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED && current != null) {
+            measured { checkStillInBrowser() }
+            if (current == null) return
         }
         // Content changes arrive in bursts while a page loads: inspect the window at most every INSPECT_COALESCE_MS.
         if (!inspectPending) {
@@ -125,10 +132,10 @@ class BrowserPagesService : AccessibilityService() {
 
     private fun inspect() {
         inspectPending = false
-        val info = rootInActiveWindow
-        val front = info?.packageName?.toString()
+        val front = frontPackage()
         val adapter = BrowserAdapters.forPackage(front)
-        if (info == null || adapter == null) {
+        val info = rootInActiveWindow
+        if (info == null || adapter == null || info.packageName?.toString() != front) {
             // Same rule as the poll: a null root is a transient gap until it repeats; another app ends the page.
             if (foreground.observe(front) == ForegroundCheck.Verdict.LEFT) endPage("left", front ?: "none")
             return
@@ -231,8 +238,23 @@ class BrowserPagesService : AccessibilityService() {
     }
 
     private fun checkStillInBrowser() {
-        val front = rootInActiveWindow?.packageName?.toString()
+        val front = frontPackage()
         if (foreground.observe(front) == ForegroundCheck.Verdict.LEFT) endPage("left", front ?: "none")
+    }
+
+    /** Package of the window in front: windows list first (HOME on Android 16), else rootInActiveWindow. */
+    private fun frontPackage(): String? {
+        val snapshots =
+            windows?.map { window ->
+                FrontPackage.Window(
+                    packageName = window.root?.packageName?.toString(),
+                    focused = window.isFocused,
+                    active = window.isActive,
+                    layer = window.layer,
+                    application = window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION,
+                )
+            }
+        return FrontPackage.of(snapshots, rootInActiveWindow?.packageName?.toString())
     }
 
     /** `web/inactive` in the product: the reported page is no longer in front. */

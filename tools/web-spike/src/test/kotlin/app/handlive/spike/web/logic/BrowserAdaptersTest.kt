@@ -38,12 +38,27 @@ class BrowserAdaptersTest {
     }
 
     @Test
-    fun serviceConfigurationListsExactlyTheAdapterPackages() {
+    fun serviceConfigurationOmitsPackageNamesSoHomeCanEndAPage() {
+        // packageNames would hide the launcher from the leave poll on Android 16; browsers are filtered in code.
         val xml = File("src/main/res/xml/browser_pages_accessibility.xml").readText()
-        val declared = Regex("android:packageNames=\"([^\"]+)\"").find(xml)!!.groupValues[1].split(',')
-        assertEquals(BrowserAdapters.packageNames.sorted(), declared.sorted())
+        assertTrue(!xml.contains("android:packageNames="))
+        assertTrue(xml.contains("flagRetrieveInteractiveWindows"))
+        assertTrue(xml.contains("typeWindowsChanged"))
         assertTrue(xml.contains("android:canRetrieveWindowContent=\"true\""))
         assertTrue(xml.contains("android:notificationTimeout=\"500\""))
+        assertEquals(
+            listOf(
+                "com.android.chrome",
+                "com.sec.android.app.sbrowser",
+                "org.mozilla.firefox",
+                "com.microsoft.emmx",
+                "com.brave.browser",
+                "com.opera.browser",
+                "com.vivaldi.browser",
+                "com.duckduckgo.mobile.android",
+            ).sorted(),
+            BrowserAdapters.packageNames.sorted(),
+        )
     }
 
     @Test
