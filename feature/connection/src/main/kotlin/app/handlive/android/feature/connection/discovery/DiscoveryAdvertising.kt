@@ -20,9 +20,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 
 /**
- * Advertises the phone on the LAN while A-SVC runs (CONN-01 API 1): instance `HL-<6 hex>` new at every start, TXT
- * `v`, the hourly hint of every active pair, and `pr`/`pm` during pairing. The hints are recomputed at each full
- * hour and whenever pairs change; a new default network re-registers (CONN-02 step 1).
+ * Advertises the phone on the LAN while A-SVC runs (CONN-01 API 1): instance `HL-<6 hex>` stable for this install
+ * (avoids stale Bonjour ghosts on the Mac after every process restart), TXT `v`, the hourly hint of every active
+ * pair, and `pr`/`pm` during pairing. The hints are recomputed at each full hour and whenever pairs change; a new
+ * default network re-registers (CONN-02 step 1).
  */
 class DiscoveryAdvertising(
     context: Context,
@@ -40,8 +41,7 @@ class DiscoveryAdvertising(
         pairingAdvert: Flow<PairingAdvert>,
     ) {
         val mdns = MdnsAdvertiser(NsdMdnsRegistrar(appContext), scope, clock).also { advertiser = it }
-        val instanceName =
-            INSTANCE_PREFIX + SecureRandomBytes.next(INSTANCE_BYTES).joinToString("") { "%02x".format(it) }
+        val instanceName = stableInstanceName(appContext)
         combine(pairs.observeActive(), hourTicks(), pairingAdvert, networkVersion) { _, _, advert, network ->
             advert to
                 network
@@ -114,5 +114,17 @@ class DiscoveryAdvertising(
         const val INSTANCE_PREFIX = "HL-"
         const val INSTANCE_BYTES = 3
         const val HOUR_MARGIN_MILLIS = 1_000L
+        const val MDNS_PREFS = "handlive_mdns"
+        const val INSTANCE_KEY = "instance_name"
+
+        /** One Bonjour instance name per install so Mac caches do not accumulate dead `HL-*` names. */
+        fun stableInstanceName(context: Context): String {
+            val prefs = context.getSharedPreferences(MDNS_PREFS, Context.MODE_PRIVATE)
+            prefs.getString(INSTANCE_KEY, null)?.takeIf { it.startsWith(INSTANCE_PREFIX) }?.let { return it }
+            val name =
+                INSTANCE_PREFIX + SecureRandomBytes.next(INSTANCE_BYTES).joinToString("") { "%02x".format(it) }
+            prefs.edit().putString(INSTANCE_KEY, name).apply()
+            return name
+        }
     }
 }
