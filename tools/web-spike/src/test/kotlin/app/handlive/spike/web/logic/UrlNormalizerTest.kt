@@ -32,6 +32,14 @@ class UrlNormalizerTest {
     }
 
     @Test
+    fun schemeShownTellsAnAssumedHttpsFromOneTheBarShowed() {
+        // Chrome 91 hides both http:// and https:// in the idle bar: the https in the address is then a guess.
+        assertFalse(UrlNormalizer.normalize("example.com/plain-http")!!.schemeShown)
+        assertTrue(UrlNormalizer.normalize("http://example.com/plain-http")!!.schemeShown)
+        assertTrue(UrlNormalizer.normalize("https://example.com/")!!.schemeShown)
+    }
+
+    @Test
     fun hostWithPortAndLocalhostAreNotMistakenForSchemes() {
         assertEquals("https://example.com:8443/x", UrlNormalizer.normalize("example.com:8443/x")!!.url)
         assertEquals("https://localhost:3000", UrlNormalizer.normalize("localhost:3000")!!.url)

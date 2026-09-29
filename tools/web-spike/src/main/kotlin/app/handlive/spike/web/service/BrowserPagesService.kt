@@ -197,6 +197,7 @@ class BrowserPagesService : AccessibilityService() {
             "host" to candidate.url.host,
             "hash" to hash,
             "host_only" to candidate.url.hostOnly,
+            "scheme" to if (candidate.url.schemeShown) "shown" else "assumed",
             "private" to if (privateState == PrivateState.Normal) "false" else "unknown",
             *common,
         )

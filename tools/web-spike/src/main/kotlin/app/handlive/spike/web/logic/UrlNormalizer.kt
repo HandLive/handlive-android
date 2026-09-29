@@ -12,11 +12,14 @@ import java.util.Locale
  * @property host the host alone, lower case ASCII: the only part of the address the spike ever logs.
  * @property hostOnly true when the bar showed no scheme and no path (Chrome's simplified bar), so [url] is the
  *   origin only and the real page path is unknown — one of the questions gate G6 answers per browser.
+ * @property schemeShown true when the bar showed the scheme; false when `https://` was assumed (Chrome 91 hides
+ *   `http://` too, so a plain http page would be sent as https).
  */
 data class NormalizedUrl(
     val url: String,
     val host: String,
     val hostOnly: Boolean,
+    val schemeShown: Boolean,
 )
 
 /**
@@ -48,7 +51,7 @@ object UrlNormalizer {
         val url = parsed.first
         if (url.toByteArray(Charsets.UTF_8).size > MAX_URL_BYTES) return null
         val hostOnly = !hasScheme && parsed.second
-        return NormalizedUrl(url = url, host = parsed.third, hostOnly = hostOnly)
+        return NormalizedUrl(url = url, host = parsed.third, hostOnly = hostOnly, schemeShown = hasScheme)
     }
 
     /** `example.com:8080/x` and `localhost:3000` have a colon but no scheme: a host and a port follow. */
