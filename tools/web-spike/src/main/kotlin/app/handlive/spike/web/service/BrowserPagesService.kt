@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import app.handlive.spike.web.logic.BrowserAdapter
 import app.handlive.spike.web.logic.BrowserAdapters
+import app.handlive.spike.web.logic.ForegroundCheck
 import app.handlive.spike.web.logic.NormalizedUrl
 import app.handlive.spike.web.logic.PageLogLine
 import app.handlive.spike.web.logic.PrivateState
@@ -39,6 +40,7 @@ class BrowserPagesService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val gate = SettleGate<String>()
     private val counter = NodeCounter()
+    private val foreground = ForegroundCheck({ BrowserAdapters.forPackage(it) != null })
     private val dumpExecutor = Executors.newSingleThreadExecutor()
     private var candidates = mutableMapOf<String, Candidate>()
     private var current: Pair<String, String>? = null // browser id, hash of the page last reported active
@@ -124,11 +126,14 @@ class BrowserPagesService : AccessibilityService() {
     private fun inspect() {
         inspectPending = false
         val info = rootInActiveWindow
-        val adapter = BrowserAdapters.forPackage(info?.packageName)
+        val front = info?.packageName?.toString()
+        val adapter = BrowserAdapters.forPackage(front)
         if (info == null || adapter == null) {
-            endPage("left")
+            // Same rule as the poll: a null root is a transient gap until it repeats; another app ends the page.
+            if (foreground.observe(front) == ForegroundCheck.Verdict.LEFT) endPage("left", front ?: "none")
             return
         }
+        foreground.observe(front)
         val root = AccessibilityUiNode(info, counter)
         val match = adapter.findUrlBar(root)
         if (match == null) {
@@ -225,17 +230,24 @@ class BrowserPagesService : AccessibilityService() {
     }
 
     private fun checkStillInBrowser() {
-        if (BrowserAdapters.forPackage(rootInActiveWindow?.packageName) == null) endPage("left")
+        val front = rootInActiveWindow?.packageName?.toString()
+        if (foreground.observe(front) == ForegroundCheck.Verdict.LEFT) endPage("left", front ?: "none")
     }
 
     /** `web/inactive` in the product: the reported page is no longer in front. */
-    private fun endPage(reason: String) {
+    private fun endPage(
+        reason: String,
+        front: String? = null,
+    ) {
         gate.reset()
+        foreground.reset()
         handler.removeCallbacks(settleRunnable)
         handler.removeCallbacks(leftPoll)
         val (browser, hash) = current ?: return
         current = null
-        SpikeLog.write(this, listOf("ev" to "inactive", "browser" to browser, "hash" to hash, "reason" to reason))
+        // front: the package now in front (or none) when the page ended because the browser left.
+        val fields = listOf("ev" to "inactive", "browser" to browser, "hash" to hash, "reason" to reason)
+        SpikeLog.write(this, if (front != null) fields + ("front" to front) else fields)
     }
 
     private fun dumpActiveWindow() {
