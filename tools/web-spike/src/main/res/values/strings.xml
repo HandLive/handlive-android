@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Development-only probe, English only: not part of the product string catalog. -->
+<resources>
+    <string name="app_name">HandLive Web Spike</string>
+    <string name="service_label">HandLive Browser Pages (spike)</string>
+    <string name="service_description">Development probe for HandLive Continue Browsing. It reads the address bar of Chrome, Samsung Internet, Firefox, Edge, Brave, Opera, Vivaldi and DuckDuckGo and writes the host and a hash of each page to a log on this phone. It has no network access and sends nothing.</string>
+    <string name="open_accessibility_settings">Open Accessibility Settings</string>
+    <string name="dump_in_five_seconds">Dump Browser Window in 5 s</string>
+    <string name="export_csv">Export CSV</string>
+    <string name="clear_log">Clear Log</string>
+    <string name="refresh">Refresh</string>
+    <string name="service_on">Service: on</string>
+    <string name="service_off">Service: off. Turn on "HandLive Browser Pages (spike)" in Accessibility settings.</string>
+    <string name="log_location">Log: %1$s</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  W3: a separate service with window content. packageNames is left empty on purpose so the leave poll can see the
+  launcher after HOME (Android 16 / One UI still exposes the browser through rootInActiveWindow alone). Browser
+  packages are filtered in code (BrowserAdapters). flagRetrieveInteractiveWindows feeds getWindows() for the front
+  package. canTakeScreenshot is a spike-only probe for FLAG_SECURE on API 34+ (screenshot discarded).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/service_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="500"
+    android:settingsActivity="app.handlive.spike.web.ui.SpikeActivity" />
