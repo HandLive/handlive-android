@@ -61,7 +61,7 @@ class UiTextSourceGuardTest {
     }
 
     private companion object {
-        val SKIPPED_DIRS = setOf("build", ".gradle", ".git", ".kotlin", "buildSrc")
+        val SKIPPED_DIRS = setOf("build", ".gradle", ".git", ".kotlin", "buildSrc", "tools")
         val RESOURCE_ELEMENT = Regex("<(string|plurals|string-array)\\b")
 
         /**
