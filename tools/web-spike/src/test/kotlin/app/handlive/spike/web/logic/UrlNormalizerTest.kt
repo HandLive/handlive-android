@@ -16,6 +16,16 @@ class UrlNormalizerTest {
     }
 
     @Test
+    fun bidiMarksAroundTheBarTextAreIgnored() {
+        // Samsung Internet 30 puts U+200E (left-to-right mark) before the host it shows.
+        val url = UrlNormalizer.normalize("\u200Eexample.com")!!
+        assertEquals("https://example.com", url.url)
+        assertEquals("example.com", url.host)
+        assertTrue(url.hostOnly)
+        assertEquals("https://example.com/a", UrlNormalizer.normalize("\u2066example.com/a\u2069\u200F")!!.url)
+    }
+
+    @Test
     fun barTextWithPathWithoutSchemeKeepsThePath() {
         val url = UrlNormalizer.normalize("example.com/docs/a?b=1#top")!!
         assertEquals("https://example.com/docs/a?b=1#top", url.url)

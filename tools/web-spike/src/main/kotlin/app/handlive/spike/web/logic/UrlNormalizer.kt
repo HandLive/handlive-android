@@ -36,7 +36,13 @@ object UrlNormalizer {
     private val ipv4 = Regex("^\\d{1,3}(\\.\\d{1,3}){3}$")
 
     fun normalize(barText: CharSequence?): NormalizedUrl? {
-        val text = barText?.toString()?.trim().orEmpty()
+        // Browsers may wrap the address in bidi controls (Samsung Internet: U+200E before the host); drop them.
+        val text =
+            barText
+                ?.toString()
+                ?.filterNot { it in BIDI_CONTROLS }
+                ?.trim()
+                .orEmpty()
         if (text.isEmpty() || text.any { it.isWhitespace() }) return null
         val scheme =
             schemePrefix
@@ -121,4 +127,7 @@ object UrlNormalizer {
         if (labels.last().all { it.isDigit() }) return null
         return ascii
     }
+
+    /** LRM, RLM, ALM, the embedding/override controls and the isolates (Unicode bidi formatting characters). */
+    private val BIDI_CONTROLS = setOf('\u200E', '\u200F', '\u061C') + ('\u202A'..'\u202E') + ('\u2066'..'\u2069')
 }
