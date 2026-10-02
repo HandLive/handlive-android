@@ -25,6 +25,7 @@ object SettingsKeys {
     val FEATURE_CLIPBOARD = booleanPreferencesKey("feature.clipboard")
     val FEATURE_SMS = booleanPreferencesKey("feature.sms")
     val FEATURE_CALL = booleanPreferencesKey("feature.call")
+    val CALL_APP_CALLS = booleanPreferencesKey("call.app_calls")
     val FEATURE_CALL_AUDIO = booleanPreferencesKey("feature.call_audio")
     val ALLOW_OPUS_FALLBACK = booleanPreferencesKey("call_audio.allow_opus_fallback")
     val FEATURE_CAMERA = booleanPreferencesKey("feature.camera")
@@ -97,6 +98,7 @@ class SettingsStore(
                 clipboardEnabled = prefs[SettingsKeys.FEATURE_CLIPBOARD] ?: defaults.clipboardEnabled,
                 smsEnabled = prefs[SettingsKeys.FEATURE_SMS] ?: defaults.smsEnabled,
                 callEnabled = prefs[SettingsKeys.FEATURE_CALL] ?: defaults.callEnabled,
+                callAppCalls = prefs[SettingsKeys.CALL_APP_CALLS] ?: defaults.callAppCalls,
                 callAudioEnabled = prefs[SettingsKeys.FEATURE_CALL_AUDIO] ?: defaults.callAudioEnabled,
                 allowOpusFallback = prefs[SettingsKeys.ALLOW_OPUS_FALLBACK] ?: defaults.allowOpusFallback,
                 cameraEnabled = prefs[SettingsKeys.FEATURE_CAMERA] ?: defaults.cameraEnabled,

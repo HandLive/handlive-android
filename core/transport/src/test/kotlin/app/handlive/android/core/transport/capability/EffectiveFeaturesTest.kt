@@ -1,7 +1,9 @@
 package app.handlive.android.core.transport.capability
 
 import app.handlive.android.core.protocol.capability.CallAudioFeature
+import app.handlive.android.core.protocol.capability.CallFeature
 import app.handlive.android.core.protocol.capability.CameraFeature
+import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.capability.CapabilityFeatures
 import app.handlive.android.core.transport.testing.LoopbackServerFixture.Companion.ANDROID_CAPABILITY
 import app.handlive.android.core.transport.testing.LoopbackServerFixture.Companion.MAC_CAPABILITY
@@ -51,4 +53,53 @@ class EffectiveFeaturesTest {
             EffectiveFeatures.compute(android, mac),
         )
     }
+
+    @Test
+    fun appCallsNeedBothSidesToReportThem() {
+        val android = ANDROID_CAPABILITY.copy(permissionsMissing = emptyList())
+        val phone = android.withAppCalls(true)
+        val mac = MAC_CAPABILITY.withAppCalls(true)
+
+        assertEquals(true, Feature.APP_CALLS in EffectiveFeatures.compute(phone, mac))
+        assertEquals(false, Feature.APP_CALLS in EffectiveFeatures.compute(phone, MAC_CAPABILITY.withAppCalls(false)))
+        assertEquals(false, Feature.APP_CALLS in EffectiveFeatures.compute(android.withAppCalls(false), mac))
+        // Absent counts as off (an iPhone, an older Mac).
+        assertEquals(false, Feature.APP_CALLS in EffectiveFeatures.compute(phone, MAC_CAPABILITY))
+        assertEquals(false, Feature.APP_CALLS in EffectiveFeatures.compute(ANDROID_CAPABILITY, mac))
+        val ios = MAC_CAPABILITY.copy(platform = "ios").withAppCalls(false)
+        assertEquals(false, Feature.APP_CALLS in EffectiveFeatures.compute(phone, ios))
+    }
+
+    @Test
+    fun appCallsAreIndependentOfTelephonyCalls() {
+        val noTelephony = ANDROID_CAPABILITY.copy(permissionsMissing = listOf("READ_PHONE_STATE")).withAppCalls(true)
+        val mac = MAC_CAPABILITY.withAppCalls(true)
+
+        val effective = EffectiveFeatures.compute(noTelephony, mac)
+
+        assertEquals(true, Feature.APP_CALLS in effective)
+        assertEquals(false, Feature.CALL in effective)
+        val callsOff =
+            noTelephony.copy(
+                features = noTelephony.features.copy(call = CallFeature(false, appCalls = true)),
+            )
+        assertEquals(true, Feature.APP_CALLS in EffectiveFeatures.compute(callsOff, mac))
+    }
+
+    @Test
+    fun theMissingNotificationAccessDisablesAppCallsAlone() {
+        val missing =
+            ANDROID_CAPABILITY
+                .copy(permissionsMissing = listOf("NOTIFICATION_LISTENER"))
+                .withAppCalls(true)
+        val mac = MAC_CAPABILITY.withAppCalls(true)
+
+        val effective = EffectiveFeatures.compute(missing, mac)
+
+        assertEquals(false, Feature.APP_CALLS in effective)
+        assertEquals(true, Feature.CALL in effective)
+    }
+
+    private fun CapabilityData.withAppCalls(on: Boolean) =
+        copy(features = features.copy(call = (features.call ?: CallFeature(enabled = true)).copy(appCalls = on)))
 }

@@ -66,6 +66,11 @@ data class CallFeature(
     @SerialName("can_end") val canEnd: Boolean? = null,
     @SerialName("caller_id") val callerId: Boolean? = null,
     val notify: Boolean? = null,
+    /**
+     * Calls of other apps (CALL-05): Android = `call.app_calls` ∧ Notification access ∧ `feature.call`; Mac =
+     * `call.app_calls`; absent = off.
+     */
+    @SerialName("app_calls") val appCalls: Boolean? = null,
 )
 
 @Serializable

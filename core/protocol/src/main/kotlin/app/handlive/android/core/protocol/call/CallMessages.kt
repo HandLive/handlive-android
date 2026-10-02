@@ -10,6 +10,7 @@ object CallOp {
     const val HFP_STATUS = "hfp_status"
     const val LOG_SYNC = "log_sync"
     const val LOG_NEW = "log_new"
+    const val APP_CALL = "app_call"
 }
 
 /** `state.direction` (CALL-01 API 1): `unknown` when the context was built while the phone was already `OFFHOOK`. */
@@ -171,4 +172,64 @@ data class CallLogSyncResponse(
 data class CallLogNewData(
     val entry: CallLogEntryData,
     @SerialName("call_id") val callId: String?,
+)
+
+/** `app_call.state` (CALL-05): a call of another app, as its notification tells it. */
+object AppCallState {
+    const val RINGING = "ringing"
+    const val ONGOING = "ongoing"
+    const val ENDED = "ended"
+}
+
+/** `app_call.end_reason`, only when `state = ended`. */
+object AppCallEndReason {
+    const val DECLINED = "declined"
+    const val ENDED = "ended"
+    const val MISSED = "missed"
+    const val UNKNOWN = "unknown"
+}
+
+/** `app_call.answer_mode`: `direct` while HandLive may start the app's answer screen from the background. */
+object AppCallAnswerMode {
+    const val DIRECT = "direct"
+    const val TAP = "tap"
+}
+
+/** `app_call.audio`: v1 keeps the audio on the phone; `mac` is reserved and refused with `CALL_ROUTE_FAILED`. */
+object AppCallAudio {
+    const val PHONE = "phone"
+}
+
+/** `app_call.app`: the calling app. */
+@Serializable
+data class AppCallApp(
+    @SerialName("package") val packageName: String,
+    val label: String,
+)
+
+/** What the client may do to the app call: each is a button of the Mac panel. */
+@Serializable
+data class AppCallControls(
+    val answer: Boolean,
+    val decline: Boolean,
+    val end: Boolean,
+)
+
+/**
+ * `call_event/app_call` (CALL-05, S→C): every field is required and the nullable ones are written as `null`, so none
+ * has a default. `caller` is personal data: it travels end-to-end encrypted only and is never logged or stored.
+ */
+@Serializable
+data class AppCallData(
+    @SerialName("call_id") val callId: String,
+    val app: AppCallApp,
+    val caller: String?,
+    val state: String,
+    val controls: AppCallControls,
+    @SerialName("answer_mode") val answerMode: String,
+    val audio: String,
+    @SerialName("started_at") val startedAt: Long,
+    @SerialName("answered_at") val answeredAt: Long?,
+    @SerialName("ended_at") val endedAt: Long?,
+    @SerialName("end_reason") val endReason: String?,
 )

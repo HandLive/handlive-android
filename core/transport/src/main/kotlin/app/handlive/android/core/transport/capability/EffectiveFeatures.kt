@@ -14,6 +14,9 @@ enum class Feature(
     CLIPBOARD("clipboard", emptySet()),
     SMS("sms", setOf("READ_SMS")),
     CALL("call", setOf("READ_PHONE_STATE")),
+
+    /** Calls of other apps (CALL-05): `features.call.app_calls`, needs Notification access, not telephony. */
+    APP_CALLS("call.app_calls", setOf("NOTIFICATION_LISTENER")),
     CALL_AUDIO("call_audio", setOf("BLUETOOTH_CONNECT")),
     CAMERA("camera", setOf("CAMERA", "RECORD_AUDIO")),
     RELAY("relay", emptySet()),
@@ -25,6 +28,7 @@ enum class Feature(
             CLIPBOARD -> features.clipboard?.enabled
             SMS -> features.sms?.enabled
             CALL -> features.call?.enabled
+            APP_CALLS -> features.call?.appCalls
             CALL_AUDIO -> features.callAudio?.enabled
             CAMERA -> features.camera?.enabled
             RELAY -> features.relay?.enabled

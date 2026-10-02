@@ -36,6 +36,7 @@ class SettingsStoreTest {
             assertEquals(true, settings.clipBlockSensitive)
             assertEquals(60, settings.clipAutoClearSeconds)
             assertEquals(true, settings.relayEnabled)
+            assertEquals(true, settings.callAppCalls)
             assertEquals(false, settings.callAudioEnabled)
             assertEquals(false, settings.cameraEnabled)
             assertNull(settings.setupCompletedAt)
@@ -54,6 +55,16 @@ class SettingsStoreTest {
 
             store.clear()
             assertEquals(HandLiveSettings(), store.current())
+        }
+
+    @Test
+    fun callsFromOtherAppsIsTheKeyCallAppCallsAndOnByDefault() =
+        scope.runTest {
+            assertEquals("call.app_calls", SettingsKeys.CALL_APP_CALLS.name)
+            store.set(SettingsKeys.CALL_APP_CALLS, false)
+            assertEquals(false, store.current().callAppCalls)
+            store.clear()
+            assertEquals(true, store.current().callAppCalls)
         }
 
     @Test

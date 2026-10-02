@@ -12,6 +12,8 @@ data class HandLiveSettings(
     val clipboardEnabled: Boolean = true,
     val smsEnabled: Boolean = true,
     val callEnabled: Boolean = true,
+    /** `call.app_calls` (CALL-05): show the calls of other apps (Telegram…) on the Mac; needs Notification access. */
+    val callAppCalls: Boolean = true,
     val callAudioEnabled: Boolean = false,
     val allowOpusFallback: Boolean = true,
     val cameraEnabled: Boolean = false,

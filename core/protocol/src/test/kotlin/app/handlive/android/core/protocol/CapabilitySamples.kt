@@ -39,7 +39,14 @@ object CapabilitySamples {
                             sims = listOf(SimInfo(1, 0, "SIM 1")),
                             defaultSubId = 1,
                         ),
-                    call = CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true),
+                    call =
+                        CallFeature(
+                            enabled = true,
+                            canAnswer = true,
+                            canEnd = true,
+                            callerId = true,
+                            appCalls = true,
+                        ),
                     callAudio =
                         CallAudioFeature(
                             enabled = false,
@@ -62,6 +69,7 @@ object CapabilitySamples {
             features =
                 CapabilityFeatures(
                     clipboard = ClipboardFeature(enabled = true, autoSend = true),
+                    call = CallFeature(enabled = true, appCalls = true),
                     callAudio = CallAudioFeature(enabled = true, btAddress = "A1:B2:C3:D4:E5:F6", consented = true),
                     relay = RelayFeature(enabled = false),
                 ),
@@ -77,7 +85,7 @@ object CapabilitySamples {
             features =
                 CapabilityFeatures(
                     sms = SmsFeature(enabled = true, notify = true),
-                    call = CallFeature(enabled = true, notify = false),
+                    call = CallFeature(enabled = true, notify = false, appCalls = false),
                 ),
         )
 
@@ -85,6 +93,12 @@ object CapabilitySamples {
         listOf(
             CapabilityOp.HELLO to android,
             CapabilityOp.UPDATE to android.copy(features = android.features.copy(camera = null)),
+            // Notification access revoked (CALL-05): app calls off, listed as a missing permission.
+            CapabilityOp.UPDATE to
+                android.copy(
+                    features = android.features.copy(call = CallFeature(enabled = true, appCalls = false)),
+                    permissionsMissing = listOf("NOTIFICATION_LISTENER"),
+                ),
             CapabilityOp.HELLO to mac,
             CapabilityOp.UPDATE to iphone,
         )
