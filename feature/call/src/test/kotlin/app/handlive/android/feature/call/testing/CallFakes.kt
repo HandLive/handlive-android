@@ -2,6 +2,7 @@ package app.handlive.android.feature.call.testing
 
 import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.protocol.ack.Ack
+import app.handlive.android.core.protocol.call.AppCallData
 import app.handlive.android.core.protocol.call.CallLogNewData
 import app.handlive.android.core.protocol.call.CallOp
 import app.handlive.android.core.protocol.call.CallStateData
@@ -236,6 +237,11 @@ class FakeClient(
     fun states(): List<CallStateData> = ops(CallOp.STATE, CallStateData.serializer())
 
     fun logNews(): List<CallLogNewData> = ops(CallOp.LOG_NEW, CallLogNewData.serializer())
+
+    fun appCalls(): List<AppCallData> = ops(CallOp.APP_CALL, AppCallData.serializer())
+
+    /** Calls and app calls in effect, the state of a Mac with everything on. */
+    fun withAppCalls(): FakeClient = also { effective.value = setOf(Feature.CALL, Feature.APP_CALLS) }
 
     fun events(): List<String> = sent.filter { it.type == MessageType.CALL_EVENT }.map { String(it.plaintext) }
 

@@ -65,6 +65,13 @@ class CallError(
             },
         )
 
+        /** CALL-05 API 2: `answer` with `audio = mac` for an app call, whose audio stays on the phone. */
+        fun routeFailed() = CallError(ErrorCode.CALL_ROUTE_FAILED, "The audio of an app call stays on the phone")
+
+        /** CALL-05 API 2: the app's notification no longer offers the action, or is gone. */
+        fun appActionUnavailable() =
+            CallError(ErrorCode.CALL_APP_ACTION_UNAVAILABLE, "The app does not offer this action now")
+
         /** CALL-04 E6: the call log could not be read; or Telecom failed in an unexpected way. */
         fun internal(message: String = "Could not read the call log") = CallError(ErrorCode.INTERNAL, message)
     }

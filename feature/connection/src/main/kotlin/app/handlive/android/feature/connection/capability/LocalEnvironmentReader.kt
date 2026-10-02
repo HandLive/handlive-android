@@ -1,6 +1,8 @@
 package app.handlive.android.feature.connection.capability
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -35,11 +37,28 @@ class LocalEnvironmentReader(
                     .toSet(),
             sims = sims.activeSims().map { SimInfo(it.subId, it.slot, it.label) },
             defaultSmsSubId = sims.defaultSmsSubId(),
+            notificationListenerMissing = !NotificationAccess.granted(appContext),
         )
     }
 
     private fun granted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * Notification access (`BIND_NOTIFICATION_LISTENER_SERVICE`, granted by hand in Settings): the user allowed HandLive's
+ * notification listener of CALL-05 (`NotificationManager.isNotificationListenerAccessGranted`, CALL-05 API 3). It is a
+ * special access, not a runtime permission, so [AndroidPermissions.NOTIFICATION_LISTENER] stands outside
+ * [AndroidPermissions.RUNTIME].
+ */
+object NotificationAccess {
+    /** The listener service (feature/call), named here so that this module does not depend on it. */
+    const val LISTENER_CLASS = "app.handlive.android.feature.call.appcall.AppCallListenerService"
+
+    fun granted(context: Context): Boolean =
+        context
+            .getSystemService(NotificationManager::class.java)
+            ?.isNotificationListenerAccessGranted(ComponentName(context.packageName, LISTENER_CLASS)) == true
 }
 
 /** Short names of the runtime permissions per feature (SET-01 API 2), as `permissions_missing` lists them. */
@@ -50,6 +69,9 @@ object AndroidPermissions {
     const val READ_PHONE_STATE = "READ_PHONE_STATE"
     const val READ_CALL_LOG = "READ_CALL_LOG"
     const val ANSWER_PHONE_CALLS = "ANSWER_PHONE_CALLS"
+
+    /** The special access "Notification access" of CALL-05, in `permissions_missing` like a permission. */
+    const val NOTIFICATION_LISTENER = "NOTIFICATION_LISTENER"
 
     /** What the SMS feature asks for, in one request (SET-01 API 2 example). */
     val SMS = listOf(READ_SMS, SEND_SMS, READ_CONTACTS, READ_PHONE_STATE)

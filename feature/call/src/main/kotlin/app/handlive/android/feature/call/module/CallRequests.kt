@@ -6,6 +6,7 @@ import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.call.CallLogSyncResponse
 import app.handlive.android.core.transport.capability.Feature
+import app.handlive.android.feature.call.appcall.AppCallServices
 import app.handlive.android.feature.call.log.LogSyncReply
 import app.handlive.android.feature.connection.session.PeerSession
 import kotlinx.coroutines.CancellationException
@@ -32,6 +33,7 @@ fun interface CallPermissionListener {
  */
 class CallRequests(
     private val services: CallServices,
+    private val appCalls: AppCallServices,
     private val permissionMissing: () -> CallPermissionListener,
 ) {
     suspend fun action(
@@ -42,17 +44,47 @@ class CallRequests(
         val callId = (data[CALL_ID] as? JsonPrimitive)?.contentOrNull.orEmpty()
         val action = (data[ACTION] as? JsonPrimitive)?.contentOrNull.orEmpty()
         services.trace.actionReceived(callId, re, session, action)
-        val error =
-            if (!session.isEffective(Feature.CALL)) {
-                CallError.notInEffect()
-            } else {
-                guarded({ CallError.internal("The call could not be controlled") }) {
-                    services.actions.perform(data, mac = session.peerPlatform == PeerPlatform.MACOS)
-                }
-            }
+        val error = guarded({ CallError.internal("The call could not be controlled") }) { route(session, callId, data) }
         reply(session, error?.ack(re) ?: Ack.success(re))
         services.trace.actionAckSent(callId, re, session, error?.code?.name)
         error?.let { suggest(session, it) }
+    }
+
+    /**
+     * CALL-02 API 1 logic 7: the live app call of [callId] goes to CALL-05 API 2 — refused with `FEATURE_DISABLED`
+     * when app calls are not in effect for [session] — every other `call_id` through the telephony checks, except that
+     * a session with app calls in effect but calls not gets `CALL_NOT_FOUND` rather than `FEATURE_DISABLED`.
+     */
+    private fun route(
+        session: PeerSession,
+        callId: String,
+        data: JsonObject,
+    ): CallError? {
+        val telephony = session.isEffective(Feature.CALL)
+        val appCallsInEffect = session.isEffective(Feature.APP_CALLS)
+        return when {
+            appCalls.tracker.find(callId) != null -> {
+                if (appCallsInEffect &&
+                    appCalls.access.enabled()
+                ) {
+                    appCalls.actions.perform(data)
+                } else {
+                    CallError.notInEffect()
+                }
+            }
+
+            !telephony && appCallsInEffect -> {
+                appCalls.actions.perform(data)
+            }
+
+            !telephony -> {
+                CallError.notInEffect()
+            }
+
+            else -> {
+                services.actions.perform(data, mac = session.peerPlatform == PeerPlatform.MACOS)
+            }
+        }
     }
 
     suspend fun logSync(

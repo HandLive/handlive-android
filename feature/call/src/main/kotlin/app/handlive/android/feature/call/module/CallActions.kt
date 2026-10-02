@@ -35,7 +35,7 @@ class CallActions(
     ): CallError? {
         val now = clock()
         locks.values.removeAll { now - it >= CallConstants.ACTION_LOCK_MILLIS }
-        val request = decode(data)
+        val request = decodeCallActionRequest(data)
         val context = tracker.current
         val refusal =
             when {
@@ -120,10 +120,11 @@ class CallActions(
             telecom.phoneState() == PhoneState.IDLE -> CallError.notFound()
             else -> CallError.notAllowed(context.phoneState.phase, CallRefusal.SYSTEM)
         }
-
-    private fun decode(data: JsonObject): CallActionRequest? =
-        runCatching { ProtocolJson.decodeFromJsonElement(CallActionRequest.serializer(), data) }
-            .getOrNull()
-            ?.takeIf { it.callId.isNotBlank() && it.action in CallAction.ALL }
-            ?.takeIf { it.audio == null || it.audio in CallAudio.ALL }
 }
+
+/** The `call_event/action` request of [data], or `null` when a field is missing or outside its list (`BAD_REQUEST`). */
+fun decodeCallActionRequest(data: JsonObject): CallActionRequest? =
+    runCatching { ProtocolJson.decodeFromJsonElement(CallActionRequest.serializer(), data) }
+        .getOrNull()
+        ?.takeIf { it.callId.isNotBlank() && it.action in CallAction.ALL }
+        ?.takeIf { it.audio == null || it.audio in CallAudio.ALL }

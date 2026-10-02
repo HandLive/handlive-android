@@ -139,6 +139,12 @@ class ConnectionRuntime private constructor(
         }
     }
 
+    /**
+     * The Accessibility service is bound: HandLive may start another app's activity from the background (CALL-05
+     * `answer_mode = direct`).
+     */
+    val accessibilityBound: StateFlow<Boolean> = accessibilityRunning.asStateFlow()
+
     /** CLIP-01 A3: the Accessibility service connected or disconnected; `auto_send` follows. */
     fun setAccessibilityRunning(running: Boolean) {
         accessibilityRunning.value = running

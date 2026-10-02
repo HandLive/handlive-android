@@ -8,6 +8,18 @@ import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.id.UuidV7Generator
+import app.handlive.android.feature.call.appcall.AndroidAppCallAccess
+import app.handlive.android.feature.call.appcall.AndroidTapToAnswerNotifier
+import app.handlive.android.feature.call.appcall.AppCallActions
+import app.handlive.android.feature.call.appcall.AppCallBroadcaster
+import app.handlive.android.feature.call.appcall.AppCallListenerService
+import app.handlive.android.feature.call.appcall.AppCallListenerTarget
+import app.handlive.android.feature.call.appcall.AppCallServices
+import app.handlive.android.feature.call.appcall.AppCallTracker
+import app.handlive.android.feature.call.appcall.AppNotification
+import app.handlive.android.feature.call.appcall.BackgroundStartExemption
+import app.handlive.android.feature.call.appcall.PackageAppLabels
+import app.handlive.android.feature.call.appcall.TapToAnswerNotifier
 import app.handlive.android.feature.call.context.CallTracker
 import app.handlive.android.feature.call.context.NameCache
 import app.handlive.android.feature.call.log.CallLogEntries
@@ -43,6 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -71,6 +84,10 @@ class CallFeature private constructor(
     private val settings: StateFlow<HandLiveSettings> =
         data.settings.settings.stateIn(scope, SharingStarted.Eagerly, HandLiveSettings())
 
+    /** CALL-05 acts on the settings only once DataStore has loaded them: `null` before. */
+    private val loadedSettings: StateFlow<HandLiveSettings?> =
+        data.settings.settings.stateIn(scope, SharingStarted.Eagerly, null)
+
     private val access = AndroidCallAccess(appContext, settings)
     private val numbers =
         SystemCallNumbers(resolver, sims::countryIso) { access.granted(AndroidPermissions.READ_CONTACTS) }
@@ -81,6 +98,13 @@ class CallFeature private constructor(
             access.granted(AndroidPermissions.READ_CALL_LOG)
         }
     private val trace = CallBenchTrace()
+
+    // CALL-05: the calls of other apps. Answer needs the background-start exemption its bound accessibility service
+    // gives; without it the answer is a notification the user taps.
+    private val appCallAccess = AndroidAppCallAccess(appContext, loadedSettings::value)
+    private val exemption = BackgroundStartExemption { runtime.accessibilityBound.value }
+    private val appTracker = AppCallTracker(UuidV7Generator(clock)::next, PackageAppLabels(appContext))
+    private val tapNotifier: TapToAnswerNotifier = AndroidTapToAnswerNotifier(appContext)
 
     val module =
         CallModule(
@@ -112,6 +136,15 @@ class CallFeature private constructor(
                         ) { CallLogEntries(numbers::normalize, numbers::name, subIds) },
                     trace = trace,
                 ),
+            appCalls =
+                AppCallServices(
+                    access = appCallAccess,
+                    tracker = appTracker,
+                    broadcaster = AppCallBroadcaster(runtime.sessions, exemption, trace),
+                    actions = AppCallActions(appTracker, exemption, tapNotifier, trace),
+                    tap = tapNotifier,
+                    trace = trace,
+                ),
             clock = clock,
         )
 
@@ -119,6 +152,31 @@ class CallFeature private constructor(
         // SET-01 field 17: a client refused for a missing call permission makes the phone suggest it.
         module.permissionMissing = CallPermissionNotifier(appContext, clock)
     }
+
+    /** What the notification listener service reports to (CALL-05 API 3): A-CALL's queue, and the capability. */
+    internal val listenerTarget =
+        object : AppCallListenerTarget {
+            override fun appCallsWanted() = loadedSettings.value?.let { it.callEnabled && it.callAppCalls }
+
+            override fun posted(
+                notification: AppNotification,
+                at: Long,
+            ) = module.appCalls.posted(notification, at)
+
+            override fun removed(
+                key: String,
+                at: Long,
+            ) = module.appCalls.removed(key, at)
+
+            override fun listenerChanged(
+                connected: Boolean,
+                at: Long,
+            ) {
+                if (!connected) module.appCalls.listenerLost(at)
+                // Notification access is read again: features.call.app_calls and permissions_missing follow it.
+                runtime.refreshEnvironment()
+            }
+        }
 
     /** Clients without a session (CONN-03, CONN-04): installed by the relay feature. */
     var offline: OfflineCallDelivery
@@ -151,6 +209,19 @@ class CallFeature private constructor(
             .map(CallWatch::of)
             .distinctUntilChanged()
             .onEach(::watchSafely)
+            .launchIn(scope)
+        // CALL-05: the settings were loaded, the setting call.app_calls / feature.call or the accessibility service
+        // (answer_mode) changed.
+        loadedSettings
+            .filterNotNull()
+            .map { it.callEnabled && it.callAppCalls }
+            .distinctUntilChanged()
+            .onEach { wanted ->
+                AppCallListenerService.follow(appContext, wanted)
+                module.appCalls.environmentChanged(clock())
+            }.launchIn(scope)
+        runtime.accessibilityBound
+            .onEach { module.appCalls.environmentChanged(clock()) }
             .launchIn(scope)
         logSignals
             .receiveAsFlow()

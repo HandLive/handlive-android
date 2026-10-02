@@ -41,4 +41,24 @@ object CallConstants {
 
     /** New call log rows are read in batches of this size (CALL-04 API 3). */
     const val LOG_ROUND_BATCH = 100
+
+    /**
+     * `APP_CALL_LINK_WINDOW` (CALL-05): after a ringing app call's notification is removed, an ongoing notification of
+     * the same package within this long is its in-call notification; otherwise the call ended.
+     */
+    const val APP_CALL_LINK_WINDOW_MILLIS = 3_000L
+
+    /**
+     * The window is decided by post times, but Android delivers a post 215–232 ms after its `postTime` (spike T3.2):
+     * the end of the window is processed this much later, so an in-call notification posted inside the window and
+     * still on its way is not cut off.
+     */
+    const val APP_CALL_LINK_GRACE_MILLIS = 500L
+
+    /** `APP_CALL_TAP_NOTIFICATION_TTL`: the "tap to answer" notification is removed after this long at the latest. */
+    const val APP_CALL_TAP_NOTIFICATION_TTL_MILLIS = 60_000L
+
+    /** `app_call` wire limits: `caller` string(128), `app.label` string(64). */
+    const val APP_CALL_CALLER_MAX = 128
+    const val APP_CALL_LABEL_MAX = 64
 }

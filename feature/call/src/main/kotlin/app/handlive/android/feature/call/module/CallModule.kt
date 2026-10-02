@@ -8,6 +8,9 @@ import app.handlive.android.core.protocol.call.CallLogSyncResponse
 import app.handlive.android.core.protocol.call.CallOp
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.transport.capability.Feature
+import app.handlive.android.feature.call.appcall.AppCallEvents
+import app.handlive.android.feature.call.appcall.AppCallInbox
+import app.handlive.android.feature.call.appcall.AppCallServices
 import app.handlive.android.feature.call.context.BroadcastCopy
 import app.handlive.android.feature.call.context.PhoneState
 import app.handlive.android.feature.call.context.SimReport
@@ -22,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -49,6 +53,7 @@ class CallModule(
     private val reads: CoroutineDispatcher,
     private val sessions: StateFlow<Map<String, PeerSession>>,
     private val services: CallServices,
+    appCalls: AppCallServices,
     clock: () -> Long,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + worker)
@@ -63,7 +68,11 @@ class CallModule(
     var permissionMissing: CallPermissionListener = CallPermissionListener { _, _ -> }
 
     private val events = CallEvents(services, { sessions.value.keys }, ::later, { offline }, clock)
-    private val requests = CallRequests(services) { permissionMissing }
+    private val appEvents = AppCallEvents(appCalls, ::later, clock)
+    private val requests = CallRequests(services, appCalls) { permissionMissing }
+
+    /** What the notification listener tells A-CALL about the calls of other apps (CALL-05). */
+    val appCalls = AppCallInbox(appEvents, ::post)
 
     val handler =
         EnvelopeHandler { session, envelope ->
@@ -78,22 +87,14 @@ class CallModule(
             }
         }
 
-    /** Starts the queue, and sends the current call to every session on which calls become effective (E8). */
-    @OptIn(ExperimentalCoroutinesApi::class)
+    /**
+     * Starts the queue, and sends the current call to every session on which calls become effective (E8), and the
+     * current app calls to every session on which app calls do (CALL-05).
+     */
     fun start() {
         scope.launch { for (task in queue) runSafely(task) }
-        sessions
-            .flatMapLatest { open ->
-                if (open.isEmpty()) {
-                    flowOf(emptyList())
-                } else {
-                    combine(open.values.map { session -> session.effectiveFeatures.map { session to it } }) { all ->
-                        all.filter { (_, features) -> Feature.CALL in features }.map { (session, _) -> session }
-                    }
-                }
-            }.distinctUntilChanged()
-            .onEach { post { events.republish() } }
-            .launchIn(scope)
+        sessions.effectiveWith(Feature.CALL).onEach { post { events.republish() } }.launchIn(scope)
+        sessions.effectiveWith(Feature.APP_CALLS).onEach { post { appEvents.republish() } }.launchIn(scope)
     }
 
     /** The default listener (CALL-01 API 2); [at] is the wall clock of the callback. */
@@ -149,3 +150,16 @@ class CallModule(
         }
     }
 }
+
+/** The sessions that have [feature] in effect, as a list that changes when one gets or loses it. */
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun StateFlow<Map<String, PeerSession>>.effectiveWith(feature: Feature): Flow<List<PeerSession>> =
+    flatMapLatest { open ->
+        if (open.isEmpty()) {
+            flowOf(emptyList())
+        } else {
+            combine(open.values.map { session -> session.effectiveFeatures.map { session to it } }) { all ->
+                all.filter { (_, features) -> feature in features }.map { (session, _) -> session }
+            }
+        }
+    }.distinctUntilChanged()

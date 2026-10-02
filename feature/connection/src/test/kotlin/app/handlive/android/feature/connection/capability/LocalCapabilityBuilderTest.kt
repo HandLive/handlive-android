@@ -47,12 +47,12 @@ class LocalCapabilityBuilderTest {
     fun callsFollowTheSettingTelephonyAndTheirPermissions() {
         val phone = environment.copy(telephony = true)
         assertEquals(
-            CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true),
+            CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true, appCalls = true),
             LocalCapabilityBuilder.build(HandLiveSettings(), phone).features.call,
         )
         val noControl = phone.copy(missingPermissions = setOf("ANSWER_PHONE_CALLS"))
         assertEquals(
-            CallFeature(enabled = true, canAnswer = false, canEnd = false, callerId = true),
+            CallFeature(enabled = true, canAnswer = false, canEnd = false, callerId = true, appCalls = true),
             LocalCapabilityBuilder.build(HandLiveSettings(), noControl).features.call,
         )
         val noNumber = phone.copy(missingPermissions = setOf("READ_CALL_LOG"))
@@ -179,6 +179,71 @@ class LocalCapabilityBuilderTest {
         assertEquals(false, capability.features.relay?.enabled)
         assertEquals(listOf("POST_NOTIFICATIONS"), capability.permissionsMissing)
     }
+
+    @Test
+    fun appCallsAreOnWithTheSettingsAndNotificationAccess() {
+        val granted = environment.copy(telephony = true)
+        assertEquals(true, appCalls(HandLiveSettings(), granted))
+        assertEquals("the setting call.app_calls", false, appCalls(HandLiveSettings(callAppCalls = false), granted))
+        assertEquals("the setting feature.call", false, appCalls(HandLiveSettings(callEnabled = false), granted))
+        assertEquals(
+            "Notification access",
+            false,
+            appCalls(HandLiveSettings(), granted.copy(notificationListenerMissing = true)),
+        )
+    }
+
+    @Test
+    fun appCallsNeedNeitherTelephonyNorTheCallPermissions() {
+        val tablet =
+            environment.copy(
+                telephony = false,
+                missingPermissions = setOf("READ_PHONE_STATE", "READ_CALL_LOG"),
+            )
+
+        val call = LocalCapabilityBuilder.build(HandLiveSettings(), tablet).features.call!!
+
+        assertFalse(call.enabled)
+        assertEquals(true, call.appCalls)
+    }
+
+    @Test
+    fun theMissingNotificationAccessIsListedOnlyWhileAppCallsAreWanted() {
+        val missing = environment.copy(telephony = true, notificationListenerMissing = true)
+        assertEquals(
+            listOf("NOTIFICATION_LISTENER"),
+            LocalCapabilityBuilder.build(HandLiveSettings(), missing).permissionsMissing,
+        )
+        assertEquals(
+            "listed once, after the runtime permissions",
+            listOf("READ_SMS", "NOTIFICATION_LISTENER"),
+            LocalCapabilityBuilder
+                .build(
+                    HandLiveSettings(callEnabled = true),
+                    missing.copy(missingPermissions = setOf("READ_SMS")),
+                ).permissionsMissing,
+        )
+        assertEquals(
+            emptyList<String>(),
+            LocalCapabilityBuilder.build(HandLiveSettings(callAppCalls = false), missing).permissionsMissing,
+        )
+        assertEquals(
+            emptyList<String>(),
+            LocalCapabilityBuilder.build(HandLiveSettings(callEnabled = false), missing).permissionsMissing,
+        )
+        assertEquals(
+            emptyList<String>(),
+            LocalCapabilityBuilder.build(HandLiveSettings(), environment.copy(telephony = true)).permissionsMissing,
+        )
+    }
+
+    private fun appCalls(
+        settings: HandLiveSettings,
+        phone: LocalEnvironment,
+    ) = LocalCapabilityBuilder
+        .build(settings, phone)
+        .features.call
+        ?.appCalls
 
     private companion object {
         const val CONSENTED_AT = 1_727_150_000_000L

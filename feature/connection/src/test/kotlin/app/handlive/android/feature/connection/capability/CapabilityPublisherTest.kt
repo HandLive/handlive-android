@@ -2,6 +2,8 @@ package app.handlive.android.feature.connection.capability
 
 import android.Manifest
 import android.app.Application
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import app.handlive.android.core.data.settings.HandLiveSettings
@@ -36,6 +38,7 @@ class CapabilityPublisherTest {
     fun phoneWithTelephonyAndNotifications() {
         shadowOf(context.packageManager).setSystemFeature(PackageManager.FEATURE_TELEPHONY, true)
         shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        setNotificationAccess(true)
     }
 
     @Test
@@ -54,11 +57,34 @@ class CapabilityPublisherTest {
             val afterCalls = capability.refresh()
             assertEquals(emptyList<String>(), afterCalls.permissionsMissing)
             assertEquals(
-                CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true),
+                CallFeature(enabled = true, canAnswer = true, canEnd = true, callerId = true, appCalls = true),
                 afterCalls.features.call,
             )
             // Feature modules and the open sessions (`capability/update`) follow the same state.
             assertEquals(afterCalls, capability.state.value)
+        }
+
+    @Test
+    fun notificationAccessIsListedUntilTheUserGrantsItInSettings() =
+        runTest {
+            setNotificationAccess(false)
+            val capability = start()
+            assertEquals(
+                AndroidPermissions.RUNTIME + AndroidPermissions.NOTIFICATION_LISTENER,
+                capability.state.value.permissionsMissing,
+            )
+            assertEquals(
+                false,
+                capability.state.value.features.call
+                    ?.appCalls,
+            )
+
+            // The Notification access page of the system: no broadcast reaches HandLive, the listener service connects.
+            setNotificationAccess(true)
+            val granted = capability.refresh()
+
+            assertEquals(AndroidPermissions.RUNTIME, granted.permissionsMissing)
+            assertEquals(true, granted.features.call?.appCalls)
         }
 
     @Test
@@ -87,6 +113,13 @@ class CapabilityPublisherTest {
         CapabilityPublisher(LocalEnvironmentReader(context))
             .state(backgroundScope, settings.value, settings, accessibilityRunning, environmentVersion)
             .also { runCurrent() }
+
+    /** The user allowed (or not) HandLive's listener in Settings › Notification access. */
+    private fun setNotificationAccess(granted: Boolean) {
+        val listener = ComponentName(context.packageName, NotificationAccess.LISTENER_CLASS)
+        shadowOf(context.getSystemService(NotificationManager::class.java))
+            .setNotificationListenerAccessGranted(listener, granted)
+    }
 
     private fun grant(permissions: List<String>) =
         shadowOf(context).grantPermissions(*permissions.map(AndroidPermissions::fullName).toTypedArray())

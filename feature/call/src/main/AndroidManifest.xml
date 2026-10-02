@@ -13,4 +13,26 @@
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
+
+    <!-- CALL-05: the apps with an InCallService are cellular dialers, whose call notifications are never app calls;
+         the listener must see them to drop them. -->
+    <queries>
+        <intent>
+            <action android:name="android.telecom.InCallService" />
+        </intent>
+    </queries>
+
+    <application>
+        <!-- CALL-05: calls of other apps (Telegram…) from their call notifications. The user grants "Notification
+             access" by hand (SET-01 primer); only call notifications are ever read, the rest is ignored. -->
+        <service
+            android:name=".appcall.AppCallListenerService"
+            android:exported="false"
+            android:label="@string/common_app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+    </application>
 </manifest>

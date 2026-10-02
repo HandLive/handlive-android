@@ -28,12 +28,21 @@ data class LocalEnvironment(
     val sims: List<SimInfo> = emptyList(),
     /** The default SMS subscription; `null` when the phone asks every time. */
     val defaultSmsSubId: Int? = null,
+    /** Notification access (the special access of CALL-05) is not granted to HandLive. */
+    val notificationListenerMissing: Boolean = false,
 ) {
     /** SMS works on this phone at all: the setting is on and the phone has telephony. */
     fun smsAvailable(settings: HandLiveSettings): Boolean = settings.smsEnabled && telephony
 
     /** Calls work on this phone at all: `feature.call` is on and the phone has telephony (SET-02 field 10). */
     fun callsAvailable(settings: HandLiveSettings): Boolean = settings.callEnabled && telephony
+
+    /** The user wants calls of other apps: `feature.call` and `call.app_calls` are on (SET-01 API 2 rule 1). */
+    fun appCallsWanted(settings: HandLiveSettings): Boolean = settings.callEnabled && settings.callAppCalls
+
+    /** Calls of other apps work: wanted and Notification access granted; telephony is not needed (CALL-05). */
+    fun appCallsAvailable(settings: HandLiveSettings): Boolean =
+        appCallsWanted(settings) && !notificationListenerMissing
 }
 
 /**
@@ -98,12 +107,13 @@ object LocalCapabilityBuilder {
             canAnswer = canAnswer,
             canEnd = canAnswer,
             callerId = AndroidPermissions.READ_CALL_LOG !in environment.missingPermissions,
+            appCalls = environment.appCallsAvailable(settings),
         )
     }
 
     /**
      * Only permissions of enabled features count, plus notifications on Android 13+ (SET-01 API 2 rule 1); each is
-     * listed once, in the order of the SET-01 API 2 table.
+     * listed once, in the order of the SET-01 API 2 table, with the Notification access of CALL-05 last.
      */
     private fun permissionsMissing(
         settings: HandLiveSettings,
@@ -117,6 +127,9 @@ object LocalCapabilityBuilder {
         return buildList {
             if (environment.notificationsMissing) add(NOTIFICATIONS_PERMISSION)
             AndroidPermissions.RUNTIME.filterTo(this) { it in wanted && it in environment.missingPermissions }
+            if (environment.appCallsWanted(settings) && environment.notificationListenerMissing) {
+                add(AndroidPermissions.NOTIFICATION_LISTENER)
+            }
         }
     }
 }

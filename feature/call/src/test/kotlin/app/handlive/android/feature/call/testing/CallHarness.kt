@@ -6,6 +6,15 @@ import app.handlive.android.core.protocol.ack.Ack
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.transport.server.InboundEnvelope
+import app.handlive.android.feature.call.appcall.AppCallActions
+import app.handlive.android.feature.call.appcall.AppCallBroadcaster
+import app.handlive.android.feature.call.appcall.AppCallFixtures
+import app.handlive.android.feature.call.appcall.AppCallServices
+import app.handlive.android.feature.call.appcall.AppCallTracker
+import app.handlive.android.feature.call.appcall.AppNotification
+import app.handlive.android.feature.call.appcall.FakeAppCallAccess
+import app.handlive.android.feature.call.appcall.FakeExemption
+import app.handlive.android.feature.call.appcall.FakeTapNotifier
 import app.handlive.android.feature.call.context.BroadcastCopy
 import app.handlive.android.feature.call.context.CallTracker
 import app.handlive.android.feature.call.context.NameCache
@@ -46,12 +55,16 @@ class CallHarness(
     val sims = FakeSimLabels()
     val callLog = FakeCallLog()
     val offline = FakeOffline(wall)
+    val appAccess = FakeAppCallAccess()
+    val exemption = FakeExemption()
+    val tap = FakeTapNotifier()
     val sessions = MutableStateFlow<Map<String, PeerSession>>(emptyMap())
     val permissionsAsked = mutableListOf<Pair<String, String>>()
     var permissionLost = 0
     private val dispatcher = StandardTestDispatcher(scope.testScheduler)
     private val ids = UuidV7Generator(wall)
     val tracker = CallTracker(ids::next, numbers, sims) { access.granted(AndroidPermissions.READ_CALL_LOG) }
+    val appTracker = AppCallTracker(ids::next, AppCallFixtures.labels)
     private val entries = {
         CallLogEntries(numbers::normalize, numbers::name.takeIf { numbers.contacts }, FakeCallLog.SUB_IDS)
     }
@@ -76,6 +89,14 @@ class CallHarness(
                         CallLogWatcher(callLog),
                         entries,
                     ),
+                trace = trace,
+            ),
+            AppCallServices(
+                access = appAccess,
+                tracker = appTracker,
+                broadcaster = AppCallBroadcaster(sessions, exemption, trace),
+                actions = AppCallActions(appTracker, exemption, tap, trace),
+                tap = tap,
                 trace = trace,
             ),
             wall,
@@ -165,6 +186,31 @@ class CallHarness(
         val extra = audio?.let { ""","audio":"$it"""" }.orEmpty()
         val id = request(client, "action", """{"call_id":"$callId","action":"$action"$extra}""")
         return client.acks().last { it.re == id }
+    }
+
+    /** The notification listener delivers [notification] now; its post time is [postTime] (now by default). */
+    fun appPost(
+        notification: AppNotification,
+        postTime: Long = wall(),
+    ) {
+        module.appCalls.posted(notification, postTime)
+        run()
+    }
+
+    fun appRemove(key: String) {
+        module.appCalls.removed(key, wall())
+        run()
+    }
+
+    fun appListenerLost() {
+        module.appCalls.listenerLost(wall())
+        run()
+    }
+
+    /** The setting, the Notification access or the background-start exemption changed. */
+    fun appEnvironmentChanged() {
+        module.appCalls.environmentChanged(wall())
+        run()
     }
 
     /** The call log observer fired (after its 100 ms coalescing). */
