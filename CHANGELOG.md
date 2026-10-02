@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Calls from other apps (CALL-05, Telegram first): `feature/call` reads call notifications through a
+  `NotificationListenerService` (only `CallStyle` notifications and the ongoing notification that follows a ringing
+  one; every other notification is ignored without its title or text being read), sends `call_event/app_call` to the
+  Macs with `features.call.app_calls` in effect and carries out `answer`, `reject` and `end` with the app's own
+  PendingIntents. Answer starts the app from the background only while the Accessibility service is bound
+  (`answer_mode = direct`); otherwise a "tap to answer" notification on the channel `hl_app_call` (`tap`).
+- Settings › Calls › "Calls from Other Apps" (`call.app_calls`, default on) with the Notification access primer and the
+  system page; `NOTIFICATION_LISTENER` in `permissions_missing` while the access is not granted; error code
+  `CALL_APP_ACTION_UNAVAILABLE`.
+
 ## [2026-09-30]
 
 ### Fixed
