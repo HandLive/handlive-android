@@ -12,6 +12,7 @@ import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.capability.AndroidPermissions
+import app.handlive.android.feature.connection.capability.NotificationAccess
 import app.handlive.android.feature.pairing.revoke.UnpairResult
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DeviceDetailsScreen
@@ -21,6 +22,7 @@ import app.handlive.android.ui.settings.CallsPrimerScreen
 import app.handlive.android.ui.settings.ConsentScreen
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
+import app.handlive.android.ui.settings.NotificationAccessPrimerScreen
 import app.handlive.android.ui.settings.PermissionTarget
 import app.handlive.android.ui.settings.PermissionsScreen
 import app.handlive.android.ui.settings.PhoneFeature
@@ -63,11 +65,18 @@ fun RouteContent(
             ConsentRoute(main, environment)
         }
 
-        Route.RestrictedSetting -> {
+        is Route.RestrictedSetting -> {
             val context = LocalContext.current
-            RestrictedSettingScreen {
+            val (title, body) =
+                if (route.notificationAccess) {
+                    R.string.permission_notification_access_title to
+                        R.string.setup_restricted_settings_help_notification_access
+                } else {
+                    R.string.settings_auto_send to R.string.setup_restricted_settings_help
+                }
+            RestrictedSettingScreen(title, body) {
                 main.pop()
-                openAccessibility(context, main)
+                if (route.notificationAccess) openNotificationAccess(context) else openAccessibility(context, main)
             }
         }
 
@@ -77,6 +86,16 @@ fun RouteContent(
 
         Route.CallPermission -> {
             PermissionPrimerRoute(main, AndroidPermissions.CALLS) { onContinue -> CallsPrimerScreen(onContinue) }
+        }
+
+        Route.NotificationAccess -> {
+            val context = LocalContext.current
+            NotificationAccessPrimerScreen {
+                main.pop()
+                // Step N1: a restricted setting outside Google Play on Android 13+, as for Accessibility.
+                val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, true)
+                if (restricted != null) main.push(restricted) else openNotificationAccess(context)
+            }
         }
     }
 }
@@ -151,18 +170,21 @@ private fun PermissionsRoute(
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
+    val notificationAccess by rememberOnResume { NotificationAccess.granted(context) }
     val state =
         SettingsUiState(
             settings,
             serviceOn,
             rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
             rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
+            notificationAccess = notificationAccess,
         )
     PermissionsScreen(
         environment = environment,
         autoSend = state.autoSendStatus,
         sms = state.smsStatus,
         calls = state.callStatus,
+        appCalls = state.appCallsStatus,
         onOpen = { target -> openPermissionTarget(context, main, environment, state, target) },
         onBack = main::pop,
         backLabel = stringResource(backLabel),
@@ -208,6 +230,10 @@ private fun openPermissionTarget(
         PermissionTarget.CALLS -> {
             grant(context, main, state, PhoneFeature.CALLS)
         }
+
+        PermissionTarget.APP_CALLS -> {
+            grant(context, main, state, PhoneFeature.APP_CALLS)
+        }
     }
 }
 
@@ -237,13 +263,8 @@ private fun ConsentRoute(
         onAgree = {
             scope.launch { consent.agree(System.currentTimeMillis()) }
             main.pop()
-            if (environment.restrictedSettingsLikely) {
-                main.push(
-                    Route.RestrictedSetting,
-                )
-            } else {
-                openAccessibility(context, main)
-            }
+            val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, notificationAccess = false)
+            if (restricted != null) main.push(restricted) else openAccessibility(context, main)
         },
         onSendManually = {
             scope.launch { consent.sendManually() }
@@ -261,5 +282,14 @@ private fun openAccessibility(
         context,
         main.dependencies.clipboard.consent
             .settingsIntent(),
+    )
+}
+
+/** SET-01 API 9: HandLive's entry in Notification access, else the list; the access is read again on resume. */
+private fun openNotificationAccess(context: Context) {
+    SystemPages.open(
+        context,
+        SystemPages.notificationListenerSettings(context),
+        SystemPages.notificationListenerList(),
     )
 }

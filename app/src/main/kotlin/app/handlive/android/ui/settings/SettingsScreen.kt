@@ -22,8 +22,9 @@ import java.text.DateFormat
 
 /**
  * SET-02 on the phone: the Clipboard group (fields 1–6, each switch with its one-line description), SMS Messages
- * (field 7) and Calls (field 10), each with its permission status and action (SET-01 fields 10, 11 and 16), Internet
- * Connection (field 21), Permissions & Background (field 23) and Language (field 32).
+ * (field 7) and Calls (field 10, with Calls from Other Apps, field 38, under it), each with its permission status and
+ * action (SET-01 fields 10, 11 and 16), Internet Connection (field 21), Permissions & Background (field 23) and
+ * Language (field 32).
  */
 @Composable
 fun SettingsScreen(
@@ -38,6 +39,7 @@ fun SettingsScreen(
     val clipboardTitle = stringResource(R.string.settings_clipboard)
     val autoClearFooter = stringResource(R.string.settings_auto_clear_footer)
     val dataTitle = stringResource(R.string.settings_data)
+    val callsFooter = stringResource(R.string.settings_call_app_calls_footer)
     val settings = state.settings
     Column(modifier = modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         HLScreenHeader(title = stringResource(R.string.settings_title))
@@ -45,7 +47,7 @@ fun SettingsScreen(
             bannerSections(banners, labels)
             clipboardSection(clipboardTitle, autoClearFooter, state, actions)
             featureSection(R.string.settings_sms_messages, state.settings.smsEnabled, state, PhoneFeature.SMS, actions)
-            featureSection(R.string.settings_calls, state.settings.callEnabled, state, PhoneFeature.CALLS, actions)
+            callsSection(state, actions, callsFooter)
             section {
                 row {
                     Switch(
@@ -127,8 +129,8 @@ private fun AutoSendSwitch(
 }
 
 /**
- * Field 7 or 10: the switch [title], disabled with "Not supported on this phone" without telephony; while it is on
- * with a permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
+ * Field 7: the switch [title], disabled with "Not supported on this phone" without telephony; while it is on with a
+ * permission missing, the status under it and "Grant Permission" or "Open Settings" (SET-01 fields 11, 16).
  */
 private fun HLGroupedListScope.featureSection(
     title: Int,
@@ -147,7 +149,7 @@ private fun HLGroupedListScope.featureSection(
 }
 
 @Composable
-private fun FeatureSwitch(
+internal fun FeatureSwitch(
     title: Int,
     enabled: Boolean,
     status: FeatureStatus,

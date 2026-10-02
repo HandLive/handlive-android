@@ -26,6 +26,7 @@ import app.handlive.android.ui.settings.DataActionDialogs
 import app.handlive.android.ui.settings.DataStep
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.LanguageScreen
+import app.handlive.android.ui.settings.NotificationAccessPrimerScreen
 import app.handlive.android.ui.settings.PermissionsScreen
 import app.handlive.android.ui.settings.RestrictedSettingScreen
 import app.handlive.android.ui.settings.SettingsScreen
@@ -93,6 +94,21 @@ object ScreenCatalog {
             },
             "sms primer" to { SmsPrimerScreen {} },
             "calls primer" to { CallsPrimerScreen {} },
+            "notification access primer" to { NotificationAccessPrimerScreen {} },
+            "settings app calls needs access" to {
+                SettingsScreen(UiSamples.appCallsNeedAccess, StatusBanners(), UiSamples.NoActions, "English")
+            },
+            "permissions app calls need access" to {
+                PermissionsScreen(
+                    UiSamples.environment,
+                    UiSamples.settings.autoSendStatus,
+                    FeatureStatus.ON,
+                    FeatureStatus.ON,
+                    {},
+                    {},
+                    appCalls = FeatureStatus.NEEDS_PERMISSION,
+                )
+            },
             "consent" to { ConsentScreen({}, {}) },
             "restricted setting" to { RestrictedSettingScreen {} },
         )

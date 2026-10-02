@@ -4,9 +4,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
+import app.handlive.android.feature.call.appcall.AppCallListenerService
 
 /** The system pages SET-01 and SET-02 lead to; each falls back when a device lacks the page. */
 object SystemPages {
@@ -42,6 +44,23 @@ object SystemPages {
         } else {
             appDetails(context)
         }
+
+    /** SET-01 API 9: HandLive's own entry in Notification access (API 30+), else the list of apps (API 29). */
+    fun notificationListenerSettings(
+        context: Context,
+        sdk: Int = Build.VERSION.SDK_INT,
+    ): Intent =
+        if (sdk >= Build.VERSION_CODES.R) {
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                ComponentName(context, AppCallListenerService::class.java).flattenToString(),
+            )
+        } else {
+            notificationListenerList()
+        }
+
+    /** API 9 logic 2: the list of apps, when the entry page is not supported. */
+    fun notificationListenerList(): Intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
 
     /** Opens [intent]; a missing or protected page falls back to [fallback], then to App info. */
     fun open(

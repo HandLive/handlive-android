@@ -64,22 +64,9 @@ class SettingsActionsImpl(
         feature: PhoneFeature,
         enabled: Boolean,
     ) {
-        save {
-            store.set(
-                if (feature ==
-                    PhoneFeature.SMS
-                ) {
-                    SettingsKeys.FEATURE_SMS
-                } else {
-                    SettingsKeys.FEATURE_CALL
-                },
-                enabled,
-            )
-        }
+        save { store.set(keyOf(feature), enabled) }
         // SET-02 step 3: the key is saved as true even when the permissions end up denied.
-        if (enabled && state.access(feature).status(enabled = true) == FeatureStatus.NEEDS_PERMISSION) {
-            main.push(primerOf(feature))
-        }
+        if (enabled) primerOnSwitch(feature, state)?.let(main::push)
     }
 
     override fun grantFeature(feature: PhoneFeature) {
@@ -115,9 +102,31 @@ class SettingsActionsImpl(
     }
 }
 
-/** SET-01 part B: the primer route of a telephony feature. */
+/**
+ * SET-02 step 3: the primer when [feature] is switched on with its access missing. The Notification access primer of
+ * calls from other apps comes only while `feature.call` is on too (SET-01 N1): with Calls off they stay off anyway.
+ */
+fun primerOnSwitch(
+    feature: PhoneFeature,
+    state: SettingsUiState,
+): Route? {
+    val callsOn = feature != PhoneFeature.APP_CALLS || state.settings.callEnabled
+    val missing = state.access(feature).status(enabled = true) == FeatureStatus.NEEDS_PERMISSION
+    return primerOf(feature).takeIf { callsOn && missing }
+}
+
+/** SET-01 part B: the primer route of a feature; calls from other apps need the Notification access primer (N1). */
 fun primerOf(feature: PhoneFeature): Route =
     when (feature) {
         PhoneFeature.SMS -> Route.SmsPermission
         PhoneFeature.CALLS -> Route.CallPermission
+        PhoneFeature.APP_CALLS -> Route.NotificationAccess
+    }
+
+/** The settings key of a feature's switch (0.9.5). */
+private fun keyOf(feature: PhoneFeature) =
+    when (feature) {
+        PhoneFeature.SMS -> SettingsKeys.FEATURE_SMS
+        PhoneFeature.CALLS -> SettingsKeys.FEATURE_CALL
+        PhoneFeature.APP_CALLS -> SettingsKeys.CALL_APP_CALLS
     }

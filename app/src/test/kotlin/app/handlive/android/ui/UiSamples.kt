@@ -77,6 +77,9 @@ object UiSamples {
     val callsDenied =
         settings.copy(calls = FeatureAccess(missing = setOf("READ_CALL_LOG"), deniedForGood = setOf("READ_CALL_LOG")))
 
+    /** Calls from other apps on without Notification access ("Needs permission" with "Grant Permission", E11). */
+    val appCallsNeedAccess = settings.copy(notificationAccess = false)
+
     /** CONN-03 E7 under Internet Connection: the longest text field 21 shows. */
     val relayPinMismatch = settings.copy(relayAvailable = true, relayPinMismatch = true)
 

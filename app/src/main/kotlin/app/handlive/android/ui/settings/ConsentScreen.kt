@@ -1,5 +1,6 @@
 package app.handlive.android.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,13 +75,20 @@ private fun ConsentLine(
     }
 }
 
-/** SET-01 field 14 (Android 13+, not installed from Google Play): before the Accessibility settings open. */
+/**
+ * SET-01 field 14 (Android 13+, not installed from Google Play): before the Accessibility settings open, or the
+ * Notification access page with the [title] of its primer.
+ */
 @Composable
-fun RestrictedSettingScreen(onContinue: () -> Unit) {
+fun RestrictedSettingScreen(
+    @StringRes title: Int = R.string.settings_auto_send,
+    @StringRes body: Int = R.string.setup_restricted_settings_help,
+    onContinue: () -> Unit,
+) {
     HLStepScreen(
         symbol = HLSymbol.Lock,
-        title = stringResource(R.string.settings_auto_send),
-        body = stringResource(R.string.setup_restricted_settings_help),
+        title = stringResource(title),
+        body = stringResource(body),
     ) {
         HLButton(stringResource(R.string.common_continue), onContinue, Modifier.fillMaxWidth())
     }

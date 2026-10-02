@@ -11,6 +11,7 @@ import app.handlive.android.core.design.component.HLFeedback
 import app.handlive.android.core.design.component.HLSymbol
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.capability.AndroidPermissions
+import app.handlive.android.feature.connection.capability.NotificationAccess
 import app.handlive.android.settings.AppLanguageSetting
 import app.handlive.android.ui.devices.DevicesScreen
 import app.handlive.android.ui.settings.DataActionDialogs
@@ -44,6 +45,7 @@ fun SettingsTab(main: MainContext) {
         main.dependencies.clipboard.consent
             .isServiceEnabled()
     }
+    val notificationAccess by rememberOnResume { NotificationAccess.granted(context) }
     val relay by main.dependencies.relay.status
         .collectAsStateWithLifecycle()
     val state =
@@ -52,6 +54,7 @@ fun SettingsTab(main: MainContext) {
             serviceOn,
             rememberFeatureAccess(AndroidPermissions.SMS, settings.permissionsRequested),
             rememberFeatureAccess(AndroidPermissions.CALLS, settings.permissionsRequested),
+            notificationAccess = notificationAccess,
             relayAvailable = relay.available,
             relayDeviceRevoked = relay.deviceRevoked,
             relayPinMismatch = relay.pinMismatch,

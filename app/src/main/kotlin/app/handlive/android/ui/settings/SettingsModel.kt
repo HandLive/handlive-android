@@ -2,6 +2,7 @@ package app.handlive.android.ui.settings
 
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.strings.R
+import app.handlive.android.feature.connection.capability.AndroidPermissions
 
 /** SET-01 field 15: the state of automatic clipboard sending. */
 enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
@@ -12,6 +13,8 @@ data class SettingsUiState(
     val accessibilityServiceOn: Boolean = false,
     val sms: FeatureAccess = FeatureAccess(),
     val calls: FeatureAccess = FeatureAccess(),
+    /** HandLive has Notification access (CALL-05): the special access calls from other apps need (SET-01 N1–N2). */
+    val notificationAccess: Boolean = true,
     /** This build has a relay (`RELAY_HOST`): "Remove Device from Server" makes sense (SET-02 field 26). */
     val relayAvailable: Boolean = false,
     /** CONN-03 E3: the relay refused this device; field 21 says so until the user turns it back on. */
@@ -34,16 +37,28 @@ data class SettingsUiState(
     /** SET-02 field 10 with SET-01 field 10: the Calls switch and its feature card. */
     val callStatus: FeatureStatus get() = calls.status(settings.callEnabled)
 
+    /**
+     * SET-02 field 38 with SET-01 field 10 and E11: calls from other apps are on only with their own switch, the Calls
+     * switch and Notification access; they need no telephony, so this never says "unsupported".
+     */
+    val appCallsStatus: FeatureStatus get() = status(PhoneFeature.APP_CALLS)
+
     fun access(feature: PhoneFeature): FeatureAccess =
         when (feature) {
             PhoneFeature.SMS -> sms
             PhoneFeature.CALLS -> calls
+            PhoneFeature.APP_CALLS -> notificationAccessOf()
         }
+
+    /** The special access of calls from other apps as a missing permission: never denied for good, no telephony. */
+    private fun notificationAccessOf() =
+        FeatureAccess(missing = if (notificationAccess) emptySet() else setOf(AndroidPermissions.NOTIFICATION_LISTENER))
 
     fun status(feature: PhoneFeature): FeatureStatus =
         when (feature) {
             PhoneFeature.SMS -> smsStatus
             PhoneFeature.CALLS -> callStatus
+            PhoneFeature.APP_CALLS -> access(feature).status(settings.callEnabled && settings.callAppCalls)
         }
 
     /** Field 15: on only with the setting, the recorded consent and the service turned on. */
@@ -71,7 +86,10 @@ interface SettingsActions {
 
     fun setInternet(enabled: Boolean)
 
-    /** SET-02 field 7 or 10: turning on with permissions missing runs SET-01 part B (the key is saved either way). */
+    /**
+     * SET-02 field 7, 10 or 38: turning on with permissions missing runs SET-01 part B — for calls from other apps the
+     * Notification access primer, steps N1–N2 (the key is saved either way).
+     */
     fun setFeature(
         feature: PhoneFeature,
         enabled: Boolean,
@@ -83,11 +101,23 @@ interface SettingsActions {
     fun open(page: SettingsPage)
 }
 
-/** The telephony features with a switch, a permission primer and a feature card (SET-02 fields 7 and 10). */
-enum class PhoneFeature { SMS, CALLS }
+/**
+ * The features with a switch, a permission primer and a feature card: SMS and calls (SET-02 fields 7 and 10), and
+ * calls from other apps (field 38, Notification access instead of runtime permissions).
+ */
+enum class PhoneFeature { SMS, CALLS, APP_CALLS }
 
 /** Subscreens and system pages reachable from Settings. */
 enum class SettingsPage { AUTO_CLEAR, PERMISSIONS, LANGUAGE }
 
 /** The system pages the Permissions & Background screen leads to. */
-enum class PermissionTarget { NOTIFICATIONS, BACKGROUND, UNUSED_APP_PAUSE, MANUFACTURER, AUTO_SEND, SMS, CALLS }
+enum class PermissionTarget {
+    NOTIFICATIONS,
+    BACKGROUND,
+    UNUSED_APP_PAUSE,
+    MANUFACTURER,
+    AUTO_SEND,
+    SMS,
+    CALLS,
+    APP_CALLS,
+}

@@ -26,15 +26,32 @@ sealed interface Route {
     /** The Accessibility disclosure (CLIP-01 A2). */
     data object Consent : Route
 
-    /** SET-01 field 14 before the Accessibility settings. */
-    data object RestrictedSetting : Route
+    /**
+     * SET-01 field 14 before the Accessibility settings or, with [notificationAccess], before the Notification access
+     * page (step N1): both are restricted settings for an install from outside Google Play on Android 13+.
+     */
+    data class RestrictedSetting(
+        val notificationAccess: Boolean = false,
+    ) : Route
 
     /** SET-01 part B for SMS: the primer, then the system dialogs (steps 10–11). */
     data object SmsPermission : Route
 
     /** SET-01 part B for calls: the primer, then the system dialogs (steps 10–11). */
     data object CallPermission : Route
+
+    /** SET-01 steps N1–N2: the Notification access primer (field 19), then the system page. */
+    data object NotificationAccess : Route
 }
+
+/**
+ * What comes before a restricted system page (SET-01 API 6, API 9): field 14 on Android 13+ when HandLive was not
+ * installed from Google Play, otherwise nothing — the system page opens at once.
+ */
+fun restrictedSettingBefore(
+    restrictedSettingsLikely: Boolean,
+    notificationAccess: Boolean,
+): Route? = Route.RestrictedSetting(notificationAccess).takeIf { restrictedSettingsLikely }
 
 /** The back button names the screen it returns to (03-android.md "Navigation"): the Devices tab or Settings. */
 @get:StringRes

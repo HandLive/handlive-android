@@ -1,5 +1,6 @@
 package app.handlive.android.ui.settings
 
+import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.strings.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -60,5 +61,39 @@ class FeatureStatusTest {
         assertEquals(R.string.common_open_settings, permissionAction(all.status(enabled = true)))
         assertNull(permissionAction(FeatureStatus.ON))
         assertNull(permissionAction(FeatureStatus.UNSUPPORTED))
+    }
+
+    @Test
+    fun callsFromOtherAppsNeedTheirSwitchTheCallsSwitchAndNotificationAccess() {
+        val ui = SettingsUiState()
+        assertEquals(FeatureStatus.ON, ui.appCallsStatus)
+        assertEquals(
+            FeatureStatus.NEEDS_PERMISSION,
+            ui.copy(notificationAccess = false).appCallsStatus,
+        )
+        assertEquals(
+            "off by its own switch, whatever the access",
+            FeatureStatus.OFF,
+            ui.copy(settings = HandLiveSettings(callAppCalls = false), notificationAccess = false).appCallsStatus,
+        )
+        assertEquals(
+            "off with Calls off",
+            FeatureStatus.OFF,
+            ui.copy(settings = HandLiveSettings(callEnabled = false), notificationAccess = false).appCallsStatus,
+        )
+    }
+
+    @Test
+    fun theNotificationAccessCardOffersGrantPermissionOnlyWhileItIsNeeded() {
+        assertEquals(R.string.permission_grant, permissionAction(FeatureStatus.NEEDS_PERMISSION))
+        assertNull(permissionAction(SettingsUiState().appCallsStatus))
+    }
+
+    @Test
+    fun callsFromOtherAppsDoNotDependOnTelephony() {
+        val tablet = SettingsUiState(calls = FeatureAccess(telephony = false))
+
+        assertEquals(FeatureStatus.UNSUPPORTED, tablet.callStatus)
+        assertEquals(FeatureStatus.ON, tablet.appCallsStatus)
     }
 }

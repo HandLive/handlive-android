@@ -22,7 +22,8 @@ import app.handlive.android.ui.system.UnusedAppPause
 /**
  * SET-02 field 23 → SET-01 fields 3, 6–11, 15 and 16: notifications, background running (with its warning, E3),
  * "Pause app activity if unused", the manufacturer's autostart instructions, and one card per feature — automatic
- * clipboard sending, SMS and calls, each with its status and "Grant Permission" or "Open Settings". Every row leads
+ * clipboard sending, SMS, calls and calls from other apps, each with its status and "Grant Permission" or "Open
+ * Settings". Every row leads
  * to the page that changes it; the states are read again on every resume. [backLabel] names the screen Back returns
  * to: Settings, or Devices when the list opens after the phone's first pairing (SET-01 step 8).
  */
@@ -35,6 +36,7 @@ fun PermissionsScreen(
     onOpen: (PermissionTarget) -> Unit,
     onBack: () -> Unit,
     backLabel: String = stringResource(R.string.settings_title),
+    appCalls: FeatureStatus = FeatureStatus.ON,
 ) {
     val backgroundWarning =
         if (environment.batteryExempt) {
@@ -74,6 +76,7 @@ fun PermissionsScreen(
                 row { AutoSendRow(autoSend) { onOpen(PermissionTarget.AUTO_SEND) } }
                 featureCard(R.string.settings_sms_messages, sms) { onOpen(PermissionTarget.SMS) }
                 featureCard(R.string.settings_calls, calls) { onOpen(PermissionTarget.CALLS) }
+                featureCard(R.string.settings_call_app_calls, appCalls) { onOpen(PermissionTarget.APP_CALLS) }
             }
         }
     }
