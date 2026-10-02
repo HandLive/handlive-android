@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Development probe only: not part of the product's string catalog. -->
+<resources>
+    <string name="app_name">HandLive Call Spike</string>
+    <string name="listener_label">HandLive call notifications (spike)</string>
+    <string name="a11y_label">HandLive call spike (background start test)</string>
+    <string name="a11y_description">Does nothing; turned on only to test background activity starts for the HandLive call spike. Reads no screen content.</string>
+    <string name="open_notification_access">Open Notification Access</string>
+    <string name="open_accessibility">Open Accessibility Settings</string>
+    <string name="refresh">Refresh</string>
+    <string name="clear_log">Clear Log</string>
+    <string name="status_on">Notification access: on</string>
+    <string name="status_off">Notification access: off — turn it on by hand</string>
+</resources>

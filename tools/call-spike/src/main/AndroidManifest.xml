@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App-call spike (Phase 3 extension, T3.2). No INTERNET permission: nothing observed ever leaves the device. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- setCommunicationDevice / setMode for spike question 3. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".ui.SpikeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Turned on by hand in Settings › Notifications › Notification access (a security setting). -->
+        <service
+            android:name=".service.CallNotificationsService"
+            android:exported="false"
+            android:label="@string/listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Optional, turned on by hand: reproduces HandLive's bound accessibility service for question 2 variant B. -->
+        <service
+            android:name=".service.BalExemptionService"
+            android:exported="false"
+            android:label="@string/a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/call_spike_accessibility" />
+        </service>
+
+        <!-- adb commands; DUMP is held only by the shell and the system. -->
+        <receiver
+            android:name=".service.CommandReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
+</manifest>
