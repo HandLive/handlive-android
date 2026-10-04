@@ -33,15 +33,27 @@ class SpecialAccessTripTest {
     @Test
     fun nothingWhenNotRestrictedOrTheAccessIsOn() {
         val none = off.copy(restriction = RestrictedSettings.NONE)
-        assertNull("row 7: stay, the user may try again", routeOnReturn(SystemPage.ACCESSIBILITY, none))
-        assertNull("row b", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, none))
-        assertNull("row 9", routeOnReturn(SystemPage.ACCESSIBILITY, off.copy(accessibilityOn = true)))
-        assertNull("row g", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, off.copy(notificationAccess = true)))
+        assertNull(
+            "API 6 logic 6: R = none, stay, the user may try again",
+            routeOnReturn(SystemPage.ACCESSIBILITY, none),
+        )
+        assertNull(
+            "API 9 logic 4: R = none, no guidance on return",
+            routeOnReturn(SystemPage.NOTIFICATION_ACCESS, none),
+        )
+        assertNull(
+            "E8: the service is on, nothing to show",
+            routeOnReturn(SystemPage.ACCESSIBILITY, off.copy(accessibilityOn = true)),
+        )
+        assertNull(
+            "E11: Notification access granted, nothing to show",
+            routeOnReturn(SystemPage.NOTIFICATION_ACCESS, off.copy(notificationAccess = true)),
+        )
     }
 
     @Test
     fun nothingAfterAppInfoOrWithoutATrip() {
-        assertNull("row 8, row f", routeOnReturn(SystemPage.APP_INFO, off))
+        assertNull("API 6 logic 6: a return from App info opens nothing", routeOnReturn(SystemPage.APP_INFO, off))
         assertNull(routeOnReturn(null, off))
     }
 
@@ -51,9 +63,12 @@ class SpecialAccessTripTest {
         val clipboardOff = off.copy(settings = wanted.copy(clipboardEnabled = false))
         val appCallsOff = off.copy(settings = wanted.copy(callAppCalls = false))
         val callsOff = off.copy(settings = wanted.copy(callEnabled = false))
-        assertNull("row 1", routeOnReturn(SystemPage.ACCESSIBILITY, autoSendOff))
+        assertNull("API 6 logic 7: auto-send off never warns", routeOnReturn(SystemPage.ACCESSIBILITY, autoSendOff))
         assertNull(routeOnReturn(SystemPage.ACCESSIBILITY, clipboardOff))
-        assertNull("row a", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, appCallsOff))
+        assertNull(
+            "API 6 logic 7: calls from other apps off never warn",
+            routeOnReturn(SystemPage.NOTIFICATION_ACCESS, appCallsOff),
+        )
         assertNull(routeOnReturn(SystemPage.NOTIFICATION_ACCESS, callsOff))
     }
 
@@ -77,7 +92,7 @@ class SpecialAccessTripTest {
     fun theDisclosureOnlyUntilTheConsentExists() {
         assertEquals(AutoSendStep.DISCLOSURE, autoSendStep(SettingsUiState()))
         val consented = SettingsUiState(wanted)
-        assertEquals("row 3: no Route.Consent again", AutoSendStep.SERVICE, autoSendStep(consented))
+        assertEquals("CLIP-01 A1: consent given, no disclosure again", AutoSendStep.SERVICE, autoSendStep(consented))
         assertEquals(
             "turned off by the user, consent kept",
             AutoSendStep.SERVICE,

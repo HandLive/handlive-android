@@ -26,7 +26,7 @@ data class PhoneEnvironment(
     val batteryExempt: Boolean,
     val manufacturer: Manufacturer?,
     val unusedAppPause: UnusedAppPause,
-    /** Whether Android 13+ blocks Accessibility and Notification access: field 14 comes first (API 6, API 9). */
+    /** Whether Android 13+ may block Accessibility and Notification access, from the install source (API 6). */
     val restrictedSettings: RestrictedSettings,
 )
 

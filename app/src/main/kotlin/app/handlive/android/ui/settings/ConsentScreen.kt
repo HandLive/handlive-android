@@ -78,7 +78,7 @@ private fun ConsentLine(
 /**
  * SET-01 field 14 (Android 13+, not installed from Google Play): before the Accessibility settings open, or the
  * Notification access page with the [title] of its primer. Its single [button] is "Continue" to the page, or "Open
- * Settings" to App info when Android blocks it.
+ * Settings" to App info when the user came back without turning HandLive on (Android may have blocked it).
  */
 @Composable
 fun RestrictedSettingScreen(
