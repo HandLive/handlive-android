@@ -1,0 +1,226 @@
+# Release: builds the installable APK of a version tag (foss flavor: no Play Services, for direct install and F-Droid),
+# signs it with the release key and attaches it, with its SHA-256, to that tag's GitHub Release (created when missing,
+# pre-release when the tag has a suffix such as -beta.1).
+# Runs on a pushed tag v*, or by hand for an existing tag: publish=false keeps the APK as a workflow artifact only;
+# an APK already attached is never replaced unless replace=true.
+# Two jobs: "build" runs Gradle and third-party build code with read-only rights and no secret; "sign" only runs the
+# SDK's zipalign/apksigner and gh, with the signing key (environment "release") and write access to Releases.
+# The tag must equal versionName in app/build.gradle.kts. The hub and handlive-shared are checked out at the same tag
+# (push their tags first); a repository without that tag falls back to main with a warning.
+# Secrets (docs/deployment-guide.md, Release builds): ANDROID_RELEASE_KEYSTORE_BASE64, ANDROID_RELEASE_KEYSTORE_PASSWORD,
+# ANDROID_RELEASE_KEY_ALIAS, optional ANDROID_RELEASE_KEY_PASSWORD (a PKCS12 keystore uses the store password). Without
+# them "sign" stops: an unsigned APK cannot be installed, and one signed with a throwaway key could never be updated.
+# Optional repository variables HANDLIVE_RELAY_HOST and HANDLIVE_RELAY_EXTRA_PINS configure the relay (CONN-03).
+name: release-android
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag to build, e.g. v0.1.0-beta.1
+        required: true
+        type: string
+      publish:
+        description: Attach the APK to the tag's GitHub Release (off = workflow artifact only)
+        type: boolean
+        default: true
+      replace:
+        description: Replace an APK already attached to that Release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-android-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: build APK (foss, unsigned)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Tag
+        id: tag
+        env:
+          OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+        run: |
+          # The tag names files and API paths: one line, vMAJOR.MINOR.PATCH with an optional -suffix.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Not a version tag: $TAG (expected v1.2.3 or v1.2.3-beta.1)"; exit 1
+          fi
+          # The same tag in the hub and handlive-shared; a missing one falls back to main, any other API error stops.
+          resolve() {
+            if gh api "repos/${OWNER}/$1/git/ref/tags/${TAG}" > /dev/null 2> "$RUNNER_TEMP/resolve.err"; then
+              ref="$TAG"
+            elif grep -q 'HTTP 404' "$RUNNER_TEMP/resolve.err"; then
+              ref=main
+              echo "::warning::$1 has no tag $TAG: built against its main (push the hub and handlive-shared tags first)"
+            else
+              echo "::error::Cannot read the tags of $1: $(cat "$RUNNER_TEMP/resolve.err")"; exit 1
+            fi
+          }
+          resolve handlive; hub="$ref"
+          resolve handlive-shared; shared="$ref"
+          { echo "hub=$hub"; echo "shared=$shared"; echo "version=${TAG#v}"; } >> "$GITHUB_OUTPUT"
+          echo "$TAG: hub → $hub, handlive-shared → $shared"
+
+      - name: Kho hub handlive ở gốc workspace
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ github.repository_owner }}/handlive
+          ref: ${{ steps.tag.outputs.hub }}
+          token: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Kho android tại tag
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: android
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0 # the previous tag's versionCode
+          persist-credentials: false
+
+      - name: Kho handlive-shared cạnh android/
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ github.repository_owner }}/handlive-shared
+          path: shared
+          ref: ${{ steps.tag.outputs.shared }}
+          token: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: The tag matches versionName; versionCode went up
+        working-directory: android
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          name="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
+          if [ "$name" != "$VERSION" ]; then
+            echo "::error file=android/app/build.gradle.kts::versionName is \"$name\", the tag says \"$VERSION\""; exit 1
+          fi
+          code() { git show "$1:app/build.gradle.kts" | sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p'; }
+          if previous="$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2> /dev/null)" \
+            && [ "$(code "$TAG")" -le "$(code "$previous")" ]; then
+            echo "::warning file=android/app/build.gradle.kts::versionCode $(code "$TAG") is not above $(code "$previous") of $previous: devices with $previous will not take this as an update"
+          fi
+
+      - name: JDK 21 (Temurin)
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Android SDK platform 37
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: "platform-tools platforms;android-37.0"
+
+      # A release is built from scratch: no Gradle cache from earlier runs.
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          cache-disabled: true
+
+      - name: ./gradlew assembleFossRelease
+        working-directory: android
+        env:
+          HANDLIVE_RELAY_HOST: ${{ vars.HANDLIVE_RELAY_HOST }}
+          HANDLIVE_RELAY_EXTRA_PINS: ${{ vars.HANDLIVE_RELAY_EXTRA_PINS }}
+        run: ./gradlew :app:assembleFossRelease --no-build-cache --stacktrace
+
+      - name: Keep the unsigned APK for the sign job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-apk-unsigned-${{ steps.tag.outputs.version }}
+          path: android/app/build/outputs/apk/foss/release/app-foss-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: sign APK and publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write # create the Release and upload its assets
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+      REPLACE: ${{ inputs.replace || false }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: android-apk-unsigned-${{ needs.build.outputs.version }}
+          path: ${{ runner.temp }}/unsigned
+
+      # The runner image's own build-tools: nothing from the build job runs here. The passwords reach apksigner through
+      # the environment, never its command line; the keystore file is removed however the step ends.
+      - name: Sign the APK
+        id: apk
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Release signing secrets missing (ANDROID_RELEASE_KEYSTORE_BASE64, ANDROID_RELEASE_KEYSTORE_PASSWORD, ANDROID_RELEASE_KEY_ALIAS): see docs/deployment-guide.md, Release builds. The unsigned build is kept as a workflow artifact."
+            exit 1
+          fi
+          export KEY_PASSWORD="${KEY_PASSWORD:-$STORE_PASSWORD}" # PKCS12: the key password is the store password
+          keystore="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$keystore" "$RUNNER_TEMP/aligned.apk"' EXIT
+          tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          out="$RUNNER_TEMP/HandLive-$VERSION-android-foss.apk"
+          printf '%s' "$KEYSTORE" | base64 --decode > "$keystore"
+          # -P 16: uncompressed native libraries stay 16 KB aligned for 16 KB page devices.
+          "$tools/zipalign" -P 16 -f 4 "$RUNNER_TEMP/unsigned/app-foss-release-unsigned.apk" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign --ks "$keystore" --ks-pass env:STORE_PASSWORD --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASSWORD --out "$out" "$RUNNER_TEMP/aligned.apk"
+          "$tools/zipalign" -c -P 16 4 "$out"
+          "$tools/apksigner" verify --print-certs "$out"
+          (cd "$RUNNER_TEMP" && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
+          echo "file=$out" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the APK as a workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-apk-${{ needs.build.outputs.version }}
+          path: |
+            ${{ steps.apk.outputs.file }}
+            ${{ steps.apk.outputs.file }}.sha256
+          retention-days: 14
+
+      - name: Attach to the GitHub Release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.apk.outputs.file }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # A published APK and its checksum stay as users downloaded them unless replace=true.
+            name="$(basename "$APK")"
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+              | grep -qxF "$name" && [ "$REPLACE" != true ]; then
+              echo "::error::$name is already attached to $TAG: run again with replace=true to replace it"; exit 1
+            fi
+            gh release upload "$TAG" "$APK" "$APK.sha256" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            prerelease=""
+            if [[ "$TAG" == *-* ]]; then prerelease=--prerelease; fi
+            # shellcheck disable=SC2086 # empty or one flag
+            gh release create "$TAG" "$APK" "$APK.sha256" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "HandLive $TAG" --generate-notes $prerelease
+          fi

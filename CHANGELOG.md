@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Release workflow (`release-android`): a pushed tag `v*`, or a manual run for an existing tag, builds the `foss`
+  APK, signs it with the release key from the repository secrets (`apksigner`, after the build) and attaches
+  `HandLive-<version>-android-foss.apk` with its SHA-256 to the tag's GitHub Release; the tag must equal
+  `versionName`. Setup: hub `docs/deployment-guide.md`, Release builds.
 - Calls from other apps (CALL-05, Telegram first): `feature/call` reads call notifications through a
   `NotificationListenerService` (only `CallStyle` notifications and the ongoing notification that follows a ringing
   one; every other notification is ignored without its title or text being read), sends `call_event/app_call` to the
