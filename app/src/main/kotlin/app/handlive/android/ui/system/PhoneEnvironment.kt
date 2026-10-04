@@ -45,9 +45,12 @@ object PhoneEnvironmentReader {
             batteryExempt = power?.isIgnoringBatteryOptimizations(context.packageName) == true,
             manufacturer = manufacturerOf(Build.MANUFACTURER),
             unusedAppPause = unusedAppPause,
-            restrictedSettings = RestrictedSettings.read(context, installer(context)),
+            restrictedSettings = restrictedSettings(context),
         )
     }
+
+    /** SET-01 API 6 logic 2, on its own: read again right before a restricted page opens and on the way back. */
+    fun restrictedSettings(context: Context): RestrictedSettings = RestrictedSettings.read(context, installer(context))
 
     fun manufacturerOf(name: String?): Manufacturer? =
         when (name?.lowercase(Locale.ROOT)) {

@@ -73,8 +73,9 @@ fun MainScreen(
             onOpenNotificationSettings = { SystemPages.open(context, SystemPages.notificationSettings(context)) },
             onRetryService = { ServiceLauncher.start(context) },
         )
-    val main = MainContext(dependencies, stack, feedback, banners)
+    val main = MainContext(dependencies, stack, feedback, banners, rememberSpecialAccessTrip())
     UnpairedByPeerNotice(main)
+    SpecialAccessReturn(main)
     OpenRequests(main, openRequests)
     BackHandler(enabled = stack.isNotEmpty(), onBack = main::pop)
     // The tab bar floats over the tab content: its measured height, plus the gap under it, is what the content's
