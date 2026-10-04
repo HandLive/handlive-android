@@ -273,23 +273,43 @@ private fun ConsentRoute(
     environment: PhoneEnvironment,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val consent = main.dependencies.clipboard.consent
+    ConsentChoices(
+        stack = main.stack,
+        agree = { consent.agree(System.currentTimeMillis()) },
+        sendManually = consent::sendManually,
+        afterAgree = {
+            val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
+            if (restricted != null) main.push(restricted) else openAccessibility(context, main)
+        },
+    )
+}
+
+/**
+ * CLIP-01 A2: the disclosure's two choices. Each is written before the disclosure leaves the [stack], because leaving
+ * it cancels this composition's scope and with it an unfinished write; a second tap then finds it gone.
+ */
+@Composable
+internal fun ConsentChoices(
+    stack: MutableList<Route>,
+    agree: suspend () -> Unit,
+    sendManually: suspend () -> Unit,
+    afterAgree: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+
+    fun leave(): Boolean = (stack.lastOrNull() == Route.Consent).also { if (it) stack.removeAt(stack.lastIndex) }
     ConsentScreen(
-        // The choice is written before the disclosure leaves the stack: leaving it cancels this scope.
         onAgree = {
             scope.launch {
-                consent.agree(System.currentTimeMillis())
-                if (main.stack.lastOrNull() != Route.Consent) return@launch
-                main.pop()
-                val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
-                if (restricted != null) main.push(restricted) else openAccessibility(context, main)
+                agree()
+                if (leave()) afterAgree()
             }
         },
         onSendManually = {
             scope.launch {
-                consent.sendManually()
-                if (main.stack.lastOrNull() == Route.Consent) main.pop()
+                sendManually()
+                leave()
             }
         },
     )
