@@ -43,7 +43,8 @@ object ClipReader {
                     BenchLog.event(
                         BenchEvent.CLIP_READ_FAILED,
                         "reason" to failure.name.lowercase(),
-                        "authority" to (uri.authority ?: "-"),
+                        "stage" to "copy",
+                        "authority" to (uri.authority?.takeIf { uri.scheme == CONTENT } ?: "-"),
                         "source" to source,
                     )
                     LocalRead.Failed(failure, source)
@@ -126,6 +127,7 @@ object ClipReader {
     }
 
     private const val IMAGE = "image/"
+    private const val CONTENT = "content"
     private const val TEXT_ANY = "text/*"
     private const val BUFFER = 64 * 1024
 }

@@ -89,6 +89,13 @@ class LocalClipIntake(
             }
 
             content == null -> {
+                // E3 after a good copy: the decoder refused the bytes (debug builds log it like a failed read).
+                BenchLog.event(
+                    BenchEvent.CLIP_READ_FAILED,
+                    "reason" to ReadFailure.IMAGE_UNREADABLE.name.lowercase(),
+                    "stage" to "normalize",
+                    "source" to read.source,
+                )
                 onFailed(LocalRead.Failed(ReadFailure.IMAGE_UNREADABLE, read.source))
             }
 

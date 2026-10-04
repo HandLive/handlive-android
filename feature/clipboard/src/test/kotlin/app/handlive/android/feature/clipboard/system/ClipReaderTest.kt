@@ -89,7 +89,7 @@ class ClipReaderTest {
     }
 
     @Test
-    fun aRevokedGrantIsSkippedSilently() {
+    fun aRevokedGrantIsAPermissionLostFailure() {
         val stream =
             object : InputStream() {
                 override fun read(): Int = throw SecurityException("grant revoked")
