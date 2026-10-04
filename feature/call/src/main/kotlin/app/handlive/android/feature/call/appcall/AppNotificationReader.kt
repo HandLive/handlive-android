@@ -77,10 +77,11 @@ class AppNotificationReader(
 
         /**
          * The `android.callType` of a real `CallStyle` notification, `null` for any other. From API 31 the platform
-         * template must be `Notification.CallStyle`, which Android accepts only with a foreground service, a
-         * user-initiated job or a full-screen intent: the bare extra, which any app can add to an ordinary
-         * notification, would otherwise make a fake call whose answer intent HandLive sends with its background-start
-         * exemption. Below API 31 there is no platform `CallStyle` (apps use the compat extras) and nothing to check.
+         * template must be `Notification.CallStyle`, which Android posts only for an app with a foreground service or
+         * a user-initiated job, or one asking for a full-screen intent: the bare extra, which any app can add to an
+         * ordinary notification, would otherwise make a fake call whose answer intent HandLive sends with its
+         * background-start exemption. Below API 31 there is no platform `CallStyle` (apps use the compat extras) and
+         * nothing to check. An app that posts a real `CallStyle` still gets that exemption when the user answers.
          */
         internal fun callTypeOf(
             notification: Notification,

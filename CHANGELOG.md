@@ -37,9 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - Calls from other apps: a notification counts as a call only with the platform `CallStyle` template (API 31+), which
-  Android accepts only with a foreground service, a user-initiated job or a full-screen intent. Before, any app could
-  add the bare `android.callType` extra to an ordinary notification, show a fake call on the Mac and, when answered,
-  have its own activity started from the background with HandLive's exemption.
+  Android posts only with a foreground service, a user-initiated job or a full-screen intent request. Before, any app
+  could add the bare `android.callType` extra to an ordinary notification, show a fake call on the Mac and, when
+  answered, have its own activity started from the background with HandLive's exemption. Below API 31, and for an
+  app that posts a real `CallStyle` notification, answering still lends that exemption.
 
 ## [2026-09-30]
 
