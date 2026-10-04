@@ -89,13 +89,50 @@ class ClipReaderTest {
     }
 
     @Test
-    fun aRevokedGrantIsSkippedSilently() {
+    fun aRevokedGrantIsAPermissionLostFailure() {
         val stream =
             object : InputStream() {
                 override fun read(): Int = throw SecurityException("grant revoked")
             }
         shadowOf(context.contentResolver).registerInputStream(imageUri, stream)
         assertEquals(ReadFailure.PERMISSION_LOST, (read(imageClip()) as LocalRead.Failed).reason)
+    }
+
+    @Test
+    fun anImageWithTextBesideItIsStillTheImage() {
+        // Browsers and OEM galleries add the image's URL, its alt text or an empty string next to the image URI
+        // (CLIP-03 API 1 logic 1 wins over CLIP-01 API 2's text rule).
+        val bytes = ByteArray(1_000) { it.toByte() }
+        for (text in listOf("", "https://example.com/photo.png", "A photo")) {
+            shadowOf(context.contentResolver).registerInputStream(imageUri, bytes.inputStream())
+            val clip =
+                ClipData(ClipDescription("photo", arrayOf("image/png")), ClipData.Item(text, null, null, imageUri))
+            val image = read(clip) as LocalRead.Image
+            assertEquals(text, "image/png", image.mime)
+            assertArrayEquals(bytes, image.file.readBytes())
+        }
+    }
+
+    @Test
+    fun anImageWithHtmlBesideItIsStillTheImage() {
+        val bytes = ByteArray(1_000) { it.toByte() }
+        shadowOf(context.contentResolver).registerInputStream(imageUri, bytes.inputStream())
+        val clip =
+            ClipData(
+                ClipDescription("photo", arrayOf("text/html", "image/png")),
+                ClipData.Item("", "<img src=\"https://example.com/photo.png\">", null, imageUri),
+            )
+        assertEquals("image/png", (read(clip) as LocalRead.Image).mime)
+    }
+
+    @Test
+    fun aTextItemWithANonImageUriStaysText() {
+        val clip =
+            ClipData(
+                ClipDescription("doc", arrayOf("text/plain", "application/pdf")),
+                ClipData.Item("Order number: HL-240917-0042", null, null, Uri.parse("content://com.example/doc.pdf")),
+            )
+        assertEquals("Order number: HL-240917-0042", (read(clip) as LocalRead.Text).text)
     }
 
     private fun imageClip() = ClipData(ClipDescription("photo", arrayOf("image/png")), ClipData.Item(imageUri))

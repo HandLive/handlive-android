@@ -71,10 +71,15 @@ class LocalClipSendTest {
         test { h ->
             h.module.onLocalRead(LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, ClipboardValues.SOURCE_AUTO))
             h.module.onLocalRead(LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, ClipboardValues.SOURCE_MANUAL))
+            h.module.onLocalRead(LocalRead.Failed(ReadFailure.PERMISSION_LOST, ClipboardValues.SOURCE_AUTO))
             h.module.onLocalRead(LocalRead.Failed(ReadFailure.PERMISSION_LOST, ClipboardValues.SOURCE_MANUAL))
             h.module.onLocalRead(LocalRead.Failed(ReadFailure.IMAGE_TOO_LARGE, ClipboardValues.SOURCE_AUTO))
             h.run()
-            assertEquals(listOf(ClipMessage.EmptyOrNotText, ClipMessage.ImageTooLarge), h.notices.messages)
+            // A lost URI grant (E10) is told only to a user who pressed Send Clipboard, as an unreadable image.
+            assertEquals(
+                listOf(ClipMessage.EmptyOrNotText, ClipMessage.ImageUnreadable, ClipMessage.ImageTooLarge),
+                h.notices.messages,
+            )
         }
 
     @Test

@@ -8,14 +8,18 @@ import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.module.ClipFiles
 import app.handlive.android.feature.clipboard.module.LocalRead
 import app.handlive.android.feature.clipboard.module.ReadFailure
+import app.handlive.android.feature.connection.bench.BenchEvent
+import app.handlive.android.feature.connection.bench.BenchLog
 import java.io.File
 import java.io.InputStream
 import java.util.UUID
 
 /**
- * CLIP-01 API 2 logic 2 and CLIP-03 API 1: item 0 of a clip becomes plain text (`coerceToText`: HTML gives its
- * text, a text URI is read by the system) or an image copied into `cache/clip/` right away — the clipboard's URI
- * grant ends when the clip changes. Anything else is E3. Runs off the main thread; the content is never logged.
+ * CLIP-01 API 2 logic 2 and CLIP-03 API 1: item 0 of a clip is an image copied into `cache/clip/` right away when its
+ * URI is an image — the clipboard's URI grant ends when the clip changes — else plain text (`coerceToText`: HTML gives
+ * its text, a text URI is read by the system). The image wins over a text beside it: browsers and OEM galleries put the
+ * image's URL, its alt text or an empty string next to the URI, and the user copied the picture, not that text.
+ * Anything else is E3. Runs off the main thread; the content is never logged.
  */
 object ClipReader {
     fun read(
@@ -31,14 +35,24 @@ object ClipReader {
         val uri = item.uri
         val imageMime = uri?.let { imageMimeOf(context, clip.description, it) }
         return when {
-            item.text != null || item.htmlText != null -> {
-                text(item.coerceToText(context), sensitive, source)
-            }
-
+            // CLIP-03 API 1 logic 1 first: an item whose URI is an image is a copied image, text beside it or not.
             uri != null && imageMime != null -> {
                 val target = files.source(UUID.randomUUID().toString())
-                copyImage(context, uri, target)?.let { LocalRead.Failed(it, source) }
-                    ?: LocalRead.Image(target, imageMime, sensitive, source)
+                copyImage(context, uri, target)?.let { failure ->
+                    // Debug builds only (HLBENCH): which provider refused the read; never the path or the content.
+                    BenchLog.event(
+                        BenchEvent.CLIP_READ_FAILED,
+                        "reason" to failure.name.lowercase(),
+                        "stage" to "copy",
+                        "authority" to (uri.authority?.takeIf { uri.scheme == CONTENT } ?: "-"),
+                        "source" to source,
+                    )
+                    LocalRead.Failed(failure, source)
+                } ?: LocalRead.Image(target, imageMime, sensitive, source)
+            }
+
+            item.text != null || item.htmlText != null -> {
+                text(item.coerceToText(context), sensitive, source)
             }
 
             uri != null && clip.description.hasMimeType(TEXT_ANY) -> {
@@ -113,6 +127,7 @@ object ClipReader {
     }
 
     private const val IMAGE = "image/"
+    private const val CONTENT = "content"
     private const val TEXT_ANY = "text/*"
     private const val BUFFER = 64 * 1024
 }

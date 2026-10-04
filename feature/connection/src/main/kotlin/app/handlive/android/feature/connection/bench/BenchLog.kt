@@ -68,6 +68,12 @@ object BenchLog {
 object BenchEvent {
     const val COPY_DETECTED = "copy_detected"
     const val CLIP_READ = "clip_read"
+
+    /**
+     * An image item was not sent: `reason` (E2, E3, E10), `stage` (`copy`, `normalize`) and the `authority` of a
+     * content URI, never its path.
+     */
+    const val CLIP_READ_FAILED = "clip_read_failed"
     const val CLIP_SENT = "clip_sent"
     const val CLIP_RECEIVED = "clip_received"
     const val CLIP_APPLIED = "clip_applied"

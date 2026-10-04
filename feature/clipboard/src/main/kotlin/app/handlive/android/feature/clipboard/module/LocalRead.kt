@@ -13,7 +13,7 @@ enum class ReadFailure {
     /** The image stream could not be read or decoded. */
     IMAGE_UNREADABLE,
 
-    /** The URI read permission went away before the copy finished (the clip changed): skipped silently. */
+    /** The URI could not be read (grant lost or never given): silent on `auto`, told on `manual` (E10). */
     PERMISSION_LOST,
 }
 
