@@ -39,15 +39,31 @@ class HtmlClipSanitizerVectorTest {
     }
 
     @Test
+    fun unclosedQuoteAndStyleMutationInputsLeaveNoLiveImgOrScript() {
+        val inputs =
+            listOf(
+                "<img src=x onerror=alert(1) \"<p>a</p>",
+                "<p><style><img src=\"</style><img src=x onerror=alert(1)//\"></p>",
+            )
+        for (input in inputs) {
+            val output = HtmlClipSanitizer.sanitize(input).lowercase()
+            assertFalse(output, output.contains("<img"))
+            assertFalse(output, output.contains("<script"))
+            // `onerror=` may survive only as escaped text, never inside a tag.
+            assertFalse(output, Regex("<[^>]*onerror=").containsMatchIn(output))
+        }
+    }
+
+    @Test
     fun longAttributeRunsDoNotOverflowTheStack() {
         val long = "<a title=\"" + "x".repeat(LONG_RUN) + "\" href=\"https://e.com\">t</a>"
         assertEquals("<a href=\"https://e.com\">t</a>", HtmlClipSanitizer.sanitize(long))
         val unclosed = "<a " + "\"x ".repeat(LONG_RUN / 3)
-        assertEquals(unclosed, HtmlClipSanitizer.sanitize(unclosed))
+        assertEquals("&lt;" + unclosed.substring(1), HtmlClipSanitizer.sanitize(unclosed))
     }
 
     private companion object {
-        const val MIN_CASES = 30
+        const val MIN_CASES = 41
         const val LONG_RUN = 200_000
     }
 }

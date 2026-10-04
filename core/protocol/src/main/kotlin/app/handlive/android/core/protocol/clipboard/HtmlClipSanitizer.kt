@@ -4,12 +4,14 @@ package app.handlive.android.core.protocol.clipboard
  * The HTML sanitizer of a text clip's `html` (CLIP-01 API 5 `html`). Every platform runs the same algorithm; the
  * shared vectors `clipboard-html.json` pin its output byte for byte.
  *
- * Comments go. Tag and attribute names are case-insensitive and output tags are lowercase. [DROP_CONTENT] tags go
- * with everything up to their matching close tag (or the end when unclosed). [KEEP] tags stay with their allowed
- * attributes only, re-serialized ` name="value"` in a fixed order with `"`, `<` and `>` escaped; every other tag is
- * unwrapped (tag gone, content kept). `href` keeps `http`, `https` and `mailto`, `img src` keeps `http` and `https`
- * and an `img` without a kept `src` is dropped whole; `width`, `height`, `colspan` and `rowspan` keep ASCII digits
- * only. Void tags never close; text between tags is copied as is. A `<` that does not start a complete tag is text.
+ * Comments go (an unclosed `<!--` runs to the end), and so do `<!…>` and `<?…>` up to the next `>`. Tag and
+ * attribute names are case-insensitive and output tags are lowercase. [DROP_CONTENT] tags go with everything up to
+ * their matching close tag (or the end when unclosed). [KEEP] tags stay with their allowed attributes only, written
+ * as ` name="value"` in a fixed order with `"`, `<` and `>` escaped; every other tag is unwrapped (tag gone,
+ * content kept). `href` keeps `http`, `https` and `mailto`, `img src` keeps `http` and `https` and an `img` without
+ * a kept `src` is dropped whole; `width`, `height`, `colspan` and `rowspan` keep ASCII digits only. Void tags never
+ * close; text between tags is copied as is, except that a `<` followed by `/` or an ASCII letter that did not
+ * complete a tag becomes `&lt;` (the receiving parser would close it at the next `>`).
  *
  * The scanner is hand written rather than a regular expression: a tag match over a 180 KiB attribute run would
  * overflow the stack of the JVM regex engine. Pure Kotlin, no Android classes.
@@ -108,16 +110,16 @@ object HtmlClipSanitizer {
     fun sanitizeOrNull(html: String?): String? = html?.let(::sanitize)?.takeIf { it.isNotEmpty() }
 
     fun sanitize(html: String): String {
-        val text = HtmlTagScanner.stripComments(html)
+        val text = HtmlPrePasses.stripBogusComments(HtmlPrePasses.stripComments(html))
         val out = StringBuilder(text.length)
         var copyFrom = 0
         while (true) {
             val tag = HtmlTagScanner.nextTag(text, copyFrom)
             if (tag == null) {
-                out.append(text, copyFrom, text.length)
+                HtmlTagScanner.appendText(out, text, copyFrom, text.length)
                 return out.toString()
             }
-            out.append(text, copyFrom, tag.start)
+            HtmlTagScanner.appendText(out, text, copyFrom, tag.start)
             copyFrom = tag.end
             if (tag.name in DROP_CONTENT) {
                 if (!tag.closing) copyFrom = HtmlTagScanner.closeTagEnd(text, tag.name, tag.end) ?: text.length

@@ -4,7 +4,7 @@ package app.handlive.android.core.protocol.clipboard
  * The hand-written scanner under [HtmlClipSanitizer]: comments, complete tags and close tags. A regular expression
  * over a 180 KiB attribute run would overflow the stack of the JVM regex engine, so the tag grammar of the reference
  * (`<`, optional `/`, a name, attributes where a quoted value may hold `>`, `>`) is walked by index. A `<` that does
- * not start a complete tag is plain text.
+ * not start a complete tag is text ([appendText] escapes the ones that look like a tag start).
  */
 internal object HtmlTagScanner {
     /** One complete tag: [start] until [end] (exclusive), its lowercase [name] and the raw [attrs] text. */
@@ -16,20 +16,27 @@ internal object HtmlTagScanner {
         val attrs: String,
     )
 
-    /** Removes every `<!-- … -->`; an unclosed comment stays as text. */
-    fun stripComments(html: String): String {
-        var open = html.indexOf("<!--")
-        if (open < 0) return html
-        val out = StringBuilder(html.length)
-        var from = 0
-        while (open >= 0) {
-            val close = html.indexOf("-->", open + COMMENT_OPEN)
-            if (close < 0) break
-            out.append(html, from, open)
-            from = close + COMMENT_CLOSE
-            open = html.indexOf("<!--", from)
+    /**
+     * Appends the text segment `[from, to)` of [text]: copied as is, except that a `<` followed by `/` or an ASCII
+     * letter (it did not complete a tag) becomes `&lt;`, so the receiving parser cannot close it at a later `>`.
+     */
+    fun appendText(
+        out: StringBuilder,
+        text: String,
+        from: Int,
+        to: Int,
+    ) {
+        var copied = from
+        var at = text.indexOf('<', from)
+        while (at in from until to) {
+            val next = if (at + 1 < to) text[at + 1] else ' '
+            if (next == '/' || isAsciiLetter(next)) {
+                out.append(text, copied, at).append("&lt;")
+                copied = at + 1
+            }
+            at = text.indexOf('<', at + 1)
         }
-        return out.append(html, from, html.length).toString()
+        out.append(text, copied, to)
     }
 
     /** The first complete tag at or after [from], or `null`. */
@@ -45,7 +52,7 @@ internal object HtmlTagScanner {
         return null
     }
 
-    /** End of the first `</name` + whitespace + `>` at or after [from], case-insensitive; `null` when unclosed. */
+    /** End of the first `</name` + whitespace + `>` at or after [from], ASCII case-insensitive; `null` if unclosed. */
     fun closeTagEnd(
         text: String,
         name: String,
@@ -67,11 +74,23 @@ internal object HtmlTagScanner {
         name: String,
         at: Int,
     ): Int? {
-        if (!text.regionMatches(at + 2, name, 0, name.length, ignoreCase = true)) return null
+        if (!matchesAsciiIgnoreCase(text, at + 2, name)) return null
         var i = at + 2 + name.length
         while (i < text.length && isSpace(text[i])) i++
         return if (i < text.length && text[i] == '>') i + 1 else null
     }
+
+    /** [name] (lowercase ASCII) at [at]; folds ASCII letters only, so U+017F and the Kelvin sign never match. */
+    private fun matchesAsciiIgnoreCase(
+        text: String,
+        at: Int,
+        name: String,
+    ): Boolean =
+        at + name.length <= text.length &&
+            name.indices.all { k ->
+                val c = text[at + k]
+                (if (c in 'A'..'Z') c + ASCII_CASE_GAP else c) == name[k]
+            }
 
     private fun parseTag(
         text: String,
@@ -112,6 +131,49 @@ internal object HtmlTagScanner {
 
     private fun isAsciiLetter(c: Char) = c in 'a'..'z' || c in 'A'..'Z'
 
+    private const val ASCII_CASE_GAP = 'a' - 'A'
+}
+
+/**
+ * The two pre-passes that run before tag scanning, comments first: `<!-- … -->` (an unclosed one runs to the end of
+ * the input, as in HTML) and the HTML "bogus comments" `<!…>` (doctype, CDATA) and `<?…>`, dropped up to and
+ * including the next `>`, or to the end when there is none.
+ */
+internal object HtmlPrePasses {
+    fun stripComments(html: String): String =
+        strip(html, "-->", COMMENT_OPEN) { text, from -> text.indexOf("<!--", from) }
+
+    fun stripBogusComments(html: String): String = strip(html, ">", BOGUS_OPEN, ::nextBogusStart)
+
+    private fun strip(
+        html: String,
+        closer: String,
+        openerLength: Int,
+        nextOpen: (String, Int) -> Int,
+    ): String {
+        var open = nextOpen(html, 0)
+        if (open < 0) return html
+        val out = StringBuilder(html.length)
+        var from = 0
+        while (open >= 0) {
+            out.append(html, from, open)
+            val close = html.indexOf(closer, open + openerLength)
+            from = if (close < 0) html.length else close + closer.length
+            open = if (close < 0) -1 else nextOpen(html, from)
+        }
+        return out.append(html, from, html.length).toString()
+    }
+
+    private fun nextBogusStart(
+        html: String,
+        from: Int,
+    ): Int {
+        var at = html.indexOf('<', from)
+        while (at >= 0 && html.getOrNull(at + 1) !in BOGUS_MARKS) at = html.indexOf('<', at + 1)
+        return at
+    }
+
+    private val BOGUS_MARKS = setOf('!', '?')
     private const val COMMENT_OPEN = 4
-    private const val COMMENT_CLOSE = 3
+    private const val BOGUS_OPEN = 2
 }
