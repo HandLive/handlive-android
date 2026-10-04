@@ -31,17 +31,20 @@ private val IconSize = 48.dp
  * A full-screen step of a flow (PermissionPrimer README and Onboarding): a large symbol in an `accent-tint` circle,
  * a bold title (a heading for TalkBack), one or two sentences, small print, and the buttons at the bottom. The text
  * scrolls, so nothing is cut at 200 % text size. For a permission primer [actions] holds exactly one "Continue".
+ * [hero] replaces the symbol circle (the welcome screen shows the brand mark there); one of the two is required.
  */
 @Composable
 fun HLStepScreen(
-    symbol: HLSymbol,
+    symbol: HLSymbol? = null,
     title: String,
     body: String?,
     modifier: Modifier = Modifier,
     footer: String? = null,
+    hero: (@Composable () -> Unit)? = null,
     extra: @Composable () -> Unit = {},
     actions: @Composable () -> Unit,
 ) {
+    require(symbol != null || hero != null) { "HLStepScreen needs a symbol or a hero" }
     val colors = HandLiveTheme.colors
     val spacing = HandLiveTheme.spacing
     Column(
@@ -57,7 +60,7 @@ fun HLStepScreen(
             verticalArrangement = Arrangement.spacedBy(spacing.space16),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            StepHeading(symbol, title)
+            StepHeading(symbol, title, hero)
             body?.let {
                 BasicText(
                     text = it,
@@ -87,20 +90,22 @@ fun HLStepScreen(
 
 @Composable
 private fun StepHeading(
-    symbol: HLSymbol,
+    symbol: HLSymbol?,
     title: String,
+    hero: (@Composable () -> Unit)?,
 ) {
     val colors = HandLiveTheme.colors
-    Box(
-        modifier =
-            Modifier
-                .padding(top = HandLiveTheme.spacing.space40)
-                .size(IconCircle)
-                .clip(CircleShape)
-                .background(colors.accentTint),
-        contentAlignment = Alignment.Center,
-    ) {
-        HLIcon(symbol = symbol, contentDescription = null, tint = colors.accent, size = IconSize)
+    Box(modifier = Modifier.padding(top = HandLiveTheme.spacing.space40), contentAlignment = Alignment.Center) {
+        if (hero != null) {
+            hero()
+        } else if (symbol != null) {
+            Box(
+                modifier = Modifier.size(IconCircle).clip(CircleShape).background(colors.accentTint),
+                contentAlignment = Alignment.Center,
+            ) {
+                HLIcon(symbol = symbol, contentDescription = null, tint = colors.accent, size = IconSize)
+            }
+        }
     }
     BasicText(
         text = title,
