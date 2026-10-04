@@ -13,10 +13,14 @@ enum class RestrictedSettings {
     /** Not restricted: Android 12 or older, installed from Google Play, or "Allow restricted settings" was chosen. */
     NONE,
 
-    /** Android decides from the install source (op `DEFAULT`, unknown or unreadable) and HandLive is not from Play. */
+    /**
+     * Blocked or maybe blocked, but App info has no "Allow restricted settings" yet: the op is `ERRORED` (the
+     * system shows its dialog once the user tries the page), or `DEFAULT`, unknown or unreadable and HandLive is
+     * not from Play.
+     */
     LIKELY,
 
-    /** The op says so: `ERRORED` (blocked) or `IGNORED` (blocked, the user has seen the system's dialog). */
+    /** `IGNORED`: blocked, and the user has seen the system's dialog; App info offers "Allow restricted settings". */
     BLOCKED,
     ;
 
@@ -27,7 +31,8 @@ enum class RestrictedSettings {
 
         /**
          * The mapping of SET-01 API 6 logic 2, as the platform's enhanced confirmation reads the op: `ALLOWED` is
-         * never guarded, `ERRORED` and `IGNORED` always are, and `DEFAULT` falls back to the install source.
+         * never guarded, `ERRORED` and `IGNORED` always are, but only `IGNORED` lets App info clear the restriction;
+         * `DEFAULT` falls back to the install source.
          */
         fun of(
             sdk: Int,
@@ -37,7 +42,8 @@ enum class RestrictedSettings {
             when {
                 sdk < Build.VERSION_CODES.TIRAMISU -> NONE
                 opMode == AppOpsManager.MODE_ALLOWED -> NONE
-                opMode == AppOpsManager.MODE_ERRORED || opMode == AppOpsManager.MODE_IGNORED -> BLOCKED
+                opMode == AppOpsManager.MODE_IGNORED -> BLOCKED
+                opMode == AppOpsManager.MODE_ERRORED -> LIKELY
                 installer == PLAY_STORE -> NONE
                 else -> LIKELY
             }

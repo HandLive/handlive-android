@@ -19,13 +19,12 @@ import app.handlive.android.ui.system.SystemPages
 enum class SystemPage { ACCESSIBILITY, NOTIFICATION_ACCESS, APP_INFO }
 
 /**
- * The trip to a system page: which one HandLive opened, so that the return can be judged (SET-01 E7, E8, E11), and
- * whether the user has already been to App info. Saved with the activity's state, so a configuration change on the
- * way (Accessibility is where font and display size change) does not lose it.
+ * The trip to a system page: which one HandLive opened, so that the return can be judged (SET-01 E7, E8, E11). Saved
+ * with the activity's state, so a configuration change on the way (Accessibility is where font and display size
+ * change) does not lose it.
  */
 class SpecialAccessTrip(
     private val pending: MutableState<SystemPage?> = mutableStateOf(null),
-    private val appInfoVisited: MutableState<Boolean> = mutableStateOf(false),
 ) {
     fun leaveFor(page: SystemPage) {
         pending.value = page
@@ -38,21 +37,7 @@ class SpecialAccessTrip(
     fun takeReturn(): SystemPage? {
         val page = pending.value
         pending.value = null
-        if (page == SystemPage.APP_INFO) appInfoVisited.value = true
         return page
-    }
-
-    /**
-     * What comes before Accessibility or Notification access. After App info, a merely likely restriction no longer
-     * stops the way (the user may just have allowed it; Android reports no difference): the page opens at once. A
-     * certain block still shows field 14.
-     */
-    fun before(
-        restriction: RestrictedSettings,
-        notificationAccess: Boolean,
-    ): Route? {
-        val known = appInfoVisited.value && restriction == RestrictedSettings.LIKELY
-        return restrictedSettingBefore(if (known) RestrictedSettings.NONE else restriction, notificationAccess)
     }
 }
 
@@ -98,8 +83,7 @@ fun routeOnReturn(
 @Composable
 fun rememberSpecialAccessTrip(): SpecialAccessTrip {
     val pending = rememberSaveable { mutableStateOf<SystemPage?>(null) }
-    val appInfoVisited = rememberSaveable { mutableStateOf(false) }
-    return SpecialAccessTrip(pending, appInfoVisited)
+    return SpecialAccessTrip(pending)
 }
 
 /** Judges each return to the app (E8, E11) and pushes field 14 again when [routeOnReturn] asks for it. */
@@ -182,6 +166,6 @@ fun openAutoSendAccess(
     context: Context,
     main: MainContext,
 ) {
-    val restricted = main.trip.before(PhoneEnvironmentReader.restrictedSettings(context), notificationAccess = false)
+    val restricted = restrictedSettingBefore(PhoneEnvironmentReader.restrictedSettings(context), false)
     if (restricted != null) main.push(restricted) else openAccessibility(context, main)
 }

@@ -1,5 +1,6 @@
 package app.handlive.android.ui.main
 
+import android.app.AppOpsManager
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.ui.settings.SettingsUiState
 import app.handlive.android.ui.system.RestrictedSettings
@@ -71,19 +72,28 @@ class SpecialAccessTripTest {
     }
 
     @Test
-    fun afterAppInfoALikelyRestrictionNoLongerStopsTheWayButABlockStillDoes() {
+    fun theNextTapAfterAppInfoFollowsTheOpAsItIsNow() {
         val trip = SpecialAccessTrip()
-        assertEquals(Route.RestrictedSetting(), trip.before(RestrictedSettings.LIKELY, notificationAccess = false))
         trip.leaveFor(SystemPage.APP_INFO)
-        trip.takeReturn()
-        assertNull(
-            "row 8: straight to Accessibility",
-            trip.before(RestrictedSettings.LIKELY, notificationAccess = false),
-        )
-        assertNull("row f", trip.before(RestrictedSettings.LIKELY, notificationAccess = true))
+        assertEquals(SystemPage.APP_INFO, trip.takeReturn())
+        val likely = RestrictedSettings.LIKELY
         assertEquals(
-            Route.RestrictedSetting(openAppInfo = true),
-            trip.before(RestrictedSettings.BLOCKED, notificationAccess = false),
+            "still unknown: Continue once more",
+            Route.RestrictedSetting(),
+            restrictedSettingBefore(likely, false),
+        )
+        assertNull("allowed: straight to the page", restrictedSettingBefore(RestrictedSettings.NONE, false))
+    }
+
+    /** A first `ERRORED` try goes to the page, where Android shows its dialog; then App info can allow it. */
+    @Test
+    fun aFirstErroredTryContinuesAndAnIgnoredOneOpensSettings() {
+        val errored = RestrictedSettings.of(35, AppOpsManager.MODE_ERRORED, null)
+        assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(errored, notificationAccess = false))
+        val ignored = RestrictedSettings.of(35, AppOpsManager.MODE_IGNORED, null)
+        assertEquals(
+            Route.RestrictedSetting(notificationAccess = true, openAppInfo = true),
+            restrictedSettingBefore(ignored, notificationAccess = true),
         )
     }
 
