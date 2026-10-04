@@ -31,7 +31,7 @@ class LocalCapabilityBuilderTest {
         assertEquals(true, clipboard.autoSend)
         assertEquals(1_048_576L, clipboard.maxTextBytes)
         assertEquals(10_485_760L, clipboard.maxImageBytes)
-        assertEquals(listOf("text/plain", "image/png", "image/jpeg"), clipboard.mimes)
+        assertEquals(listOf("text/plain", "text/html", "image/png", "image/jpeg"), clipboard.mimes)
         assertEquals(true, capability.features.relay?.enabled)
         assertEquals(emptyList<String>(), capability.permissionsMissing)
     }
@@ -175,7 +175,7 @@ class LocalCapabilityBuilderTest {
         val settings = HandLiveSettings(clipboardEnabled = false, clipSendImages = false, relayEnabled = false)
         val capability = LocalCapabilityBuilder.build(settings, environment.copy(notificationsMissing = true))
         assertFalse(capability.features.clipboard!!.enabled)
-        assertEquals(listOf("text/plain"), capability.features.clipboard!!.mimes)
+        assertEquals(listOf("text/plain", "text/html"), capability.features.clipboard!!.mimes)
         assertEquals(false, capability.features.relay?.enabled)
         assertEquals(listOf("POST_NOTIFICATIONS"), capability.permissionsMissing)
     }

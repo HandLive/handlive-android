@@ -63,7 +63,7 @@ class LocalClipIntake(
     }
 
     private suspend fun onText(read: LocalRead.Text) {
-        val content = ClipContent.Text(read.text)
+        val content = ClipContent.Text(read.text, read.html)
         trace.markChanged(content.sha256)
         val settings = context.settings.value
         val sensitive = read.sensitiveExtra || SensitiveContent.looksLikeCardNumber(read.text)
@@ -194,10 +194,13 @@ class LocalClipIntake(
     ) {
         BenchLog.event(
             BenchEvent.CLIP_READ,
-            "clip" to clip.clipId,
-            "kind" to clip.kind,
-            "bytes" to clip.content.size,
-            "source" to clip.origin.source,
+            listOfNotNull(
+                "clip" to clip.clipId,
+                "kind" to clip.kind,
+                "bytes" to clip.content.size,
+                "source" to clip.origin.source,
+                ("html" to 1).takeIf { (clip.content as? ClipContent.Text)?.html != null },
+            ),
         )
         context.state.remember(clip)
         context.state.loopGuard.onSent(clip.content.sha256)

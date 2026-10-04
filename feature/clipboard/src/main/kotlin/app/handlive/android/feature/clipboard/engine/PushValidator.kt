@@ -84,6 +84,18 @@ object PushValidator {
             (push.text == null) == (push.transfer == null) -> "exactly one of text and transfer is required"
             push.text?.let(::isWellFormedText) == false -> "text is not valid UTF-8"
             push.transfer?.let(ChunkPlan::isWellFormed) == false -> "inconsistent transfer"
+            else -> push.html?.let { htmlProblem(push, it) }
+        }
+
+    /** `html` rides only on inline text (CLIP-01 API 5), within `CLIP_MAX_HTML` of UTF-8. */
+    private fun htmlProblem(
+        push: ClipboardPushData,
+        html: String,
+    ): String? =
+        when {
+            push.kind != ClipboardValues.KIND_TEXT || push.transfer != null -> "html only goes with inline text"
+            !isWellFormedText(html) -> "html is not valid UTF-8"
+            html.toByteArray(Charsets.UTF_8).size > ClipLimits.MAX_HTML_BYTES -> "html exceeds CLIP_MAX_HTML"
             else -> null
         }
 

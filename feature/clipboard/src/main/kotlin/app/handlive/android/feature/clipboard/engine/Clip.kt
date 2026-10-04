@@ -11,8 +11,13 @@ sealed interface ClipContent {
     val size: Long
     val sha256: ByteArray
 
+    /**
+     * Text with its optional sanitized [html] form (CLIP-01 API 5 `html`). Identity (`bytes`, `sha256`, QC4, QC6, QC8)
+     * looks at [text] only; [html] is an attachment of the clip.
+     */
     class Text(
         val text: String,
+        val html: String? = null,
     ) : ClipContent {
         val bytes: ByteArray = text.toByteArray(Charsets.UTF_8)
         override val mime = MIME_TEXT

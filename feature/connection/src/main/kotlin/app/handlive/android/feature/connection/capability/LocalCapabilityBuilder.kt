@@ -52,8 +52,8 @@ data class LocalEnvironment(
 object LocalCapabilityBuilder {
     const val MAX_TEXT_BYTES = 1_048_576L
     const val MAX_IMAGE_BYTES = 10_485_760L
-    val TEXT_MIMES = listOf("text/plain")
-    val ALL_MIMES = listOf("text/plain", "image/png", "image/jpeg")
+    val TEXT_MIMES = listOf("text/plain", "text/html")
+    val ALL_MIMES = listOf("text/plain", "text/html", "image/png", "image/jpeg")
     const val NOTIFICATIONS_PERMISSION = "POST_NOTIFICATIONS"
 
     fun build(

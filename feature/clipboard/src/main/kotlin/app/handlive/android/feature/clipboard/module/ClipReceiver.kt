@@ -8,11 +8,13 @@ import app.handlive.android.core.protocol.clipboard.ClipboardChunkPlaintext
 import app.handlive.android.core.protocol.clipboard.ClipboardConflictData
 import app.handlive.android.core.protocol.clipboard.ClipboardPushData
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
+import app.handlive.android.core.protocol.clipboard.HtmlClipSanitizer
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.clipboard.engine.Acceptance
 import app.handlive.android.feature.clipboard.engine.Clip
 import app.handlive.android.feature.clipboard.engine.ClipContent
+import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.engine.ClipOrigin
 import app.handlive.android.feature.clipboard.engine.ConflictDecision
 import app.handlive.android.feature.clipboard.engine.ConflictPolicy
@@ -50,10 +52,13 @@ class ClipReceiver(
         }
         BenchLog.event(
             BenchEvent.CLIP_RECEIVED,
-            "clip" to push.clipId,
-            "peer" to session.peerDeviceId.take(PEER_ID),
-            "kind" to push.kind,
-            "bytes" to PushValidator.size(push),
+            listOfNotNull(
+                "clip" to push.clipId,
+                "peer" to session.peerDeviceId.take(PEER_ID),
+                "kind" to push.kind,
+                "bytes" to PushValidator.size(push),
+                ("html" to 1).takeIf { push.html != null },
+            ),
         )
         val rejection = PushValidator.check(push, acceptance(session))
         when {
@@ -71,7 +76,7 @@ class ClipReceiver(
                 if (text == null) {
                     incoming.start(session, pushId, push)
                 } else {
-                    apply(session, pushId, push, ClipContent.Text(text))
+                    apply(session, pushId, push, ClipContent.Text(text, sanitizedHtml(push.html)))
                 }
             }
         }
@@ -192,7 +197,7 @@ class ClipReceiver(
                 val writer = context.platform.writer
                 when (content) {
                     is ClipContent.Text -> {
-                        writer.writeText(push.clipId, content.sha256, content.text, push.sensitive)
+                        writer.writeText(push.clipId, content.sha256, content.text, push.sensitive, content.html)
                     }
 
                     is ClipContent.FileBacked -> {
@@ -285,3 +290,12 @@ class ClipReceiver(
         const val PEER_ID = 8
     }
 }
+
+/**
+ * The receiver never trusts the sender's sanitizing: `html` is sanitized again before any write. Escaping can grow
+ * the output past [ClipLimits.MAX_HTML_BYTES]; then the text is written alone.
+ */
+private fun sanitizedHtml(html: String?): String? =
+    HtmlClipSanitizer
+        .sanitizeOrNull(html)
+        ?.takeIf { it.toByteArray(Charsets.UTF_8).size <= ClipLimits.MAX_HTML_BYTES }

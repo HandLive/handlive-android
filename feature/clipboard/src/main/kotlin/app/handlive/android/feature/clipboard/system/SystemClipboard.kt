@@ -28,12 +28,16 @@ class OwnWrite(
 
 /** Writes, clears and identifies the system clipboard (CLIP-02 API 3, CLIP-03 API 6, CLIP-05 API 2). */
 interface ClipboardWriter {
-    /** Throws on failure (`SecurityException`, a transaction too large) → `ack INTERNAL`. */
+    /**
+     * Throws on failure (`SecurityException`, a transaction too large) → `ack INTERNAL`. A non-null [html] (already
+     * sanitized) is written beside [text] as one `ClipData.newHtmlText` item (CLIP-02 API 3).
+     */
     fun writeText(
         clipId: String,
         sha256: ByteArray,
         text: String,
         sensitive: Boolean,
+        html: String? = null,
     ): OwnWrite
 
     fun writeFile(
@@ -67,7 +71,15 @@ class SystemClipboard(
         sha256: ByteArray,
         text: String,
         sensitive: Boolean,
-    ): OwnWrite = write(clipId, sha256, null, ClipData.newPlainText(LABEL, text), sensitive)
+        html: String?,
+    ): OwnWrite =
+        write(
+            clipId,
+            sha256,
+            null,
+            if (html != null) ClipData.newHtmlText(LABEL, text, html) else ClipData.newPlainText(LABEL, text),
+            sensitive,
+        )
 
     override fun writeFile(
         clipId: String,

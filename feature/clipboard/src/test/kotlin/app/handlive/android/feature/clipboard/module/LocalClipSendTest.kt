@@ -6,11 +6,13 @@ import app.handlive.android.feature.clipboard.ClipMessage
 import app.handlive.android.feature.clipboard.engine.ChunkPlan
 import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.testing.ClipboardHarness
+import app.handlive.android.feature.clipboard.testing.HTML_MIMES
 import app.handlive.android.feature.clipboard.testing.PHONE_ID
 import app.handlive.android.feature.clipboard.testing.clientCapability
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -45,6 +47,83 @@ class LocalClipSendTest {
             assertEquals(PHONE_ID, push.originDeviceId)
             assertEquals(false, push.sensitive)
             assertEquals(h.wall(), push.originTs)
+        }
+
+    @Test
+    fun theHtmlOfATextGoesOnlyToAClientListingTextHtml() =
+        test { h ->
+            h.mac.capability.value = clientCapability(mimes = HTML_MIMES)
+            h.connect(h.mac, h.ipad)
+            h.readText("Order", html = "<p>Order</p>")
+            assertEquals(
+                "<p>Order</p>",
+                h.mac
+                    .pushes()
+                    .single()
+                    .second.html,
+            )
+            assertEquals(
+                "Order",
+                h.mac
+                    .pushes()
+                    .single()
+                    .second.text,
+            )
+            assertNull(
+                h.ipad
+                    .pushes()
+                    .single()
+                    .second.html,
+            )
+        }
+
+    @Test
+    fun anOversizeHtmlIsDroppedAndTheTextStillGoesInline() =
+        test { h ->
+            h.mac.capability.value = clientCapability(mimes = HTML_MIMES)
+            h.connect(h.mac)
+            h.readText("Order", html = "<p>" + "x".repeat(ClipLimits.MAX_HTML_BYTES) + "</p>")
+            val push =
+                h.mac
+                    .pushes()
+                    .single()
+                    .second
+            assertEquals("Order", push.text)
+            assertNull(push.html)
+            assertNull(push.transfer)
+        }
+
+    @Test
+    fun anHtmlThatPushesThePlaintextOverTheInlineLimitIsDroppedNotChunked() =
+        test { h ->
+            h.mac.capability.value = clientCapability(mimes = HTML_MIMES)
+            h.connect(h.mac)
+            val text = "a".repeat(ClipLimits.INLINE_MAX_BYTES - 1_000)
+            h.readText(text, html = "<p>" + "x".repeat(ClipLimits.INLINE_MAX_BYTES - 2_000) + "</p>")
+            val push =
+                h.mac
+                    .pushes()
+                    .single()
+                    .second
+            assertEquals(text, push.text)
+            assertNull(push.html)
+            assertNull(push.transfer)
+        }
+
+    @Test
+    fun aChunkedTextNeverCarriesHtml() =
+        test { h ->
+            h.mac.capability.value = clientCapability(mimes = HTML_MIMES)
+            h.connect(h.mac)
+            h.readText("a".repeat(ClipLimits.INLINE_MAX_BYTES + 1), html = "<p>a</p>")
+            val push =
+                h.mac
+                    .pushes()
+                    .single()
+                    .second
+            assertNull(push.html)
+            assertNull(push.text)
+            assertTrue(push.transfer != null)
         }
 
     @Test

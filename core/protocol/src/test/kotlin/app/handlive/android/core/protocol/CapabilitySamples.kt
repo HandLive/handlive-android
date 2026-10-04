@@ -30,7 +30,7 @@ object CapabilitySamples {
                             autoSend = true,
                             maxTextBytes = 1_048_576,
                             maxImageBytes = 10_485_760,
-                            mimes = listOf("text/plain", "image/png", "image/jpeg"),
+                            mimes = listOf("text/plain", "text/html", "image/png", "image/jpeg"),
                         ),
                     sms =
                         SmsFeature(

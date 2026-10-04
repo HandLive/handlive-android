@@ -42,6 +42,23 @@ class PushValidatorTest {
             height = 1800,
         )
 
+    private fun htmlCode(push: ClipboardPushData) = code(push)
+
+    @Test
+    fun htmlOnInlineTextWithinTheLimitIsAccepted() {
+        assertNull(htmlCode(text.copy(html = "<p>x</p>")))
+        assertNull(htmlCode(text.copy(html = "é".repeat(ClipLimits.MAX_HTML_BYTES / 2))))
+    }
+
+    @Test
+    fun htmlWithATransferAnImageOrOverTheLimitIsBadRequest() {
+        val chunkedText = text.copy(text = null, transfer = transfer, html = "<p>x</p>")
+        assertEquals(ErrorCode.BAD_REQUEST, htmlCode(chunkedText))
+        assertEquals(ErrorCode.BAD_REQUEST, htmlCode(image.copy(html = "<p>x</p>")))
+        assertEquals(ErrorCode.BAD_REQUEST, htmlCode(text.copy(html = "x".repeat(ClipLimits.MAX_HTML_BYTES + 1))))
+        assertEquals(ErrorCode.BAD_REQUEST, htmlCode(text.copy(html = "é".repeat(ClipLimits.MAX_HTML_BYTES / 2 + 1))))
+    }
+
     private fun code(
         push: ClipboardPushData,
         acceptance: Acceptance = all,

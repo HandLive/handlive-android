@@ -118,7 +118,7 @@ class ClipSender(
         }
         val result =
             runCatching {
-                val inline = ClipWire.inlineOrNull(clip)
+                val inline = ClipWire.inlineOrNull(clip, withHtml = acceptsHtml(session))
                 if (inline != null) {
                     session.request(MessageType.CLIPBOARD, inline) { onSent() }
                 } else {
@@ -128,6 +128,14 @@ class ClipSender(
         result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
         return result.getOrNull()
     }
+
+    /** The peer lists `text/html` in its clipboard `mimes`: only then does a push carry `html` (CLIP-01 API 5). */
+    private fun acceptsHtml(session: PeerSession): Boolean =
+        session.peerCapability.value
+            ?.features
+            ?.clipboard
+            ?.mimes
+            ?.contains(ClipboardValues.MIME_HTML) == true
 
     private fun record(
         session: PeerSession,

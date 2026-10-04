@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipDescription
 import android.content.Context
 import android.net.Uri
+import app.handlive.android.core.protocol.clipboard.HtmlClipSanitizer
 import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.module.ClipFiles
 import app.handlive.android.feature.clipboard.module.LocalRead
@@ -17,8 +18,9 @@ import java.util.UUID
 /**
  * CLIP-01 API 2 logic 2 and CLIP-03 API 1: item 0 of a clip is an image copied into `cache/clip/` right away when its
  * URI is an image — the clipboard's URI grant ends when the clip changes — else plain text (`coerceToText`: HTML gives
- * its text, a text URI is read by the system). The image wins over a text beside it: browsers and OEM galleries put the
- * image's URL, its alt text or an empty string next to the URI, and the user copied the picture, not that text.
+ * its text, a text URI is read by the system) with the sanitized `htmlText` beside it when the item has one. The
+ * image wins over a text beside it: browsers and OEM galleries put the image's URL, its alt text or an empty string
+ * next to the URI, and the user copied the picture, not that text.
  * Anything else is E3. Runs off the main thread; the content is never logged.
  */
 object ClipReader {
@@ -52,7 +54,7 @@ object ClipReader {
             }
 
             item.text != null || item.htmlText != null -> {
-                text(item.coerceToText(context), sensitive, source)
+                text(item.coerceToText(context), sensitive, source, item.htmlText)
             }
 
             uri != null && clip.description.hasMimeType(TEXT_ANY) -> {
@@ -102,8 +104,11 @@ object ClipReader {
         text: CharSequence?,
         sensitive: Boolean,
         source: String,
+        html: String? = null,
     ): LocalRead =
-        text?.toString()?.takeIf { it.isNotEmpty() }?.let { LocalRead.Text(it, sensitive, source) }
+        text?.toString()?.takeIf { it.isNotEmpty() }?.let {
+            LocalRead.Text(it, sensitive, source, HtmlClipSanitizer.sanitizeOrNull(html))
+        }
             ?: LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, source)
 
     /** Logic 1: an image when the description or the provider gives an `image` MIME type. */
