@@ -1,6 +1,7 @@
 package app.handlive.android.ui.main
 
 import app.handlive.android.core.data.settings.HandLiveSettings
+import app.handlive.android.ui.settings.SettingsUiState
 import app.handlive.android.ui.system.RestrictedSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -8,7 +9,8 @@ import org.junit.Test
 
 /**
  * SET-01 E7, E8, E11: field 14 again on the way back from Accessibility or Notification access without the access,
- * once per return, never after App info, never while the feature is off.
+ * once per return, never after App info, never while the feature is off; and CLIP-01 A1: the disclosure only until
+ * the consent exists.
  */
 class SpecialAccessTripTest {
     private val wanted = HandLiveSettings(clipA11yConsentAt = 1L)
@@ -75,5 +77,18 @@ class SpecialAccessTripTest {
             Route.RestrictedSetting(openAppInfo = true),
             trip.before(RestrictedSettings.BLOCKED, notificationAccess = false),
         )
+    }
+
+    @Test
+    fun theDisclosureOnlyUntilTheConsentExists() {
+        assertEquals(AutoSendStep.DISCLOSURE, autoSendStep(SettingsUiState()))
+        val consented = SettingsUiState(wanted)
+        assertEquals("row 3: no Route.Consent again", AutoSendStep.SERVICE, autoSendStep(consented))
+        assertEquals(
+            "turned off by the user, consent kept",
+            AutoSendStep.SERVICE,
+            autoSendStep(consented.copy(settings = wanted.copy(clipAutoSend = false))),
+        )
+        assertEquals(AutoSendStep.SAVE, autoSendStep(consented.copy(accessibilityServiceOn = true)))
     }
 }
