@@ -44,6 +44,7 @@ object ScreenCatalog {
             "service failed" to { ServiceFailedScreen {} },
             "autostart" to { AutostartScreen(UiSamples.environment.manufacturer, true, {}, {}, {}, {}) },
             "devices empty" to { DevicesScreen(emptyList(), StatusBanners(), {}, {}) },
+            "devices empty with warnings" to { DevicesScreen(emptyList(), warnings, {}, {}) },
             "devices with warnings" to { DevicesScreen(listOf(UiSamples.mac, UiSamples.ipad), warnings, {}, {}) },
             "device details" to { DeviceDetailsScreen(UiSamples.mac, "Devices", {}, {}, now = UiSamples.NOW) },
             "pair choice" to { PairChoiceScreen({}, {}, {}) },

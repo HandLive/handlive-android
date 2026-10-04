@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import app.handlive.android.core.design.component.HLButton
 import app.handlive.android.core.design.component.HLGroupedList
 import app.handlive.android.core.design.component.HLScreenHeader
+import app.handlive.android.core.design.component.hlContentBottomInset
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.pairing.devices.DeviceListItem
@@ -41,7 +42,15 @@ fun DevicesScreen(
     Column(modifier = modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         HLScreenHeader(title = stringResource(R.string.pairing_devices))
         if (items.isEmpty() && !banners.any) {
-            EmptyDevices(onAdd)
+            // The empty state alone scrolls on its own (large text, a short window) and ends clear of the tab bar.
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = hlContentBottomInset()),
+            ) { EmptyDevices(onAdd) }
         } else {
             val addLabel = stringResource(R.string.pairing_add_device)
             val labels = bannerLabels()
@@ -60,13 +69,16 @@ fun DevicesScreen(
     }
 }
 
-/** Empty state: a `brand-title` title, one sentence, one button (Writing, "Empty states"). */
+/**
+ * Empty state: a `brand-title` title, one sentence, one button (Writing, "Empty states"). It does not scroll by itself:
+ * it is also a row of the grouped list (under a banner), where a scroll inside the lazy list cannot be measured.
+ */
 @Composable
 private fun EmptyDevices(onAdd: () -> Unit) {
     val colors = HandLiveTheme.colors
     val spacing = HandLiveTheme.spacing
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(spacing.space24),
+        modifier = Modifier.fillMaxWidth().padding(spacing.space24),
         verticalArrangement = Arrangement.spacedBy(spacing.space16),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

@@ -26,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Devices tab without a paired device: with a status banner (notifications off, service stopped) the screen crashed,
+  a vertical scroll measured inside the grouped list's lazy column; alone in a short window its Add Device button
+  ended under the tab bar. The empty state no longer scrolls by itself, and its own scroll keeps the navigation bar
+  and the tab bar clear (`hlContentBottomInset`, shared with `HLGroupedList`).
 - Settings, Devices and the other grouped lists: the last rows (Data › Delete All HandLive Data) ended under the floating
   tab bar and the navigation bar and could not be reached. `HLGroupedList` now keeps the navigation bar and the
   floating bar the main screen measures (`LocalHLFloatingBarInset`) clear at the bottom.

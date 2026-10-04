@@ -5,11 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -55,8 +52,7 @@ object HLGroupedListDefaults {
     @Composable
     fun contentPadding(): PaddingValues {
         val space = HandLiveTheme.spacing.space16
-        val navigationBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        return PaddingValues(top = space, bottom = space + navigationBar + LocalHLFloatingBarInset.current)
+        return PaddingValues(top = space, bottom = space + hlContentBottomInset())
     }
 }
 
