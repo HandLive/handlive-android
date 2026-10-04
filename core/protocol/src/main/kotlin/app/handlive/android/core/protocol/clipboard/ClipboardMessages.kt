@@ -16,6 +16,7 @@ object ClipboardValues {
     const val KIND_TEXT = "text"
     const val KIND_IMAGE = "image"
     const val MIME_TEXT = "text/plain"
+    const val MIME_HTML = "text/html"
     const val MIME_PNG = "image/png"
     const val MIME_JPEG = "image/jpeg"
     const val SOURCE_AUTO = "auto"
@@ -34,7 +35,8 @@ object ClipboardValues {
 
 /**
  * `clipboard/push` (CLIP-01 API 5, CLIP-03 API 3): exactly one of [text] (inline) and [transfer] (chunks) is set;
- * [width]/[height] only for images. [originTs] is on the origin device's clock (QC8 b).
+ * [width]/[height] only for images. [originTs] is on the origin device's clock (QC8 b). [html] is the optional
+ * sanitized HTML form of an inline [text] (CLIP-01 API 5 `html`); only sent to peers listing `text/html`.
  */
 @Serializable
 data class ClipboardPushData(
@@ -42,6 +44,7 @@ data class ClipboardPushData(
     val kind: String,
     val mime: String,
     val text: String? = null,
+    val html: String? = null,
     val transfer: ClipboardTransfer? = null,
     val width: Int? = null,
     val height: Int? = null,

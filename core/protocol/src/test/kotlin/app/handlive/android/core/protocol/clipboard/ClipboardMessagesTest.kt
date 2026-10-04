@@ -24,6 +24,16 @@ class ClipboardMessagesTest {
     }
 
     @Test
+    fun inlineTextPushWithHtmlRoundTrips() {
+        val json =
+            """{"op":"push","data":{"clip_id":"0192f3e0-5a21-7b3c-9d4e-1f2a3b4c5d6e","kind":"text",""" +
+                """"mime":"text/plain","text":"Order","html":"<p>Order</p>","sensitive":false,""" +
+                """"origin_ts":1727150100123,"source":"auto",""" +
+                """"origin_device_id":"8c7d6e5f-4a3b-8c2d-9e1f-0a1b2c3d4e5f"}}"""
+        assertEquals("<p>Order</p>", roundTrip(json, ClipboardPushData.serializer()).html)
+    }
+
+    @Test
     fun chunkedImagePushMatchesTheSpecExample() {
         val json =
             """{"op":"push","data":{"clip_id":"0192f3f1-2c3d-7e4f-8a5b-6c7d8e9f0a1b","kind":"image",""" +
