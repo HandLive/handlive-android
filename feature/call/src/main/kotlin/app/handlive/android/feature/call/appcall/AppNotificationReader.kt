@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Person
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import androidx.core.os.BundleCompat
@@ -16,14 +17,14 @@ import androidx.core.os.BundleCompat
  */
 class AppNotificationReader(
     private val context: Context,
+    private val sdk: Int = Build.VERSION.SDK_INT,
 ) {
     fun read(sbn: StatusBarNotification): AppNotification {
         val notification = sbn.notification
-        val extras = notification.extras
         return AppNotification(
             key = sbn.key,
             packageName = sbn.packageName,
-            callType = if (extras.containsKey(EXTRA_CALL_TYPE)) extras.getInt(EXTRA_CALL_TYPE) else null,
+            callType = callTypeOf(notification, sdk),
             ongoing = ongoing(notification),
             details =
                 object : AppNotificationDetails {
@@ -72,14 +73,34 @@ class AppNotificationReader(
         private const val EXTRA_ANSWER_INTENT = "android.answerIntent"
         private const val EXTRA_DECLINE_INTENT = "android.declineIntent"
         private const val EXTRA_HANG_UP_INTENT = "android.hangUpIntent"
+        private const val CALL_STYLE_TEMPLATE = "android.app.Notification\$CallStyle"
 
         /**
-         * The filter of the listener thread (CALL-05 API 1 logic 1): only a `CallStyle` notification (it has
-         * `android.callType`) or an ongoing one (`FLAG_ONGOING_EVENT`, a possible in-call notification) can matter to
+         * The `android.callType` of a real `CallStyle` notification, `null` for any other. From API 31 the platform
+         * template must be `Notification.CallStyle`, which Android accepts only with a foreground service, a
+         * user-initiated job or a full-screen intent: the bare extra, which any app can add to an ordinary
+         * notification, would otherwise make a fake call whose answer intent HandLive sends with its background-start
+         * exemption. Below API 31 there is no platform `CallStyle` (apps use the compat extras) and nothing to check.
+         */
+        internal fun callTypeOf(
+            notification: Notification,
+            sdk: Int,
+        ): Int? {
+            val extras = notification.extras
+            val template = extras.getString(Notification.EXTRA_TEMPLATE)
+            val styled = sdk < Build.VERSION_CODES.S || template == CALL_STYLE_TEMPLATE
+            return if (styled && extras.containsKey(EXTRA_CALL_TYPE)) extras.getInt(EXTRA_CALL_TYPE) else null
+        }
+
+        /**
+         * The filter of the listener thread (CALL-05 API 1 logic 1): only a `CallStyle` notification ([callTypeOf])
+         * or an ongoing one (`FLAG_ONGOING_EVENT`, a possible in-call notification) can matter to
          * A-CALL; every other one is dropped before it is read or queued.
          */
-        fun candidate(sbn: StatusBarNotification): Boolean =
-            ongoing(sbn.notification) || sbn.notification.extras.containsKey(EXTRA_CALL_TYPE)
+        fun candidate(
+            sbn: StatusBarNotification,
+            sdk: Int = Build.VERSION.SDK_INT,
+        ): Boolean = ongoing(sbn.notification) || callTypeOf(sbn.notification, sdk) != null
 
         private fun ongoing(notification: Notification) = notification.flags and Notification.FLAG_ONGOING_EVENT != 0
     }
