@@ -174,6 +174,32 @@ class AppNotificationReaderTest {
     }
 
     @Test
+    fun aBareCallTypeExtraOnAnOrdinaryNotificationIsNoCall() {
+        val sbn = post(fakeCall())
+
+        val read = reader.read(sbn)
+
+        assertNull("no CallStyle template, no call", read.callType)
+        assertNull(AppCallParser.shape(read))
+        assertFalse(AppNotificationReader.candidate(sbn))
+    }
+
+    @Test
+    fun belowApi31TheCallTypeExtraIsAllThereIs() {
+        val sbn = post(fakeCall())
+
+        assertEquals(AppCallParser.CALL_TYPE_INCOMING, AppNotificationReader(context, sdk = 30).read(sbn).callType)
+        assertTrue(AppNotificationReader.candidate(sbn, sdk = 30))
+    }
+
+    /** An ordinary notification dressed as a call: the extras a real `CallStyle` sets, without its template. */
+    private fun fakeCall(): Notification =
+        builder().setContentTitle("Bank").build().apply {
+            extras.putInt("android.callType", AppCallParser.CALL_TYPE_INCOMING)
+            extras.putParcelable("android.answerIntent", intent("answer"))
+        }
+
+    @Test
     fun theCallerIsTheTitleWhenTheNotificationHasNoCallPerson() {
         val read = reader.read(post(builder().setContentTitle("Zalo call").build()))
 

@@ -26,9 +26,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Devices tab without a paired device: with a status banner (notifications off, service stopped) the screen crashed,
+  a vertical scroll measured inside the grouped list's lazy column; alone in a short window its Add Device button
+  ended under the tab bar. The empty state no longer scrolls by itself, and its own scroll keeps the navigation bar
+  and the tab bar clear (`hlContentBottomInset`, shared with `HLGroupedList`).
 - Settings, Devices and the other grouped lists: the last rows (Data › Delete All HandLive Data) ended under the floating
   tab bar and the navigation bar and could not be reached. `HLGroupedList` now keeps the navigation bar and the
   floating bar the main screen measures (`LocalHLFloatingBarInset`) clear at the bottom.
+
+### Security
+
+- Calls from other apps: a notification counts as a call only with the platform `CallStyle` template (API 31+), which
+  Android posts only with a foreground service, a user-initiated job or a full-screen intent request. Before, any app
+  could add the bare `android.callType` extra to an ordinary notification, show a fake call on the Mac and, when
+  answered, have its own activity started from the background with HandLive's exemption. Below API 31, and for an
+  app that posts a real `CallStyle` notification, answering still lends that exemption.
 
 ## [2026-09-30]
 

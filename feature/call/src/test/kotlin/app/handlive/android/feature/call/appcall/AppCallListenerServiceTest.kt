@@ -92,7 +92,11 @@ class AppCallListenerServiceTest {
     ): StatusBarNotification {
         val notification =
             Notification().apply {
-                if (callType != null) extras.putInt("android.callType", callType)
+                if (callType != null) {
+                    // What `Notification.CallStyle` writes: its template and the call type.
+                    extras.putString(Notification.EXTRA_TEMPLATE, Notification.CallStyle::class.java.name)
+                    extras.putInt("android.callType", callType)
+                }
                 if (ongoing) flags = flags or Notification.FLAG_ONGOING_EVENT
             }
         return ReflectionHelpers.callConstructor(
