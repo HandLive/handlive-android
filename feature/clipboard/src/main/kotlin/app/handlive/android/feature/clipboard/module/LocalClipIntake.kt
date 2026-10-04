@@ -134,12 +134,14 @@ class LocalClipIntake(
 
     private fun onFailed(read: LocalRead.Failed) {
         val manual = read.source != ClipboardValues.SOURCE_AUTO
+        // A lost URI grant (E10) stays silent on the automatic path; a user who pressed Send Clipboard learns the
+        // image was not read, like any unreadable image (E3).
         val message =
             when (read.reason) {
                 ReadFailure.EMPTY_OR_NOT_TEXT -> ClipMessage.EmptyOrNotText.takeIf { manual }
                 ReadFailure.IMAGE_TOO_LARGE -> ClipMessage.ImageTooLarge
                 ReadFailure.IMAGE_UNREADABLE -> ClipMessage.ImageUnreadable.takeIf { manual }
-                ReadFailure.PERMISSION_LOST -> null
+                ReadFailure.PERMISSION_LOST -> ClipMessage.ImageUnreadable.takeIf { manual }
             }
         message?.let(notices::show)
     }

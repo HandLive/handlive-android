@@ -8,6 +8,8 @@ import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.module.ClipFiles
 import app.handlive.android.feature.clipboard.module.LocalRead
 import app.handlive.android.feature.clipboard.module.ReadFailure
+import app.handlive.android.feature.connection.bench.BenchEvent
+import app.handlive.android.feature.connection.bench.BenchLog
 import java.io.File
 import java.io.InputStream
 import java.util.UUID
@@ -33,11 +35,19 @@ object ClipReader {
         val uri = item.uri
         val imageMime = uri?.let { imageMimeOf(context, clip.description, it) }
         return when {
-            // CLIP-03 API 1 logic 1 comes first: an item whose URI is an image is a copied image even with a text beside it.
+            // CLIP-03 API 1 logic 1 first: an item whose URI is an image is a copied image, text beside it or not.
             uri != null && imageMime != null -> {
                 val target = files.source(UUID.randomUUID().toString())
-                copyImage(context, uri, target)?.let { LocalRead.Failed(it, source) }
-                    ?: LocalRead.Image(target, imageMime, sensitive, source)
+                copyImage(context, uri, target)?.let { failure ->
+                    // Debug builds only (HLBENCH): which provider refused the read; never the path or the content.
+                    BenchLog.event(
+                        BenchEvent.CLIP_READ_FAILED,
+                        "reason" to failure.name.lowercase(),
+                        "authority" to (uri.authority ?: "-"),
+                        "source" to source,
+                    )
+                    LocalRead.Failed(failure, source)
+                } ?: LocalRead.Image(target, imageMime, sensitive, source)
             }
 
             item.text != null || item.htmlText != null -> {
