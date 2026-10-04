@@ -13,9 +13,11 @@ import java.io.InputStream
 import java.util.UUID
 
 /**
- * CLIP-01 API 2 logic 2 and CLIP-03 API 1: item 0 of a clip becomes plain text (`coerceToText`: HTML gives its
- * text, a text URI is read by the system) or an image copied into `cache/clip/` right away — the clipboard's URI
- * grant ends when the clip changes. Anything else is E3. Runs off the main thread; the content is never logged.
+ * CLIP-01 API 2 logic 2 and CLIP-03 API 1: item 0 of a clip is an image copied into `cache/clip/` right away when its
+ * URI is an image — the clipboard's URI grant ends when the clip changes — else plain text (`coerceToText`: HTML gives
+ * its text, a text URI is read by the system). The image wins over a text beside it: browsers and OEM galleries put the
+ * image's URL, its alt text or an empty string next to the URI, and the user copied the picture, not that text.
+ * Anything else is E3. Runs off the main thread; the content is never logged.
  */
 object ClipReader {
     fun read(
@@ -31,14 +33,15 @@ object ClipReader {
         val uri = item.uri
         val imageMime = uri?.let { imageMimeOf(context, clip.description, it) }
         return when {
-            item.text != null || item.htmlText != null -> {
-                text(item.coerceToText(context), sensitive, source)
-            }
-
+            // CLIP-03 API 1 logic 1 comes first: an item whose URI is an image is a copied image even with a text beside it.
             uri != null && imageMime != null -> {
                 val target = files.source(UUID.randomUUID().toString())
                 copyImage(context, uri, target)?.let { LocalRead.Failed(it, source) }
                     ?: LocalRead.Image(target, imageMime, sensitive, source)
+            }
+
+            item.text != null || item.htmlText != null -> {
+                text(item.coerceToText(context), sensitive, source)
             }
 
             uri != null && clip.description.hasMimeType(TEXT_ANY) -> {
