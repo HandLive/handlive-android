@@ -113,7 +113,9 @@ fun SpecialAccessReturn(main: MainContext) {
             SpecialAccessState(
                 restriction = PhoneEnvironmentReader.restrictedSettings(context),
                 settings = settings,
-                accessibilityOn = main.dependencies.clipboard.consent.isServiceEnabled(),
+                accessibilityOn =
+                    main.dependencies.clipboard.consent
+                        .isServiceEnabled(),
                 notificationAccess = NotificationAccess.granted(context),
             )
         },

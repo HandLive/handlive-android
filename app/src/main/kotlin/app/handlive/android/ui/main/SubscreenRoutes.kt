@@ -66,23 +66,7 @@ fun RouteContent(
         }
 
         is Route.RestrictedSetting -> {
-            val context = LocalContext.current
-            val (title, body) =
-                if (route.notificationAccess) {
-                    R.string.permission_notification_access_title to
-                        R.string.setup_restricted_settings_help_notification_access
-                } else {
-                    R.string.settings_auto_send to R.string.setup_restricted_settings_help
-                }
-            val button = if (route.openAppInfo) R.string.common_open_settings else R.string.common_continue
-            RestrictedSettingScreen(title, body, button) {
-                main.pop()
-                when {
-                    route.openAppInfo -> openAppInfo(context, main)
-                    route.notificationAccess -> openNotificationAccess(context, main)
-                    else -> openAccessibility(context, main)
-                }
-            }
+            RestrictedSettingRoute(main, route)
         }
 
         Route.SmsPermission -> {
@@ -101,6 +85,31 @@ fun RouteContent(
                 val restricted = main.trip.before(environment.restrictedSettings, notificationAccess = true)
                 if (restricted != null) main.push(restricted) else openNotificationAccess(context, main)
             }
+        }
+    }
+}
+
+/** SET-01 field 14: "Continue" to the restricted page, or "Open Settings" to App info (E7, E8, E11). */
+@Composable
+private fun RestrictedSettingRoute(
+    main: MainContext,
+    route: Route.RestrictedSetting,
+) {
+    val context = LocalContext.current
+    val (title, body) =
+        if (route.notificationAccess) {
+            R.string.permission_notification_access_title to
+                R.string.setup_restricted_settings_help_notification_access
+        } else {
+            R.string.settings_auto_send to R.string.setup_restricted_settings_help
+        }
+    val button = if (route.openAppInfo) R.string.common_open_settings else R.string.common_continue
+    RestrictedSettingScreen(title, body, button) {
+        main.pop()
+        when {
+            route.openAppInfo -> openAppInfo(context, main)
+            route.notificationAccess -> openNotificationAccess(context, main)
+            else -> openAccessibility(context, main)
         }
     }
 }
@@ -226,7 +235,8 @@ private fun openPermissionTarget(
 
         PermissionTarget.AUTO_SEND -> {
             // CLIP-01 A1: the disclosure only until the consent exists.
-            if (state.settings.clipA11yConsentAt == null) main.push(Route.Consent) else openAutoSendAccess(context, main)
+            val consented = state.settings.clipA11yConsentAt != null
+            if (consented) openAutoSendAccess(context, main) else main.push(Route.Consent)
         }
 
         PermissionTarget.SMS -> {

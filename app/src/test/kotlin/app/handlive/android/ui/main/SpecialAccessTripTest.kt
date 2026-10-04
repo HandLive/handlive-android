@@ -50,11 +50,16 @@ class SpecialAccessTripTest {
 
     @Test
     fun nothingWhileTheFeatureIsOff() {
-        val blocked = off.copy(restriction = RestrictedSettings.BLOCKED)
-        assertNull("row 1", routeOnReturn(SystemPage.ACCESSIBILITY, blocked.copy(settings = wanted.copy(clipAutoSend = false))))
-        assertNull(routeOnReturn(SystemPage.ACCESSIBILITY, blocked.copy(settings = wanted.copy(clipboardEnabled = false))))
-        assertNull("row a", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, blocked.copy(settings = wanted.copy(callAppCalls = false))))
-        assertNull(routeOnReturn(SystemPage.NOTIFICATION_ACCESS, blocked.copy(settings = wanted.copy(callEnabled = false))))
+        fun blockedWith(settings: HandLiveSettings) =
+            off.copy(restriction = RestrictedSettings.BLOCKED, settings = settings)
+        val autoSendOff = blockedWith(wanted.copy(clipAutoSend = false))
+        val clipboardOff = blockedWith(wanted.copy(clipboardEnabled = false))
+        val appCallsOff = blockedWith(wanted.copy(callAppCalls = false))
+        val callsOff = blockedWith(wanted.copy(callEnabled = false))
+        assertNull("row 1", routeOnReturn(SystemPage.ACCESSIBILITY, autoSendOff))
+        assertNull(routeOnReturn(SystemPage.ACCESSIBILITY, clipboardOff))
+        assertNull("row a", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, appCallsOff))
+        assertNull(routeOnReturn(SystemPage.NOTIFICATION_ACCESS, callsOff))
     }
 
     @Test
@@ -71,7 +76,10 @@ class SpecialAccessTripTest {
         assertEquals(Route.RestrictedSetting(), trip.before(RestrictedSettings.LIKELY, notificationAccess = false))
         trip.leaveFor(SystemPage.APP_INFO)
         trip.takeReturn()
-        assertNull("row 8: straight to Accessibility", trip.before(RestrictedSettings.LIKELY, notificationAccess = false))
+        assertNull(
+            "row 8: straight to Accessibility",
+            trip.before(RestrictedSettings.LIKELY, notificationAccess = false),
+        )
         assertNull("row f", trip.before(RestrictedSettings.LIKELY, notificationAccess = true))
         assertEquals(
             Route.RestrictedSetting(openAppInfo = true),
