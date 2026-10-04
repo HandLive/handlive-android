@@ -84,8 +84,22 @@ class SpecialAccessTripTest {
     fun theNextTapAfterAppInfoGoesThroughField14AgainWithContinue() {
         val trip = SpecialAccessTrip()
         trip.leaveFor(SystemPage.APP_INFO)
-        assertEquals(SystemPage.APP_INFO, trip.takeReturn())
-        assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(RestrictedSettings.LIKELY, false))
+        assertNull("the return itself navigates nowhere", routeOnReturn(trip.takeReturn(), off))
+        assertNull("and leaves nothing behind", trip.takeReturn())
+        assertEquals(
+            "the next tap on the consented card: field 14 with Continue, not Open Settings",
+            Route.RestrictedSetting(),
+            autoSendRoute(consented = true, RestrictedSettings.LIKELY),
+        )
+    }
+
+    @Test
+    fun theAutoSendCardShowsTheDisclosureOnlyUntilTheConsentExists() {
+        listOf(RestrictedSettings.NONE, RestrictedSettings.LIKELY).forEach { restriction ->
+            assertEquals(Route.Consent, autoSendRoute(consented = false, restriction))
+        }
+        assertEquals(Route.RestrictedSetting(), autoSendRoute(consented = true, RestrictedSettings.LIKELY))
+        assertNull("Accessibility opens at once", autoSendRoute(consented = true, RestrictedSettings.NONE))
     }
 
     @Test
