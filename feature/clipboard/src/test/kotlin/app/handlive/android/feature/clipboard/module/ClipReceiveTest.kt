@@ -97,6 +97,22 @@ class ClipReceiveTest {
         }
 
     @Test
+    fun htmlThatGrowsPastTheLimitWhenSanitizedIsDroppedAndTheTextIsStillApplied() =
+        test { h ->
+            h.connect(h.mac)
+            // Under the limit as sent; every `"` in the href becomes `&quot;`, which takes it far over.
+            val quotes = "\"".repeat(ClipLimits.MAX_HTML_BYTES / 2)
+            val html = "<a href='https://e.com/$quotes'>t</a>"
+            assertTrue(html.length < ClipLimits.MAX_HTML_BYTES)
+            h.push(h.mac, h.macText("Hi").copy(html = html))
+            val written = h.writer.writes.single()
+            assertEquals("Hi", written.text)
+            assertNull(written.html)
+            val ack = h.mac.ackData().single()
+            assertEquals(ClipboardValues.STATUS_APPLIED, ack.status)
+        }
+
+    @Test
     fun htmlWithATransferOrAnImageOrTooLongIsBadRequest() =
         test { h ->
             h.connect(h.mac)

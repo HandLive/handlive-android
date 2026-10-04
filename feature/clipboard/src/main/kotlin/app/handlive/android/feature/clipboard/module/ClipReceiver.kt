@@ -14,6 +14,7 @@ import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.clipboard.engine.Acceptance
 import app.handlive.android.feature.clipboard.engine.Clip
 import app.handlive.android.feature.clipboard.engine.ClipContent
+import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.engine.ClipOrigin
 import app.handlive.android.feature.clipboard.engine.ConflictDecision
 import app.handlive.android.feature.clipboard.engine.ConflictPolicy
@@ -75,8 +76,7 @@ class ClipReceiver(
                 if (text == null) {
                     incoming.start(session, pushId, push)
                 } else {
-                    // The receiver never trusts the sender's sanitizing: `html` is sanitized again before any write.
-                    apply(session, pushId, push, ClipContent.Text(text, HtmlClipSanitizer.sanitizeOrNull(push.html)))
+                    apply(session, pushId, push, ClipContent.Text(text, sanitizedHtml(push.html)))
                 }
             }
         }
@@ -290,3 +290,12 @@ class ClipReceiver(
         const val PEER_ID = 8
     }
 }
+
+/**
+ * The receiver never trusts the sender's sanitizing: `html` is sanitized again before any write. Escaping can grow
+ * the output past [ClipLimits.MAX_HTML_BYTES]; then the text is written alone.
+ */
+private fun sanitizedHtml(html: String?): String? =
+    HtmlClipSanitizer
+        .sanitizeOrNull(html)
+        ?.takeIf { it.toByteArray(Charsets.UTF_8).size <= ClipLimits.MAX_HTML_BYTES }
