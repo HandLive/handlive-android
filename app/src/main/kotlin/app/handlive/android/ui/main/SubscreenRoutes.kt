@@ -234,9 +234,7 @@ private fun openPermissionTarget(
         }
 
         PermissionTarget.AUTO_SEND -> {
-            // CLIP-01 A1: the disclosure only until the consent exists.
-            val consented = state.settings.clipA11yConsentAt != null
-            if (consented) openAutoSendAccess(context, main) else main.push(Route.Consent)
+            openAutoSendAccess(context, main, consented = state.settings.clipA11yConsentAt != null)
         }
 
         PermissionTarget.SMS -> {

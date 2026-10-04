@@ -159,13 +159,21 @@ fun openAppInfo(
 }
 
 /**
- * Turning automatic sending on once the consent exists (CLIP-01 A1 is not shown again): field 14 first when Android
- * may restrict Accessibility, else Accessibility itself.
+ * The way to automatic sending from its card or switch (CLIP-01 A1, SET-01 step 12): the disclosure until the
+ * consent exists and never again afterwards; then field 14 first when Android may restrict Accessibility. `null`:
+ * Accessibility opens at once.
  */
+fun autoSendRoute(
+    consented: Boolean,
+    restriction: RestrictedSettings,
+): Route? = if (consented) restrictedSettingBefore(restriction, notificationAccess = false) else Route.Consent
+
+/** Follows [autoSendRoute] with the restriction read now. */
 fun openAutoSendAccess(
     context: Context,
     main: MainContext,
+    consented: Boolean = true,
 ) {
-    val restricted = restrictedSettingBefore(PhoneEnvironmentReader.restrictedSettings(context), false)
-    if (restricted != null) main.push(restricted) else openAccessibility(context, main)
+    val route = autoSendRoute(consented, PhoneEnvironmentReader.restrictedSettings(context))
+    if (route != null) main.push(route) else openAccessibility(context, main)
 }
