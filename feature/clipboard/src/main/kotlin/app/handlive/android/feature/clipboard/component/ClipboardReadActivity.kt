@@ -14,6 +14,8 @@ import app.handlive.android.feature.clipboard.ClipboardFeature
 import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.module.LocalRead
 import app.handlive.android.feature.clipboard.module.ReadFailure
+import app.handlive.android.feature.connection.bench.BenchEvent
+import app.handlive.android.feature.connection.bench.BenchLog
 
 /**
  * CLIP-01 API 2 and 4, CLIP-05 step 7: a transparent activity without animation that takes focus for an instant —
@@ -86,6 +88,14 @@ class ClipboardReadActivity : Activity() {
         if (intent.getStringExtra(EXTRA_MODE) == MODE_VERIFY) {
             feature.module.trace.deliverVerification(null)
         } else {
+            // E3 without a clip read: the window never got focus (another window, the lock screen, an OEM overlay).
+            BenchLog.event(
+                BenchEvent.CLIP_READ_FAILED,
+                "reason" to ReadFailure.EMPTY_OR_NOT_TEXT.name.lowercase(),
+                "stage" to "focus",
+                "why" to "no_focus",
+                "source" to sourceOf(intent),
+            )
             feature.module.onLocalRead(LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, sourceOf(intent)))
         }
         finishQuietly()
@@ -148,7 +158,16 @@ class ClipboardReadActivity : Activity() {
 
         /** API 1 logic 3: a bound Accessibility service may start activities from the background. */
         fun startAutomaticRead(context: Context) {
-            runCatching { context.startActivity(intent(context, ClipboardValues.SOURCE_AUTO)) }
+            runCatching { context.startActivity(intent(context, ClipboardValues.SOURCE_AUTO)) }.onFailure {
+                // The system refused the background start (CLIP-01 API 1 logic 3 did not hold on this build).
+                BenchLog.event(
+                    BenchEvent.CLIP_READ_FAILED,
+                    "reason" to ReadFailure.EMPTY_OR_NOT_TEXT.name.lowercase(),
+                    "stage" to "start",
+                    "why" to (it::class.simpleName ?: "exception"),
+                    "source" to ClipboardValues.SOURCE_AUTO,
+                )
+            }
         }
 
         /** The tile's target on API 29–33 (`startActivityAndCollapse(Intent)`). */
