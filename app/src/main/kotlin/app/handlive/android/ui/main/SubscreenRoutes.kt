@@ -276,15 +276,21 @@ private fun ConsentRoute(
     val scope = rememberCoroutineScope()
     val consent = main.dependencies.clipboard.consent
     ConsentScreen(
+        // The choice is written before the disclosure leaves the stack: leaving it cancels this scope.
         onAgree = {
-            scope.launch { consent.agree(System.currentTimeMillis()) }
-            main.pop()
-            val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
-            if (restricted != null) main.push(restricted) else openAccessibility(context, main)
+            scope.launch {
+                consent.agree(System.currentTimeMillis())
+                if (main.stack.lastOrNull() != Route.Consent) return@launch
+                main.pop()
+                val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
+                if (restricted != null) main.push(restricted) else openAccessibility(context, main)
+            }
         },
         onSendManually = {
-            scope.launch { consent.sendManually() }
-            main.pop()
+            scope.launch {
+                consent.sendManually()
+                if (main.stack.lastOrNull() == Route.Consent) main.pop()
+            }
         },
     )
 }
