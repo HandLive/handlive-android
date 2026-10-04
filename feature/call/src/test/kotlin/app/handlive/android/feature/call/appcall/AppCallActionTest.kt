@@ -67,6 +67,28 @@ class AppCallActionTest {
         }
 
     @Test
+    fun aCallAndroidDoesNotVouchForIsAnsweredThroughThePhoneEvenWithTheExemption() =
+        runTest {
+            val h = CallHarness(this).withMac()
+            h.appPost(AppCallFixtures.telegramRinging(answer = answer, decline = decline, vouched = false))
+            val callId =
+                h.mac
+                    .appCalls()
+                    .last()
+                    .callId
+
+            assertTrue(h.action(h.mac, callId, "answer").ok)
+
+            assertTrue("HandLive lends its exemption to no forged call", sent.isEmpty())
+            assertSame(
+                answer,
+                h.tap.posted
+                    .single()
+                    .answer,
+            )
+        }
+
+    @Test
     fun answerWithAudioPhoneIsTheSameAsWithoutAudio() =
         runTest {
             val h = CallHarness(this).withMac()

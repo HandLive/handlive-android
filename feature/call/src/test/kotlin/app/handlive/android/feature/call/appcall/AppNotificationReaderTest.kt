@@ -192,6 +192,45 @@ class AppNotificationReaderTest {
         assertTrue(AppNotificationReader.candidate(sbn, sdk = 30))
     }
 
+    @Test
+    fun fromApi34AndroidVouchesForACallWithAServiceOrAFullScreenIntentOnly() {
+        val person = Person.Builder().setName("A").build()
+
+        fun ringing() =
+            builder().setStyle(NotificationCompat.CallStyle.forIncomingCall(person, intent("d"), intent("a")))
+
+        val bare = post(ringing().build())
+        assertFalse("a CallStyle with a merely requested full-screen intent", reader.read(bare).vouched)
+        assertEquals(
+            "still a call, answered through the phone",
+            AppCallShape.RINGING,
+            AppCallParser.shape(reader.read(bare)),
+        )
+
+        val service = post(ringing().build().apply { flags = flags or Notification.FLAG_FOREGROUND_SERVICE })
+        assertTrue(reader.read(service).vouched)
+
+        val fullScreen = post(ringing().setFullScreenIntent(intent("full"), true).build())
+        assertTrue(reader.read(fullScreen).vouched)
+    }
+
+    @Test
+    fun onApi31To33TheTemplateVouchesAndBelowNothingDoes() {
+        val person = Person.Builder().setName("A").build()
+        val sbn =
+            post(
+                builder()
+                    .setStyle(
+                        NotificationCompat.CallStyle.forIncomingCall(person, intent("d"), intent("a")),
+                    ).build(),
+            )
+
+        assertTrue(AppNotificationReader(context, sdk = 33).read(sbn).vouched)
+        assertTrue(AppNotificationReader(context, sdk = 31).read(sbn).vouched)
+        assertFalse(AppNotificationReader(context, sdk = 30).read(sbn).vouched)
+        assertFalse(AppNotificationReader(context, sdk = 29).read(post(fakeCall())).vouched)
+    }
+
     /** An ordinary notification dressed as a call: the extras a real `CallStyle` sets, without its template. */
     private fun fakeCall(): Notification =
         builder().setContentTitle("Bank").build().apply {

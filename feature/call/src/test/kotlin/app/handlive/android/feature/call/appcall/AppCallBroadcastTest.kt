@@ -265,6 +265,31 @@ class AppCallBroadcastTest {
         }
 
     @Test
+    fun theAnswerModeIsTapForACallAndroidDoesNotVouchForAndFollowsItsRepost() =
+        runTest {
+            val h = CallHarness(this)
+            h.connect(h.mac.withAppCalls())
+
+            h.appPost(AppCallFixtures.telegramRinging(vouched = false))
+            assertEquals(
+                AppCallAnswerMode.TAP,
+                h.mac
+                    .appCalls()
+                    .last()
+                    .answerMode,
+            )
+
+            h.appPost(AppCallFixtures.telegramRinging(vouched = true))
+            assertEquals(
+                AppCallAnswerMode.DIRECT,
+                h.mac
+                    .appCalls()
+                    .last()
+                    .answerMode,
+            )
+        }
+
+    @Test
     fun theAnswerModeFollowsTheBackgroundStartExemption() =
         runTest {
             val h = CallHarness(this)

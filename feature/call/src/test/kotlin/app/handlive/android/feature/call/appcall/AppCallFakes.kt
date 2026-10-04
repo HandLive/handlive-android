@@ -41,17 +41,20 @@ object AppCallFixtures {
     val labels = AppLabels { packageName -> if (packageName == TELEGRAM) "Telegram" else "Zalo" }
 
     /** Telegram ringing: `CallStyle` incoming, decline (broadcast) and answer (activity) intents. */
+    @Suppress("LongParameterList")
     fun telegramRinging(
         key: String = "0|org.telegram.messenger|203|null|10148",
         caller: String? = CALLER,
         answer: AppIntent? = FakeAppIntent("answer"),
         decline: AppIntent? = FakeAppIntent("decline"),
+        vouched: Boolean = true,
         onCallerRead: () -> Unit = {},
     ) = notification(
         key = key,
         packageName = TELEGRAM,
         callType = CALL_TYPE_INCOMING,
         ongoing = false,
+        vouched = vouched,
         answer = answer,
         decline = decline,
         caller = caller,
@@ -83,6 +86,7 @@ object AppCallFixtures {
         packageName: String,
         callType: Int? = null,
         ongoing: Boolean = false,
+        vouched: Boolean = true,
         answer: AppIntent? = null,
         decline: AppIntent? = null,
         hangUp: AppIntent? = null,
@@ -95,6 +99,7 @@ object AppCallFixtures {
         packageName = packageName,
         callType = callType,
         ongoing = ongoing,
+        vouched = vouched,
         details =
             object : AppNotificationDetails {
                 override fun intents(): AppIntents {
