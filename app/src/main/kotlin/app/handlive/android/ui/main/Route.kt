@@ -2,6 +2,7 @@ package app.handlive.android.ui.main
 
 import androidx.annotation.StringRes
 import app.handlive.android.core.strings.R
+import app.handlive.android.ui.system.RestrictedSettings
 
 /** Screens above the two tabs; the tab bar shows only when none is open. */
 sealed interface Route {
@@ -28,10 +29,13 @@ sealed interface Route {
 
     /**
      * SET-01 field 14 before the Accessibility settings or, with [notificationAccess], before the Notification access
-     * page (step N1): both are restricted settings for an install from outside Google Play on Android 13+.
+     * page (step N1): both are restricted settings for an install from outside Google Play on Android 13+. With
+     * [openAppInfo] its button is "Open Settings" and leads to App info, where they are allowed (blocked for sure, or
+     * shown again after the user came back without the access, E7, E8, E11); otherwise "Continue" opens the page.
      */
     data class RestrictedSetting(
         val notificationAccess: Boolean = false,
+        val openAppInfo: Boolean = false,
     ) : Route
 
     /** SET-01 part B for SMS: the primer, then the system dialogs (steps 10–11). */
@@ -45,13 +49,18 @@ sealed interface Route {
 }
 
 /**
- * What comes before a restricted system page (SET-01 API 6, API 9): field 14 on Android 13+ when HandLive was not
- * installed from Google Play, otherwise nothing — the system page opens at once.
+ * What comes before a restricted system page (SET-01 API 6, API 9): nothing when Android does not restrict it (the
+ * system page opens at once), field 14 with "Continue" when it may, and with "Open Settings" when it surely does.
  */
 fun restrictedSettingBefore(
-    restrictedSettingsLikely: Boolean,
+    restriction: RestrictedSettings,
     notificationAccess: Boolean,
-): Route? = Route.RestrictedSetting(notificationAccess).takeIf { restrictedSettingsLikely }
+): Route? =
+    when (restriction) {
+        RestrictedSettings.NONE -> null
+        RestrictedSettings.LIKELY -> Route.RestrictedSetting(notificationAccess)
+        RestrictedSettings.BLOCKED -> Route.RestrictedSetting(notificationAccess, openAppInfo = true)
+    }
 
 /** The back button names the screen it returns to (03-android.md "Navigation"): the Devices tab or Settings. */
 @get:StringRes

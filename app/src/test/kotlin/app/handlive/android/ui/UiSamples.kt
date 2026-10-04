@@ -20,6 +20,7 @@ import app.handlive.android.ui.settings.SettingsPage
 import app.handlive.android.ui.settings.SettingsUiState
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
+import app.handlive.android.ui.system.RestrictedSettings
 import app.handlive.android.ui.system.UnusedAppPause
 
 /** Sample data and wrappers shared by the screen tests. */
@@ -57,7 +58,7 @@ object UiSamples {
             batteryExempt = false,
             manufacturer = Manufacturer.XIAOMI,
             unusedAppPause = UnusedAppPause.ENABLED,
-            restrictedSettingsLikely = true,
+            restrictedSettings = RestrictedSettings.LIKELY,
         )
 
     val settings = SettingsUiState(HandLiveSettings(clipA11yConsentAt = NOW), accessibilityServiceOn = true)

@@ -4,25 +4,32 @@ import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.ui.settings.FeatureAccess
 import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.SettingsUiState
+import app.handlive.android.ui.system.RestrictedSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
  * SET-01 steps 12 and N1: the "Restricted setting" guidance (field 14) comes before Accessibility and before
- * Notification access alike on Android 13+ outside Google Play, and switching calls from other apps on shows the
- * Notification access primer only while Calls are on too.
+ * Notification access alike while Android may restrict them (API 6 logic 2), and switching calls from other apps on
+ * shows the Notification access primer only while Calls are on too.
  */
 class SpecialAccessRoutesTest {
     @Test
-    fun theRestrictedSettingComesFirstForBothSpecialAccessesOutsideGooglePlay() {
-        assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(true, notificationAccess = false))
-        assertEquals(
-            Route.RestrictedSetting(notificationAccess = true),
-            restrictedSettingBefore(true, notificationAccess = true),
-        )
-        assertNull(restrictedSettingBefore(false, notificationAccess = false))
-        assertNull(restrictedSettingBefore(false, notificationAccess = true))
+    fun theRestrictedSettingComesFirstForBothSpecialAccessesWhenAndroidMayBlockThem() {
+        listOf(false, true).forEach { notificationAccess ->
+            assertNull(restrictedSettingBefore(RestrictedSettings.NONE, notificationAccess))
+            assertEquals(
+                "Continue opens the system page",
+                Route.RestrictedSetting(notificationAccess),
+                restrictedSettingBefore(RestrictedSettings.LIKELY, notificationAccess),
+            )
+            assertEquals(
+                "Open Settings leads to App info",
+                Route.RestrictedSetting(notificationAccess, openAppInfo = true),
+                restrictedSettingBefore(RestrictedSettings.BLOCKED, notificationAccess),
+            )
+        }
     }
 
     @Test

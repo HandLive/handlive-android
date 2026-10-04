@@ -93,7 +93,7 @@ fun RouteContent(
             NotificationAccessPrimerScreen {
                 main.pop()
                 // Step N1: a restricted setting outside Google Play on Android 13+, as for Accessibility.
-                val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, true)
+                val restricted = restrictedSettingBefore(environment.restrictedSettings, true)
                 if (restricted != null) main.push(restricted) else openNotificationAccess(context)
             }
         }
@@ -263,7 +263,7 @@ private fun ConsentRoute(
         onAgree = {
             scope.launch { consent.agree(System.currentTimeMillis()) }
             main.pop()
-            val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, notificationAccess = false)
+            val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
             if (restricted != null) main.push(restricted) else openAccessibility(context, main)
         },
         onSendManually = {

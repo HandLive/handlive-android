@@ -26,13 +26,11 @@ data class PhoneEnvironment(
     val batteryExempt: Boolean,
     val manufacturer: Manufacturer?,
     val unusedAppPause: UnusedAppPause,
-    /** Android 13+ and not installed from Google Play: the "Restricted setting" help comes first (API 6). */
-    val restrictedSettingsLikely: Boolean,
+    /** Whether Android 13+ blocks Accessibility and Notification access: field 14 comes first (API 6, API 9). */
+    val restrictedSettings: RestrictedSettings,
 )
 
 object PhoneEnvironmentReader {
-    private const val PLAY_STORE = "com.android.vending"
-
     fun read(
         context: Context,
         unusedAppPause: UnusedAppPause = UnusedAppPause.NOT_AVAILABLE,
@@ -47,7 +45,7 @@ object PhoneEnvironmentReader {
             batteryExempt = power?.isIgnoringBatteryOptimizations(context.packageName) == true,
             manufacturer = manufacturerOf(Build.MANUFACTURER),
             unusedAppPause = unusedAppPause,
-            restrictedSettingsLikely = runtime && installer(context) != PLAY_STORE,
+            restrictedSettings = RestrictedSettings.read(context, installer(context)),
         )
     }
 
