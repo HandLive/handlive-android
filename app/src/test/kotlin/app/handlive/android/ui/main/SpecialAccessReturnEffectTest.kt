@@ -75,14 +75,6 @@ class SpecialAccessReturnEffectTest {
     }
 
     @Test
-    fun anUntriedBlockLeadsBackToThePageWithContinue() {
-        now = now.copy(restriction = RestrictedSettings.UNTRIED)
-        start()
-        trip(SystemPage.ACCESSIBILITY)
-        assertEquals(listOf(Route.RestrictedSetting()), shown)
-    }
-
-    @Test
     fun backFromAppInfoNavigatesNowhere() {
         start()
         trip(SystemPage.APP_INFO)
@@ -90,8 +82,8 @@ class SpecialAccessReturnEffectTest {
     }
 
     @Test
-    fun autoSendOffStaysQuietEvenWhenBlocked() {
-        now = now.copy(restriction = RestrictedSettings.BLOCKED, settings = now.settings.copy(clipAutoSend = false))
+    fun autoSendOffStaysQuietEvenWhenRestricted() {
+        now = now.copy(settings = now.settings.copy(clipAutoSend = false))
         start()
         trip(SystemPage.ACCESSIBILITY)
         assertEquals(emptyList<Route>(), shown)

@@ -19,17 +19,10 @@ class SpecialAccessRoutesTest {
     fun theRestrictedSettingComesFirstForBothSpecialAccessesWhenAndroidMayBlockThem() {
         listOf(false, true).forEach { notificationAccess ->
             assertNull(restrictedSettingBefore(RestrictedSettings.NONE, notificationAccess))
-            listOf(RestrictedSettings.UNTRIED, RestrictedSettings.LIKELY).forEach { restriction ->
-                assertEquals(
-                    "Continue opens the system page",
-                    Route.RestrictedSetting(notificationAccess),
-                    restrictedSettingBefore(restriction, notificationAccess),
-                )
-            }
             assertEquals(
-                "Open Settings leads to App info",
-                Route.RestrictedSetting(notificationAccess, openAppInfo = true),
-                restrictedSettingBefore(RestrictedSettings.BLOCKED, notificationAccess),
+                "Continue opens the system page",
+                Route.RestrictedSetting(notificationAccess),
+                restrictedSettingBefore(RestrictedSettings.LIKELY, notificationAccess),
             )
         }
     }

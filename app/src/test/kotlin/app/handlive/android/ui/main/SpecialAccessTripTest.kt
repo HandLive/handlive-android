@@ -1,6 +1,5 @@
 package app.handlive.android.ui.main
 
-import android.app.AppOpsManager
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.ui.settings.SettingsUiState
 import app.handlive.android.ui.system.RestrictedSettings
@@ -29,19 +28,6 @@ class SpecialAccessTripTest {
     fun backWithoutTheAccessShowsField14WithOpenSettingsWhileAndroidMayRestrictIt() {
         assertEquals(reshowA11y, routeOnReturn(SystemPage.ACCESSIBILITY, off))
         assertEquals(reshowNotifications, routeOnReturn(SystemPage.NOTIFICATION_ACCESS, off))
-        val blocked = off.copy(restriction = RestrictedSettings.BLOCKED)
-        assertEquals(reshowA11y, routeOnReturn(SystemPage.ACCESSIBILITY, blocked))
-        assertEquals(reshowNotifications, routeOnReturn(SystemPage.NOTIFICATION_ACCESS, blocked))
-    }
-
-    @Test
-    fun anUntriedBlockSendsTheUserBackToThePageWhereAndroidShowsItsDialog() {
-        val untried = off.copy(restriction = RestrictedSettings.UNTRIED)
-        assertEquals(Route.RestrictedSetting(), routeOnReturn(SystemPage.ACCESSIBILITY, untried))
-        assertEquals(
-            Route.RestrictedSetting(notificationAccess = true),
-            routeOnReturn(SystemPage.NOTIFICATION_ACCESS, untried),
-        )
     }
 
     @Test
@@ -56,17 +42,15 @@ class SpecialAccessTripTest {
     @Test
     fun nothingAfterAppInfoOrWithoutATrip() {
         assertNull("row 8, row f", routeOnReturn(SystemPage.APP_INFO, off))
-        assertNull(routeOnReturn(null, off.copy(restriction = RestrictedSettings.BLOCKED)))
+        assertNull(routeOnReturn(null, off))
     }
 
     @Test
     fun nothingWhileTheFeatureIsOff() {
-        fun blockedWith(settings: HandLiveSettings) =
-            off.copy(restriction = RestrictedSettings.BLOCKED, settings = settings)
-        val autoSendOff = blockedWith(wanted.copy(clipAutoSend = false))
-        val clipboardOff = blockedWith(wanted.copy(clipboardEnabled = false))
-        val appCallsOff = blockedWith(wanted.copy(callAppCalls = false))
-        val callsOff = blockedWith(wanted.copy(callEnabled = false))
+        val autoSendOff = off.copy(settings = wanted.copy(clipAutoSend = false))
+        val clipboardOff = off.copy(settings = wanted.copy(clipboardEnabled = false))
+        val appCallsOff = off.copy(settings = wanted.copy(callAppCalls = false))
+        val callsOff = off.copy(settings = wanted.copy(callEnabled = false))
         assertNull("row 1", routeOnReturn(SystemPage.ACCESSIBILITY, autoSendOff))
         assertNull(routeOnReturn(SystemPage.ACCESSIBILITY, clipboardOff))
         assertNull("row a", routeOnReturn(SystemPage.NOTIFICATION_ACCESS, appCallsOff))
@@ -82,34 +66,11 @@ class SpecialAccessTripTest {
     }
 
     @Test
-    fun theNextTapAfterAppInfoFollowsTheOpAsItIsNow() {
+    fun theNextTapAfterAppInfoGoesThroughField14AgainWithContinue() {
         val trip = SpecialAccessTrip()
         trip.leaveFor(SystemPage.APP_INFO)
         assertEquals(SystemPage.APP_INFO, trip.takeReturn())
-        val likely = RestrictedSettings.LIKELY
-        assertEquals(
-            "still unknown: Continue once more",
-            Route.RestrictedSetting(),
-            restrictedSettingBefore(likely, false),
-        )
-        assertNull("allowed: straight to the page", restrictedSettingBefore(RestrictedSettings.NONE, false))
-    }
-
-    /** A first `ERRORED` try goes to the page, where Android shows its dialog; then App info can allow it. */
-    @Test
-    fun aFirstErroredTryContinuesAndAnIgnoredOneOpensSettings() {
-        val errored = RestrictedSettings.of(35, AppOpsManager.MODE_ERRORED, null)
-        assertEquals(RestrictedSettings.UNTRIED, errored)
-        assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(errored, notificationAccess = false))
-        assertEquals(
-            Route.RestrictedSetting(notificationAccess = true),
-            restrictedSettingBefore(errored, notificationAccess = true),
-        )
-        val ignored = RestrictedSettings.of(35, AppOpsManager.MODE_IGNORED, null)
-        assertEquals(
-            Route.RestrictedSetting(notificationAccess = true, openAppInfo = true),
-            restrictedSettingBefore(ignored, notificationAccess = true),
-        )
+        assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(RestrictedSettings.LIKELY, false))
     }
 
     @Test

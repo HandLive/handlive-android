@@ -30,8 +30,8 @@ sealed interface Route {
     /**
      * SET-01 field 14 before the Accessibility settings or, with [notificationAccess], before the Notification access
      * page (step N1): both are restricted settings for an install from outside Google Play on Android 13+. With
-     * [openAppInfo] its button is "Open Settings" and leads to App info, where they are allowed (blocked for sure, or
-     * shown again after the user came back without the access, E7, E8, E11); otherwise "Continue" opens the page.
+     * [openAppInfo] (shown again after the user came back without the access, E7, E8, E11) its button is "Open
+     * Settings" and leads to App info, where they are allowed; otherwise "Continue" opens the page.
      */
     data class RestrictedSetting(
         val notificationAccess: Boolean = false,
@@ -50,8 +50,7 @@ sealed interface Route {
 
 /**
  * What comes before a restricted system page (SET-01 API 6, API 9): nothing when Android does not restrict it (the
- * system page opens at once), field 14 with "Continue" while the page itself is the next step (untried or only
- * likely), and with "Open Settings" once App info can allow it (blocked).
+ * system page opens at once), otherwise field 14 with "Continue" to the page.
  */
 fun restrictedSettingBefore(
     restriction: RestrictedSettings,
@@ -59,8 +58,7 @@ fun restrictedSettingBefore(
 ): Route? =
     when (restriction) {
         RestrictedSettings.NONE -> null
-        RestrictedSettings.UNTRIED, RestrictedSettings.LIKELY -> Route.RestrictedSetting(notificationAccess)
-        RestrictedSettings.BLOCKED -> Route.RestrictedSetting(notificationAccess, openAppInfo = true)
+        RestrictedSettings.LIKELY -> Route.RestrictedSetting(notificationAccess)
     }
 
 /** The back button names the screen it returns to (03-android.md "Navigation"): the Devices tab or Settings. */
