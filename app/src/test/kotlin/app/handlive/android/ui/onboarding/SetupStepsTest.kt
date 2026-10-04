@@ -3,6 +3,7 @@ package app.handlive.android.ui.onboarding
 import app.handlive.android.ui.system.Manufacturer
 import app.handlive.android.ui.system.PhoneEnvironment
 import app.handlive.android.ui.system.PhoneEnvironmentReader
+import app.handlive.android.ui.system.RestrictedSettings
 import app.handlive.android.ui.system.UnusedAppPause
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -17,7 +18,7 @@ class SetupStepsTest {
             batteryExempt = false,
             manufacturer = Manufacturer.XIAOMI,
             unusedAppPause = UnusedAppPause.ENABLED,
-            restrictedSettingsLikely = false,
+            restrictedSettings = RestrictedSettings.NONE,
         )
 
     @Test

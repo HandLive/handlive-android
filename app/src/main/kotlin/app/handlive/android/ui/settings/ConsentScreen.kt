@@ -77,12 +77,14 @@ private fun ConsentLine(
 
 /**
  * SET-01 field 14 (Android 13+, not installed from Google Play): before the Accessibility settings open, or the
- * Notification access page with the [title] of its primer.
+ * Notification access page with the [title] of its primer. Its single [button] is "Continue" to the page, or "Open
+ * Settings" to App info when the user came back without turning HandLive on (Android may have blocked it).
  */
 @Composable
 fun RestrictedSettingScreen(
     @StringRes title: Int = R.string.settings_auto_send,
     @StringRes body: Int = R.string.setup_restricted_settings_help,
+    @StringRes button: Int = R.string.common_continue,
     onContinue: () -> Unit,
 ) {
     HLStepScreen(
@@ -90,6 +92,6 @@ fun RestrictedSettingScreen(
         title = stringResource(title),
         body = stringResource(body),
     ) {
-        HLButton(stringResource(R.string.common_continue), onContinue, Modifier.fillMaxWidth())
+        HLButton(stringResource(button), onContinue, Modifier.fillMaxWidth())
     }
 }

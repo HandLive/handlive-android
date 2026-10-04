@@ -66,18 +66,7 @@ fun RouteContent(
         }
 
         is Route.RestrictedSetting -> {
-            val context = LocalContext.current
-            val (title, body) =
-                if (route.notificationAccess) {
-                    R.string.permission_notification_access_title to
-                        R.string.setup_restricted_settings_help_notification_access
-                } else {
-                    R.string.settings_auto_send to R.string.setup_restricted_settings_help
-                }
-            RestrictedSettingScreen(title, body) {
-                main.pop()
-                if (route.notificationAccess) openNotificationAccess(context) else openAccessibility(context, main)
-            }
+            RestrictedSettingRoute(main, route)
         }
 
         Route.SmsPermission -> {
@@ -93,9 +82,34 @@ fun RouteContent(
             NotificationAccessPrimerScreen {
                 main.pop()
                 // Step N1: a restricted setting outside Google Play on Android 13+, as for Accessibility.
-                val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, true)
-                if (restricted != null) main.push(restricted) else openNotificationAccess(context)
+                val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = true)
+                if (restricted != null) main.push(restricted) else openNotificationAccess(context, main)
             }
+        }
+    }
+}
+
+/** SET-01 field 14: "Continue" to the restricted page, or "Open Settings" to App info (E7, E8, E11). */
+@Composable
+private fun RestrictedSettingRoute(
+    main: MainContext,
+    route: Route.RestrictedSetting,
+) {
+    val context = LocalContext.current
+    val (title, body) =
+        if (route.notificationAccess) {
+            R.string.permission_notification_access_title to
+                R.string.setup_restricted_settings_help_notification_access
+        } else {
+            R.string.settings_auto_send to R.string.setup_restricted_settings_help
+        }
+    val button = if (route.openAppInfo) R.string.common_open_settings else R.string.common_continue
+    RestrictedSettingScreen(title, body, button) {
+        main.pop()
+        when {
+            route.openAppInfo -> openAppInfo(context, main)
+            route.notificationAccess -> openNotificationAccess(context, main)
+            else -> openAccessibility(context, main)
         }
     }
 }
@@ -220,7 +234,7 @@ private fun openPermissionTarget(
         }
 
         PermissionTarget.AUTO_SEND -> {
-            if (state.settings.clipA11yConsentAt == null) main.push(Route.Consent) else openAccessibility(context, main)
+            openAutoSendAccess(context, main, consented = state.settings.clipA11yConsentAt != null)
         }
 
         PermissionTarget.SMS -> {
@@ -257,39 +271,44 @@ private fun ConsentRoute(
     environment: PhoneEnvironment,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val consent = main.dependencies.clipboard.consent
-    ConsentScreen(
-        onAgree = {
-            scope.launch { consent.agree(System.currentTimeMillis()) }
-            main.pop()
-            val restricted = restrictedSettingBefore(environment.restrictedSettingsLikely, notificationAccess = false)
+    ConsentChoices(
+        stack = main.stack,
+        agree = { consent.agree(System.currentTimeMillis()) },
+        sendManually = consent::sendManually,
+        afterAgree = {
+            val restricted = restrictedSettingBefore(environment.restrictedSettings, notificationAccess = false)
             if (restricted != null) main.push(restricted) else openAccessibility(context, main)
         },
-        onSendManually = {
-            scope.launch { consent.sendManually() }
-            main.pop()
-        },
     )
 }
 
-/** CLIP-01 A2 / SET-01 step 12: Settings › Accessibility, where the user turns HandLive on. */
-private fun openAccessibility(
-    context: Context,
-    main: MainContext,
+/**
+ * CLIP-01 A2: the disclosure's two choices. Each is written before the disclosure leaves the [stack], because leaving
+ * it cancels this composition's scope and with it an unfinished write; a second tap then finds it gone.
+ */
+@Composable
+internal fun ConsentChoices(
+    stack: MutableList<Route>,
+    agree: suspend () -> Unit,
+    sendManually: suspend () -> Unit,
+    afterAgree: () -> Unit,
 ) {
-    SystemPages.open(
-        context,
-        main.dependencies.clipboard.consent
-            .settingsIntent(),
-    )
-}
+    val scope = rememberCoroutineScope()
 
-/** SET-01 API 9: HandLive's entry in Notification access, else the list; the access is read again on resume. */
-private fun openNotificationAccess(context: Context) {
-    SystemPages.open(
-        context,
-        SystemPages.notificationListenerSettings(context),
-        SystemPages.notificationListenerList(),
+    fun leave(): Boolean = (stack.lastOrNull() == Route.Consent).also { if (it) stack.removeAt(stack.lastIndex) }
+    ConsentScreen(
+        onAgree = {
+            scope.launch {
+                agree()
+                if (leave()) afterAgree()
+            }
+        },
+        onSendManually = {
+            scope.launch {
+                sendManually()
+                leave()
+            }
+        },
     )
 }

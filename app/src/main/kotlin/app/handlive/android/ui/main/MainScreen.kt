@@ -73,9 +73,8 @@ fun MainScreen(
             onOpenNotificationSettings = { SystemPages.open(context, SystemPages.notificationSettings(context)) },
             onRetryService = { ServiceLauncher.start(context) },
         )
-    val main = MainContext(dependencies, stack, feedback, banners)
-    UnpairedByPeerNotice(main)
-    OpenRequests(main, openRequests)
+    val main = MainContext(dependencies, stack, feedback, banners, rememberSpecialAccessTrip())
+    MainEffects(main, openRequests)
     BackHandler(enabled = stack.isNotEmpty(), onBack = main::pop)
     // The tab bar floats over the tab content: its measured height, plus the gap under it, is what the content's
     // lists keep clear at the bottom (LocalHLFloatingBarInset), so the last row never ends under the bar.
@@ -113,6 +112,17 @@ fun MainScreen(
         }
         HLFeedbackHost(feedback, Modifier.align(Alignment.TopCenter))
     }
+}
+
+/** What the app watches while it is open: unpair notices, notification requests and returns from system pages. */
+@Composable
+private fun MainEffects(
+    main: MainContext,
+    openRequests: MutableStateFlow<String?>,
+) {
+    UnpairedByPeerNotice(main)
+    OpenRequests(main, openRequests)
+    SpecialAccessReturn(main)
 }
 
 /**

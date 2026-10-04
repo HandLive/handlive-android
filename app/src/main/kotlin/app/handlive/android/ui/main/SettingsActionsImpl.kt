@@ -3,7 +3,6 @@ package app.handlive.android.ui.main
 import android.content.Context
 import app.handlive.android.core.data.settings.SettingsKeys
 import app.handlive.android.settings.AppLanguageSetting
-import app.handlive.android.ui.settings.AutoSendStatus
 import app.handlive.android.ui.settings.FeatureStatus
 import app.handlive.android.ui.settings.PhoneFeature
 import app.handlive.android.ui.settings.SettingsActions
@@ -29,24 +28,24 @@ class SettingsActionsImpl(
     override fun setClipboard(enabled: Boolean) = save { store.set(SettingsKeys.FEATURE_CLIPBOARD, enabled) }
 
     override fun setAutoSend(enabled: Boolean) {
-        when {
-            !enabled -> {
-                save {
-                    main.dependencies.clipboard.consent
-                        .sendManually()
-                }
+        if (!enabled) {
+            save {
+                main.dependencies.clipboard.consent
+                    .sendManually()
             }
-
-            state.settings.clipA11yConsentAt == null -> {
+            return
+        }
+        when (autoSendStep(state)) {
+            AutoSendStep.DISCLOSURE -> {
                 main.push(Route.Consent)
             }
 
-            state.autoSendStatus == AutoSendStatus.NEEDS_ACCESSIBILITY && !state.accessibilityServiceOn -> {
+            AutoSendStep.SERVICE -> {
                 save { store.set(SettingsKeys.CLIP_AUTO_SEND, true) }
-                main.push(Route.Consent)
+                openAutoSendAccess(context, main)
             }
 
-            else -> {
+            AutoSendStep.SAVE -> {
                 save { store.set(SettingsKeys.CLIP_AUTO_SEND, true) }
             }
         }
@@ -101,6 +100,25 @@ class SettingsActionsImpl(
         scope.launch { write() }
     }
 }
+
+/** What turning automatic sending on leads to (CLIP-01 A1). */
+enum class AutoSendStep {
+    /** No consent yet: the disclosure (CLIP-01 A2). */
+    DISCLOSURE,
+
+    /** The consent exists but the service is off: never the disclosure again, the way to the service instead. */
+    SERVICE,
+
+    /** Consent and service are there: the setting alone. */
+    SAVE,
+}
+
+fun autoSendStep(state: SettingsUiState): AutoSendStep =
+    when {
+        state.settings.clipA11yConsentAt == null -> AutoSendStep.DISCLOSURE
+        !state.accessibilityServiceOn -> AutoSendStep.SERVICE
+        else -> AutoSendStep.SAVE
+    }
 
 /**
  * SET-02 step 3: the primer when [feature] is switched on with its access missing. The Notification access primer of
