@@ -30,7 +30,7 @@ object ClipReader {
     ): LocalRead {
         val item =
             clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-                ?: return LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, source)
+                ?: return unsupported(clip, source, if (clip == null) "no_clip" else "no_item")
         val sensitive = SystemClipboard.isSensitive(clip.description)
         val uri = item.uri
         val imageMime = uri?.let { imageMimeOf(context, clip.description, it) }
@@ -60,9 +60,42 @@ object ClipReader {
             }
 
             else -> {
-                LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, source)
+                unsupported(clip, source, "neither_text_nor_image")
             }
         }
+    }
+
+    /**
+     * E3 with its reason in debug builds (HLBENCH `clip_read_failed`): the MIME types the description declares and
+     * which parts item 0 carries, never the content. This is what tells a silent copy on an OEM build apart.
+     */
+    private fun unsupported(
+        clip: ClipData?,
+        source: String,
+        why: String,
+    ): LocalRead {
+        val description = clip?.description
+        val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+        val mimeCount = description?.mimeTypeCount ?: 0
+        val mimes = (0 until mimeCount).joinToString(",") { description?.getMimeType(it) ?: "" }
+        val parts =
+            listOfNotNull(
+                "text".takeIf { item?.text != null },
+                "html".takeIf { item?.htmlText != null },
+                "uri".takeIf { item?.uri != null },
+                "intent".takeIf { item?.intent != null },
+            ).joinToString("+")
+        BenchLog.event(
+            BenchEvent.CLIP_READ_FAILED,
+            "reason" to ReadFailure.EMPTY_OR_NOT_TEXT.name.lowercase(),
+            "stage" to "read",
+            "why" to why,
+            "mimes" to mimes.ifEmpty { "-" },
+            "parts" to parts.ifEmpty { "-" },
+            "authority" to (item?.uri?.takeIf { it.scheme == CONTENT }?.authority ?: "-"),
+            "source" to source,
+        )
+        return LocalRead.Failed(ReadFailure.EMPTY_OR_NOT_TEXT, source)
     }
 
     private fun text(

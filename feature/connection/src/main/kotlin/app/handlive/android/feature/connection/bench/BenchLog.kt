@@ -70,8 +70,8 @@ object BenchEvent {
     const val CLIP_READ = "clip_read"
 
     /**
-     * An image item was not sent: `reason` (E2, E3, E10), `stage` (`copy`, `normalize`) and the `authority` of a
-     * content URI, never its path.
+     * A local clip was not sent: `reason` (E2, E3, E10), `stage` (`start`, `focus`, `read`, `copy`, `normalize`),
+     * `why`, the description's `mimes` and the item's `parts` for E3, the `authority` of a content URI; never content.
      */
     const val CLIP_READ_FAILED = "clip_read_failed"
     const val CLIP_SENT = "clip_sent"
