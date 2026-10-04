@@ -42,7 +42,7 @@ class AppCallActions(
     /** Direct: the app's answer intent now. Tap: the user's tap on a HandLive notification sends it. */
     private fun answer(context: AppCallContext): CallError? {
         val intent = context.answer?.takeIf { context.state == AppCallState.RINGING } ?: return unavailable()
-        return if (exemption.held()) {
+        return if (exemption.lendsTo(context)) {
             send(context, intent, CallAction.ANSWER) { tracker.markSent(context.callId, AppCallAction.ANSWER) }
         } else if (tap.post(context.callId, context.label, context.caller, intent)) {
             // The user's tap may still not come: an answer nothing follows ends as unknown, not missed.

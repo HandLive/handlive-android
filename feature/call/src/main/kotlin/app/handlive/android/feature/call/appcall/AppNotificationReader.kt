@@ -26,6 +26,7 @@ class AppNotificationReader(
             packageName = sbn.packageName,
             callType = callTypeOf(notification, sdk),
             ongoing = ongoing(notification),
+            vouched = vouchedFor(notification, sdk),
             details =
                 object : AppNotificationDetails {
                     override fun intents() = intentsOf(notification, sbn.packageName)
@@ -74,6 +75,35 @@ class AppNotificationReader(
         private const val EXTRA_DECLINE_INTENT = "android.declineIntent"
         private const val EXTRA_HANG_UP_INTENT = "android.hangUpIntent"
         private const val CALL_STYLE_TEMPLATE = "android.app.Notification\$CallStyle"
+
+        /** `Notification.FLAG_USER_INITIATED_JOB` (API 34), spelled out so minSdk 29 needs no version check. */
+        private const val FLAG_USER_INITIATED_JOB = 0x00008000
+
+        /**
+         * Whether Android vouches that [notification] is a real call (CALL-05 API 1 logic 6). From API 34 the app
+         * must have posted it with a foreground service or a user-initiated job, or with a full-screen intent it was
+         * granted: Android strips a forged flag and a denied full-screen intent there, while the `CallStyle` template
+         * alone passes with a merely requested full-screen intent. On API 31–33 the template ([callTypeOf]) is all
+         * there is; below API 31 nothing tells a real call from a forged one, so answering goes through the phone.
+         */
+        internal fun vouchedFor(
+            notification: Notification,
+            sdk: Int,
+        ): Boolean =
+            when {
+                sdk < Build.VERSION_CODES.S -> {
+                    false
+                }
+
+                sdk < Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+                    true
+                }
+
+                else -> {
+                    val service = Notification.FLAG_FOREGROUND_SERVICE or FLAG_USER_INITIATED_JOB
+                    notification.flags and service != 0 || notification.fullScreenIntent != null
+                }
+            }
 
         /**
          * The `android.callType` of a real `CallStyle` notification, `null` for any other. From API 31 the platform

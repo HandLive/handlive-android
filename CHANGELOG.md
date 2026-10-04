@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- Calls from other apps: "Answer" from the Mac starts the app from the background (`answer_mode = direct`) only for a
+  call Android vouches for: from Android 14 a ringing notification posted with a foreground service, a user-initiated
+  job or a granted full-screen intent; on Android 12–13 any `CallStyle` notification; on Android 10–11 never. Any other
+  call is answered through the "tap to answer" notification on the phone, so HandLive no longer lends its exemption
+  to an app that only requested a full-screen intent or to a call it cannot tell from a forged one (CALL-05 API 1
+  logic 6).
+
 ## [0.1.0-beta.2] — 2026-10-04
 
 ### Added

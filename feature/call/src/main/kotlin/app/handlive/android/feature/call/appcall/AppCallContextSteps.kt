@@ -53,6 +53,7 @@ internal fun AppCallContext.updatedBy(
                 caller = callerOf(notification) ?: caller,
                 answer = notification.intents.answer,
                 decline = notification.intents.decline,
+                vouched = notification.vouched,
                 unlinkedAt = null,
             )
         }

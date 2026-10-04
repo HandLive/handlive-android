@@ -141,6 +141,7 @@ class AppCallTracker(
                 notificationKey = notification.key,
                 answer = notification.intents.answer.takeIf { ringing },
                 decline = notification.intents.decline.takeIf { ringing },
+                vouched = ringing && notification.vouched,
                 end = if (ringing) null else AppCallEndAction.select(notification),
             )
         if (ringing) {

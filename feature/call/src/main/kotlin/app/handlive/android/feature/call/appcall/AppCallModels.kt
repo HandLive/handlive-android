@@ -53,6 +53,11 @@ class AppNotification(
     val callType: Int?,
     /** `FLAG_ONGOING_EVENT`. */
     val ongoing: Boolean,
+    /**
+     * Android vouches that this is a real call notification (CALL-05 API 1 logic 6): only then may its answer intent
+     * start the app from the background with HandLive's exemption.
+     */
+    val vouched: Boolean,
     private val details: AppNotificationDetails,
 ) {
     /** The intents, read from the notification the first time they are asked for. */
@@ -85,6 +90,8 @@ data class AppCallContext(
     val endReason: String? = null,
     /** The ringing notification's answer and decline intents; gone with that notification. */
     val answer: AppIntent? = null,
+    /** Android vouches for the ringing notification ([AppNotification.vouched]): answering may be `direct`. */
+    val vouched: Boolean = false,
     val decline: AppIntent? = null,
     /** The in-call notification's end action (hang-up intent, else its single action). */
     val end: AppIntent? = null,
