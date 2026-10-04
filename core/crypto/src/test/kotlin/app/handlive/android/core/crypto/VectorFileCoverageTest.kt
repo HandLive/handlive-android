@@ -32,6 +32,7 @@ class VectorFileCoverageTest {
             "push-envelope.json" to "PushEnvelopeVectorTest, PushRequestVectorTest",
             "relay-frame.json" to "RelayFrameVectorTest",
             "revoke.json" to "RevokeStatementVectorTest",
+            "clipboard-html.json" to "HtmlClipSanitizerVectorTest",
             EnvelopeRoundtripTest.ANDROID_FILE to "EnvelopeRoundtripTest",
             EnvelopeRoundtripTest.APPLE_FILE to "EnvelopeRoundtripTest",
         )
