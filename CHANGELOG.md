@@ -24,6 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   system page; `NOTIFICATION_LISTENER` in `permissions_missing` while the access is not granted; error code
   `CALL_APP_ACTION_UNAVAILABLE`.
 
+### Fixed
+
+- Settings, Devices and the other grouped lists: the last rows (Data › Delete All HandLive Data) ended under the floating
+  tab bar and the navigation bar and could not be reached. `HLGroupedList` now keeps the navigation bar and the
+  floating bar the main screen measures (`LocalHLFloatingBarInset`) clear at the bottom.
+
 ## [2026-09-30]
 
 ### Fixed

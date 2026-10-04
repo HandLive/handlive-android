@@ -8,17 +8,22 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.handlive.android.core.data.settings.HandLiveSettings
@@ -28,6 +33,7 @@ import app.handlive.android.core.design.component.HLFeedbackState
 import app.handlive.android.core.design.component.HLSymbol
 import app.handlive.android.core.design.component.HLTabBar
 import app.handlive.android.core.design.component.HLTabItem
+import app.handlive.android.core.design.component.LocalHLFloatingBarInset
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.core.strings.R
 import app.handlive.android.feature.connection.ServiceLauncher
@@ -71,10 +77,21 @@ fun MainScreen(
     UnpairedByPeerNotice(main)
     OpenRequests(main, openRequests)
     BackHandler(enabled = stack.isNotEmpty(), onBack = main::pop)
+    // The tab bar floats over the tab content: its measured height, plus the gap under it, is what the content's
+    // lists keep clear at the bottom (LocalHLFloatingBarInset), so the last row never ends under the bar.
+    val density = LocalDensity.current
+    var tabBarHeight by remember { mutableStateOf(0.dp) }
+    val tabBarGap = HandLiveTheme.spacing.space8
     Box(modifier = Modifier.fillMaxSize().background(HandLiveTheme.colors.systemGroupedBackground)) {
         Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             val top = stack.lastOrNull()
-            if (top == null) TabContent(main, tab) else RouteContent(main, top, environment)
+            if (top == null) {
+                CompositionLocalProvider(
+                    LocalHLFloatingBarInset provides tabBarHeight + tabBarGap,
+                ) { TabContent(main, tab) }
+            } else {
+                RouteContent(main, top, environment)
+            }
         }
         if (stack.isEmpty()) {
             HLTabBar(
@@ -90,7 +107,8 @@ fun MainScreen(
                         .align(
                             Alignment.BottomCenter,
                         ).navigationBarsPadding()
-                        .padding(bottom = HandLiveTheme.spacing.space8),
+                        .padding(bottom = tabBarGap)
+                        .onSizeChanged { tabBarHeight = with(density) { it.height.toDp() } },
             )
         }
         HLFeedbackHost(feedback, Modifier.align(Alignment.TopCenter))

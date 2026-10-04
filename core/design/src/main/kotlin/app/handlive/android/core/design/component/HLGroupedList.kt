@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -32,7 +35,7 @@ annotation class HLGroupedListDsl
 @Composable
 fun HLGroupedList(
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(vertical = HandLiveTheme.spacing.space16),
+    contentPadding: PaddingValues = HLGroupedListDefaults.contentPadding(),
     content: HLGroupedListScope.() -> Unit,
 ) {
     LazyColumn(
@@ -41,6 +44,19 @@ fun HLGroupedList(
         verticalArrangement = Arrangement.spacedBy(HandLiveTheme.spacing.space24),
     ) {
         HLGroupedListScope(this).content()
+    }
+}
+
+object HLGroupedListDefaults {
+    /**
+     * 16 dp above and below the sections, plus at the bottom the system navigation bar (edge-to-edge) and any floating
+     * bar over the content ([LocalHLFloatingBarInset]): the last section scrolls clear of both.
+     */
+    @Composable
+    fun contentPadding(): PaddingValues {
+        val space = HandLiveTheme.spacing.space16
+        val navigationBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        return PaddingValues(top = space, bottom = space + navigationBar + LocalHLFloatingBarInset.current)
     }
 }
 
