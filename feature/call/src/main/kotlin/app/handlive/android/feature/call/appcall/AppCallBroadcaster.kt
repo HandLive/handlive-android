@@ -38,14 +38,12 @@ class AppCallBroadcaster(
     ) {
         val active = active()
         lastSent.keys.retainAll(active.toSet())
-        val mode = if (exemption.held()) AppCallAnswerMode.DIRECT else AppCallAnswerMode.TAP
-        for (session in active) publishTo(session, contexts, mode, change)
+        for (session in active) publishTo(session, contexts, change)
     }
 
     private suspend fun publishTo(
         session: PeerSession,
         contexts: Collection<AppCallContext>,
-        mode: String,
         change: Boolean,
     ) {
         val seen = lastSent.getOrPut(session) { HashMap() }
@@ -53,7 +51,7 @@ class AppCallBroadcaster(
         val due =
             contexts
                 .filter { !it.ended || it.callId in seen }
-                .map { it to AppCallView.of(it, mode) }
+                .map { it to AppCallView.of(it, answerMode(it)) }
                 .filter { (context, data) -> seen[context.callId] != data }
         for ((context, data) in due) {
             val envId = send(session, data) ?: continue
@@ -79,4 +77,8 @@ class AppCallBroadcaster(
         ) {
             null
         }
+
+    /** `direct` when the exemption is lent to [context]'s call ([lendsTo]), `tap` otherwise. */
+    private fun answerMode(context: AppCallContext): String =
+        if (exemption.lendsTo(context)) AppCallAnswerMode.DIRECT else AppCallAnswerMode.TAP
 }

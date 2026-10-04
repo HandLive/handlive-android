@@ -18,6 +18,12 @@ fun interface BackgroundStartExemption {
 }
 
 /**
+ * Whether answering [context] starts the app from the background (`answer_mode = direct`, CALL-05 API 1 logic 6): the
+ * exemption is held and Android vouches for the ringing notification, so it is never lent to a forged call.
+ */
+fun BackgroundStartExemption.lendsTo(context: AppCallContext): Boolean = context.vouched && held()
+
+/**
  * The "tap to answer" notification of the phone (`answer_mode = tap`): its content intent is the app's answer intent,
  * so the user's tap — not HandLive — starts the app's answer screen. Removed when the call leaves ringing, and by
  * itself after `APP_CALL_TAP_NOTIFICATION_TTL`.
