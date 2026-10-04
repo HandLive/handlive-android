@@ -96,9 +96,8 @@ object HtmlClipSanitizer {
         mapOf("href" to listOf("http:", "https:", "mailto:"), "src" to listOf("http:", "https:"))
     private val DIGITS = setOf("width", "height", "colspan", "rowspan")
 
-    /** Whitespace as the reference reads it (`\s` and `str.strip`): ASCII, FS-US, NEL and the Unicode spaces. */
-    private const val SPACE_CLASS =
-        " \\t\\n\\r\\u000b\\u000c\\u001c-\\u001f\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000"
+    /** Whitespace as the reference reads it (ASCII `\\s`): space, TAB, LF, VT, FF and CR. */
+    private const val SPACE_CLASS = " \\t\\n\\r\\u000b\\u000c"
     private val ATTR =
         Regex(
             "([A-Za-z_:][-A-Za-z0-9_:.]*)(?:[$SPACE_CLASS]*=[$SPACE_CLASS]*" +

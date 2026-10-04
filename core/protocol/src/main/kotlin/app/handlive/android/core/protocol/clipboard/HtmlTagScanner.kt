@@ -59,11 +59,8 @@ internal object HtmlTagScanner {
         return null
     }
 
-    /** Whitespace as the reference reads it (`\s` and `str.strip`): ASCII, FS-US, NEL and the Unicode spaces. */
-    fun isSpace(c: Char) =
-        c in '\u0009'..'\u000d' || c in '\u001c'..'\u0020' || c == '\u0085' || c == '\u00a0' || c == '\u1680' ||
-            c in '\u2000'..'\u200a' || c == '\u2028' || c == '\u2029' || c == '\u202f' || c == '\u205f' ||
-            c == '\u3000'
+    /** Whitespace of the reference's ASCII `\s`: space, TAB, LF, VT, FF, CR; never NBSP or Unicode spaces. */
+    fun isSpace(c: Char) = c == ' ' || c in '\u0009'..'\u000d'
 
     private fun closeEndAt(
         text: String,
