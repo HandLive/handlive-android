@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import app.handlive.android.core.design.component.HLBrandMark
 import app.handlive.android.core.design.component.HLButton
 import app.handlive.android.core.design.component.HLButtonStyle
 import app.handlive.android.core.design.component.HLStepScreen
@@ -21,7 +22,7 @@ fun WelcomeScreen(
     onPrivacy: () -> Unit,
 ) {
     HLStepScreen(
-        symbol = HLSymbol.Devices,
+        hero = { HLBrandMark() },
         title = stringResource(R.string.setup_welcome_title),
         body = stringResource(R.string.setup_welcome_body_android),
         extra = {
