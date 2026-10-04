@@ -62,6 +62,7 @@ class FakeWriter(
         val text: String?,
         val file: File?,
         val sensitive: Boolean,
+        val html: String? = null,
     )
 
     val writes = mutableListOf<Written>()
@@ -74,7 +75,8 @@ class FakeWriter(
         sha256: ByteArray,
         text: String,
         sensitive: Boolean,
-    ) = record(Written(clipId, text, null, sensitive), sha256)
+        html: String?,
+    ) = record(Written(clipId, text, null, sensitive, html), sha256)
 
     override fun writeFile(
         clipId: String,
@@ -147,6 +149,9 @@ class FakeFocus : FocusProbe {
         return canStart
     }
 }
+
+/** `mimes` of a client that accepts the optional `html` of a text push (CLIP-01 API 5). */
+val HTML_MIMES = listOf(ClipboardValues.MIME_TEXT, ClipboardValues.MIME_HTML)
 
 fun clientCapability(
     mimes: List<String> = listOf(ClipboardValues.MIME_TEXT, ClipboardValues.MIME_PNG, ClipboardValues.MIME_JPEG),
@@ -290,8 +295,9 @@ class ClipboardHarness(
         text: String,
         source: String = ClipboardValues.SOURCE_AUTO,
         sensitiveExtra: Boolean = false,
+        html: String? = null,
     ) {
-        module.onLocalRead(LocalRead.Text(text, sensitiveExtra, source))
+        module.onLocalRead(LocalRead.Text(text, sensitiveExtra, source, html))
         run()
     }
 

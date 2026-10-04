@@ -13,6 +13,7 @@ import app.handlive.android.feature.clipboard.module.ReadFailure
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +41,15 @@ class ClipReaderTest {
             (read(ClipData.newPlainText("note", "Order number: HL-240917-0042")) as LocalRead.Text).text,
         )
         assertEquals("bold", (read(ClipData.newHtmlText("web", "bold", "<b>bold</b>")) as LocalRead.Text).text)
+    }
+
+    @Test
+    fun anHtmlItemKeepsItsSanitizedHtmlBesideTheText() {
+        val html = "<p onclick=\"x\">Hello <b>world</b></p><script>y</script>"
+        val read = read(ClipData.newHtmlText("web", "Hello world", html)) as LocalRead.Text
+        assertEquals("Hello world", read.text)
+        assertEquals("<p>Hello <b>world</b></p>", read.html)
+        assertNull((read(ClipData.newPlainText("note", "plain")) as LocalRead.Text).html)
     }
 
     @Test

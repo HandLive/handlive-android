@@ -2,19 +2,24 @@ package app.handlive.android.feature.clipboard.module
 
 import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.clipboard.ClipboardConflictData
+import app.handlive.android.core.protocol.clipboard.ClipboardTransfer
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
+import app.handlive.android.core.protocol.encoding.Base64Codecs
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.testing.ClipboardHarness
+import app.handlive.android.feature.clipboard.testing.HTML_MIMES
 import app.handlive.android.feature.clipboard.testing.IPAD_ID
 import app.handlive.android.feature.clipboard.testing.MAC_ID
 import app.handlive.android.feature.clipboard.testing.PHONE_ID
 import app.handlive.android.feature.clipboard.testing.PHONE_NAME
+import app.handlive.android.feature.clipboard.testing.clientCapability
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -50,6 +55,62 @@ class ClipReceiveTest {
             )
             assertEquals(listOf(push), h.ipad.pushes().map { it.second })
             assertTrue(h.mac.pushes().isEmpty())
+        }
+
+    @Test
+    fun anHtmlPushIsSanitizedAgainWrittenWithItAndForwardedPerPeer() =
+        test { h ->
+            h.ipad.capability.value = clientCapability(mimes = HTML_MIMES)
+            h.connect(h.mac, h.ipad)
+            val push = h.macText("Hi").copy(html = "<p onclick=\"x\">Hi<script>y</script></p>")
+            h.push(h.mac, push)
+            val written = h.writer.writes.single()
+            assertEquals("Hi", written.text)
+            assertEquals("<p>Hi</p>", written.html)
+            assertEquals(
+                ClipboardValues.STATUS_APPLIED,
+                h.mac
+                    .ackData()
+                    .single()
+                    .status,
+            )
+            assertEquals(
+                "<p>Hi</p>",
+                h.ipad
+                    .pushes()
+                    .single()
+                    .second.html,
+            )
+        }
+
+    @Test
+    fun forwardingDropsHtmlForAPeerWithoutTextHtml() =
+        test { h ->
+            h.connect(h.mac, h.ipad)
+            h.push(h.mac, h.macText("Hi").copy(html = "<p>Hi</p>"))
+            assertNull(
+                h.ipad
+                    .pushes()
+                    .single()
+                    .second.html,
+            )
+        }
+
+    @Test
+    fun htmlWithATransferOrAnImageOrTooLongIsBadRequest() =
+        test { h ->
+            h.connect(h.mac)
+            val transfer = ClipboardTransfer(h.newId(), 10, Base64Codecs.encodeB64u(ByteArray(32)), 10, 1)
+            val withTransfer = h.macText("x").copy(text = null, transfer = transfer, html = "<p>x</p>")
+            val asImage =
+                withTransfer.copy(kind = ClipboardValues.KIND_IMAGE, mime = ClipboardValues.MIME_PNG)
+            val tooLong = h.macText("x").copy(html = "y".repeat(ClipLimits.MAX_HTML_BYTES + 1))
+            listOf(withTransfer, asImage, tooLong).forEach { h.push(h.mac, it) }
+            assertEquals(
+                List(3) { ErrorCode.BAD_REQUEST },
+                h.mac.acks().map { it.error?.errorCode },
+            )
+            assertTrue(h.writer.writes.isEmpty())
         }
 
     @Test

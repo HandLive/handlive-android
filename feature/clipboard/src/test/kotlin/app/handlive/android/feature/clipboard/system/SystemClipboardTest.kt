@@ -38,6 +38,16 @@ class SystemClipboardTest {
     }
 
     @Test
+    fun htmlIsWrittenBesideTheTextInOneItem() {
+        clipboard.writeText("clip-h", ByteArray(32), "Hi", sensitive = false, html = "<p>Hi</p>")
+        val item = checkNotNull(manager.primaryClip).getItemAt(0)
+        assertEquals("Hi", item.text)
+        assertEquals("<p>Hi</p>", item.htmlText)
+        clipboard.writeText("clip-p", ByteArray(32), "Hi", sensitive = false)
+        assertNull(checkNotNull(manager.primaryClip).getItemAt(0).htmlText)
+    }
+
+    @Test
     fun filesArePastedThroughTheClipfilesProvider() {
         shadowOf(MimeTypeMap.getSingleton()).addExtensionMimeTypeMapping("png", "image/png")
         val file =
