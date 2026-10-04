@@ -11,6 +11,9 @@ object ClipLimits {
     /** `CLIP_INLINE_MAX`: a push whose plaintext is larger sends its text in chunks (QC5). */
     const val INLINE_MAX_BYTES = 180 * 1024
 
+    /** `CLIP_MAX_HTML`: 180 KiB of UTF-8 for the sanitized `html` of a text clip. */
+    const val MAX_HTML_BYTES = 180 * 1024
+
     /** Images above 1 MiB show progress (CLIP-03 field 2). */
     const val PROGRESS_MIN_BYTES = 1_048_576L
 

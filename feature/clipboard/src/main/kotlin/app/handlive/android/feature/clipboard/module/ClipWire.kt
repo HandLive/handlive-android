@@ -21,12 +21,24 @@ import kotlinx.serialization.json.jsonObject
 
 /** Plaintexts and `ack`s of `type = clipboard` (CLIP-01 API 5–6, CLIP-03 API 3–5). */
 object ClipWire {
-    /** The inline `clipboard/push` of a text clip, or `null` when its plaintext exceeds `CLIP_INLINE_MAX` (QC5). */
-    fun inlineOrNull(clip: Clip): ByteArray? {
+    /**
+     * The inline `clipboard/push` of a text clip, or `null` when its plaintext exceeds `CLIP_INLINE_MAX` (QC5).
+     * The clip's `html` rides along only when [withHtml] (the peer lists `text/html`), is within `CLIP_MAX_HTML` and
+     * keeps the plaintext within `CLIP_INLINE_MAX`; otherwise the push is plain text as before (CLIP-01 API 5).
+     */
+    fun inlineOrNull(
+        clip: Clip,
+        withHtml: Boolean = false,
+    ): ByteArray? {
         val content = clip.content as? ClipContent.Text ?: return null
-        return PlaintextCodec
-            .encodeOp(ClipboardOp.PUSH, ClipboardPushData.serializer(), data(clip, content.text, null))
-            .takeIf { it.size <= ClipLimits.INLINE_MAX_BYTES }
+        val html = content.html?.takeIf { withHtml && it.toByteArray(Charsets.UTF_8).size <= ClipLimits.MAX_HTML_BYTES }
+
+        fun encode(html: String?) =
+            PlaintextCodec
+                .encodeOp(ClipboardOp.PUSH, ClipboardPushData.serializer(), data(clip, content.text, null, html))
+                .takeIf { it.size <= ClipLimits.INLINE_MAX_BYTES }
+
+        return html?.let(::encode) ?: encode(null)
     }
 
     fun chunkedPush(
@@ -102,6 +114,7 @@ object ClipWire {
         clip: Clip,
         text: String?,
         transfer: ClipboardTransfer?,
+        html: String? = null,
     ): ClipboardPushData {
         val file = clip.content as? ClipContent.FileBacked
         return ClipboardPushData(
@@ -109,6 +122,7 @@ object ClipWire {
             kind = clip.kind,
             mime = clip.content.mime,
             text = text,
+            html = html,
             transfer = transfer,
             width = file?.width,
             height = file?.height,

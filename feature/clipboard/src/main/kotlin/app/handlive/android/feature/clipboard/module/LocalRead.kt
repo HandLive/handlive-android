@@ -27,6 +27,8 @@ sealed interface LocalRead {
         /** `EXTRA_IS_SENSITIVE` on the `ClipDescription` (QC3); always `false` for Share. */
         val sensitiveExtra: Boolean,
         override val source: String,
+        /** Sanitized `ClipData.Item.htmlText` beside the text (CLIP-01 API 2 logic 2); `null` for plain text, Share. */
+        val html: String? = null,
     ) : LocalRead
 
     /** An image copied into `cache/clip/` before the activity closed. */
