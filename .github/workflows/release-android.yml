@@ -175,8 +175,13 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Release signing secrets missing (ANDROID_RELEASE_KEYSTORE_BASE64, ANDROID_RELEASE_KEYSTORE_PASSWORD, ANDROID_RELEASE_KEY_ALIAS): see docs/deployment-guide.md, Release builds. The unsigned build is kept as a workflow artifact."
+          # Name each missing or empty secret: an empty value (e.g. `base64` of a file that was not there) looks set.
+          missing=""
+          [ -n "$KEYSTORE" ] || missing="$missing ANDROID_RELEASE_KEYSTORE_BASE64"
+          [ -n "$STORE_PASSWORD" ] || missing="$missing ANDROID_RELEASE_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing ANDROID_RELEASE_KEY_ALIAS"
+          if [ -n "$missing" ]; then
+            echo "::error::Release signing secrets missing or empty:$missing (docs/deployment-guide.md, Release builds). The unsigned build is kept as a workflow artifact."
             exit 1
           fi
           export KEY_PASSWORD="${KEY_PASSWORD:-$STORE_PASSWORD}" # PKCS12: the key password is the store password
