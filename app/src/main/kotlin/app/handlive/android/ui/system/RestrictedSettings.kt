@@ -14,10 +14,12 @@ enum class RestrictedSettings {
     NONE,
 
     /**
-     * Blocked or maybe blocked, but App info has no "Allow restricted settings" yet: the op is `ERRORED` (the
-     * system shows its dialog once the user tries the page), or `DEFAULT`, unknown or unreadable and HandLive is
-     * not from Play.
+     * `ERRORED`: blocked, but App info has no "Allow restricted settings" until the user has tried the page itself,
+     * where the system shows its dialog.
      */
+    UNTRIED,
+
+    /** `DEFAULT`, unknown or unreadable, and HandLive is not from Play: Android decides from the install source. */
     LIKELY,
 
     /** `IGNORED`: blocked, and the user has seen the system's dialog; App info offers "Allow restricted settings". */
@@ -43,7 +45,7 @@ enum class RestrictedSettings {
                 sdk < Build.VERSION_CODES.TIRAMISU -> NONE
                 opMode == AppOpsManager.MODE_ALLOWED -> NONE
                 opMode == AppOpsManager.MODE_IGNORED -> BLOCKED
-                opMode == AppOpsManager.MODE_ERRORED -> LIKELY
+                opMode == AppOpsManager.MODE_ERRORED -> UNTRIED
                 installer == PLAY_STORE -> NONE
                 else -> LIKELY
             }

@@ -50,7 +50,8 @@ sealed interface Route {
 
 /**
  * What comes before a restricted system page (SET-01 API 6, API 9): nothing when Android does not restrict it (the
- * system page opens at once), field 14 with "Continue" when it may, and with "Open Settings" when it surely does.
+ * system page opens at once), field 14 with "Continue" while the page itself is the next step (untried or only
+ * likely), and with "Open Settings" once App info can allow it (blocked).
  */
 fun restrictedSettingBefore(
     restriction: RestrictedSettings,
@@ -58,7 +59,7 @@ fun restrictedSettingBefore(
 ): Route? =
     when (restriction) {
         RestrictedSettings.NONE -> null
-        RestrictedSettings.LIKELY -> Route.RestrictedSetting(notificationAccess)
+        RestrictedSettings.UNTRIED, RestrictedSettings.LIKELY -> Route.RestrictedSetting(notificationAccess)
         RestrictedSettings.BLOCKED -> Route.RestrictedSetting(notificationAccess, openAppInfo = true)
     }
 

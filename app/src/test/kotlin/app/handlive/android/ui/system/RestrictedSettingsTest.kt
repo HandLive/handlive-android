@@ -30,10 +30,10 @@ class RestrictedSettingsTest {
 
     /** App info offers "Allow restricted settings" only after the system's dialog, which the page itself shows. */
     @Test
-    fun anErroredOpIsOnlyLikelyUntilTheUserHasSeenTheSystemDialog() {
-        assertEquals(RestrictedSettings.LIKELY, RestrictedSettings.of(33, AppOpsManager.MODE_ERRORED, apk))
-        assertEquals(RestrictedSettings.LIKELY, RestrictedSettings.of(36, AppOpsManager.MODE_ERRORED, null))
-        assertEquals(RestrictedSettings.LIKELY, RestrictedSettings.of(35, AppOpsManager.MODE_ERRORED, play))
+    fun anErroredOpIsUntriedUntilTheUserHasSeenTheSystemDialog() {
+        assertEquals(RestrictedSettings.UNTRIED, RestrictedSettings.of(33, AppOpsManager.MODE_ERRORED, apk))
+        assertEquals(RestrictedSettings.UNTRIED, RestrictedSettings.of(36, AppOpsManager.MODE_ERRORED, null))
+        assertEquals(RestrictedSettings.UNTRIED, RestrictedSettings.of(35, AppOpsManager.MODE_ERRORED, play))
     }
 
     @Test

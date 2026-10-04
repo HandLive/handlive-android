@@ -35,6 +35,16 @@ class SpecialAccessTripTest {
     }
 
     @Test
+    fun anUntriedBlockSendsTheUserBackToThePageWhereAndroidShowsItsDialog() {
+        val untried = off.copy(restriction = RestrictedSettings.UNTRIED)
+        assertEquals(Route.RestrictedSetting(), routeOnReturn(SystemPage.ACCESSIBILITY, untried))
+        assertEquals(
+            Route.RestrictedSetting(notificationAccess = true),
+            routeOnReturn(SystemPage.NOTIFICATION_ACCESS, untried),
+        )
+    }
+
+    @Test
     fun nothingWhenNotRestrictedOrTheAccessIsOn() {
         val none = off.copy(restriction = RestrictedSettings.NONE)
         assertNull("row 7: stay, the user may try again", routeOnReturn(SystemPage.ACCESSIBILITY, none))
@@ -89,7 +99,12 @@ class SpecialAccessTripTest {
     @Test
     fun aFirstErroredTryContinuesAndAnIgnoredOneOpensSettings() {
         val errored = RestrictedSettings.of(35, AppOpsManager.MODE_ERRORED, null)
+        assertEquals(RestrictedSettings.UNTRIED, errored)
         assertEquals(Route.RestrictedSetting(), restrictedSettingBefore(errored, notificationAccess = false))
+        assertEquals(
+            Route.RestrictedSetting(notificationAccess = true),
+            restrictedSettingBefore(errored, notificationAccess = true),
+        )
         val ignored = RestrictedSettings.of(35, AppOpsManager.MODE_IGNORED, null)
         assertEquals(
             Route.RestrictedSetting(notificationAccess = true, openAppInfo = true),

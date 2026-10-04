@@ -75,6 +75,14 @@ class SpecialAccessReturnEffectTest {
     }
 
     @Test
+    fun anUntriedBlockLeadsBackToThePageWithContinue() {
+        now = now.copy(restriction = RestrictedSettings.UNTRIED)
+        start()
+        trip(SystemPage.ACCESSIBILITY)
+        assertEquals(listOf(Route.RestrictedSetting()), shown)
+    }
+
+    @Test
     fun backFromAppInfoNavigatesNowhere() {
         start()
         trip(SystemPage.APP_INFO)

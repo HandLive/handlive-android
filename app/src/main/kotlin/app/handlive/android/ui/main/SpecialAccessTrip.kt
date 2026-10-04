@@ -51,8 +51,9 @@ data class SpecialAccessState(
 
 /**
  * SET-01 E8 and E11: back from the page HandLive opened without the access turned on, while Android may restrict it
- * and the user still wants the feature, field 14 shows again with "Open Settings". Nothing after App info (no
- * surprise navigation), and nothing while the feature or automatic sending is off.
+ * and the user still wants the feature, field 14 shows again: "Continue" back to the page while the system's dialog
+ * has not been seen there (untried), else "Open Settings". Nothing after App info (no surprise navigation), and
+ * nothing while the feature or automatic sending is off.
  */
 fun routeOnReturn(
     page: SystemPage?,
@@ -60,16 +61,17 @@ fun routeOnReturn(
 ): Route? {
     if (now.restriction == RestrictedSettings.NONE) return null
     val settings = now.settings
+    val openAppInfo = now.restriction != RestrictedSettings.UNTRIED
     return when (page) {
         SystemPage.ACCESSIBILITY -> {
             Route
-                .RestrictedSetting(openAppInfo = true)
+                .RestrictedSetting(openAppInfo = openAppInfo)
                 .takeIf { settings.clipboardEnabled && settings.clipAutoSend && !now.accessibilityOn }
         }
 
         SystemPage.NOTIFICATION_ACCESS -> {
             Route
-                .RestrictedSetting(notificationAccess = true, openAppInfo = true)
+                .RestrictedSetting(notificationAccess = true, openAppInfo = openAppInfo)
                 .takeIf { settings.callEnabled && settings.callAppCalls && !now.notificationAccess }
         }
 
