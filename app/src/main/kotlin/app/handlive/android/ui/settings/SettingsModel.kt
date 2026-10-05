@@ -7,6 +7,16 @@ import app.handlive.android.feature.connection.capability.AndroidPermissions
 /** SET-01 field 15: the state of automatic clipboard sending. */
 enum class AutoSendStatus { ON, OFF, NEEDS_ACCESSIBILITY }
 
+/** What a tap on the Auto-Send switch (SET-02 field 2) does: change the setting at once, or ask first. */
+enum class AutoSendSwitchTap { APPLY, ASK }
+
+/**
+ * The switch shows on while the service is not on yet ("Auto-send isn't on yet"): a tap there may mean "make it work"
+ * as much as "turn it off", so the sheet asks; every other state applies the tap as before.
+ */
+fun autoSendSwitchTap(status: AutoSendStatus): AutoSendSwitchTap =
+    if (status == AutoSendStatus.NEEDS_ACCESSIBILITY) AutoSendSwitchTap.ASK else AutoSendSwitchTap.APPLY
+
 /** Everything the Settings screens show, from the settings keys and the phone's state. */
 data class SettingsUiState(
     val settings: HandLiveSettings = HandLiveSettings(),
