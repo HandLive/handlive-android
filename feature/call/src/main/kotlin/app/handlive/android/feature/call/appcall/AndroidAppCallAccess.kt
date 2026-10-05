@@ -42,7 +42,11 @@ class AndroidAppCallAccess(
     }
 }
 
-/** The label of an app from `PackageManager`; the package name when it cannot be read (the app was removed). */
+/**
+ * The label of an app from `PackageManager`. From API 30 package visibility hides the other apps, and the notification
+ * listener is not exempt: the manifest's launcher-intent `<queries>` makes the calling apps visible. The package name
+ * when the label still cannot be read (an app without a launcher activity, or one just removed).
+ */
 class PackageAppLabels(
     context: Context,
 ) : AppLabels {
