@@ -13,6 +13,7 @@ import app.handlive.android.feature.call.appcall.AppCallServices
 import app.handlive.android.feature.call.appcall.AppCallTracker
 import app.handlive.android.feature.call.appcall.AppNotification
 import app.handlive.android.feature.call.appcall.FakeAppCallAccess
+import app.handlive.android.feature.call.appcall.FakeCommunicationMode
 import app.handlive.android.feature.call.appcall.FakeExemption
 import app.handlive.android.feature.call.appcall.FakeTapNotifier
 import app.handlive.android.feature.call.context.BroadcastCopy
@@ -58,13 +59,14 @@ class CallHarness(
     val appAccess = FakeAppCallAccess()
     val exemption = FakeExemption()
     val tap = FakeTapNotifier()
+    val mode = FakeCommunicationMode()
     val sessions = MutableStateFlow<Map<String, PeerSession>>(emptyMap())
     val permissionsAsked = mutableListOf<Pair<String, String>>()
     var permissionLost = 0
     private val dispatcher = StandardTestDispatcher(scope.testScheduler)
     private val ids = UuidV7Generator(wall)
     val tracker = CallTracker(ids::next, numbers, sims) { access.granted(AndroidPermissions.READ_CALL_LOG) }
-    val appTracker = AppCallTracker(ids::next, AppCallFixtures.labels)
+    val appTracker = AppCallTracker(ids::next, AppCallFixtures.labels, mode)
     private val entries = {
         CallLogEntries(numbers::normalize, numbers::name.takeIf { numbers.contacts }, FakeCallLog.SUB_IDS)
     }
@@ -197,8 +199,12 @@ class CallHarness(
         run()
     }
 
-    fun appRemove(key: String) {
-        module.appCalls.removed(key, wall())
+    /** [byApp]: the app removed the notification itself; otherwise the user or the system did. */
+    fun appRemove(
+        key: String,
+        byApp: Boolean = true,
+    ) {
+        module.appCalls.removed(key, wall(), byApp)
         run()
     }
 

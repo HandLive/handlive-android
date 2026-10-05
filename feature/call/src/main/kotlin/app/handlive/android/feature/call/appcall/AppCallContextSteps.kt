@@ -37,7 +37,7 @@ internal fun AppCallContext.updatedBy(
 ): AppCallContext? =
     when {
         state == AppCallState.ONGOING && shape != AppCallShape.RINGING -> {
-            copy(end = AppCallEndAction.select(notification))
+            copy(end = AppCallEndAction.select(notification), detached = false)
         }
 
         state != AppCallState.RINGING -> {
@@ -63,6 +63,13 @@ internal fun AppCallContext.updatedBy(
         }
     }
 
+/**
+ * [this], ongoing, lost its in-call notification without the app removing it: it goes on without an end action until
+ * [notification], a new ongoing notification of its package, holds it again.
+ */
+internal fun AppCallContext.reattachedTo(notification: AppNotification): AppCallContext =
+    copy(notificationKey = notification.key, end = AppCallEndAction.select(notification), detached = false)
+
 /** [this] ended at [at] for [reason]; only a call seen answered and then ended keeps its answer time. */
 internal fun AppCallContext.endedAs(
     reason: String,
@@ -77,6 +84,7 @@ internal fun AppCallContext.endedAs(
         decline = null,
         end = null,
         unlinkedAt = null,
+        detached = false,
     )
 
 /** The caller as the clients show it, cut to the wire limit; `null` when absent or blank. */

@@ -14,10 +14,12 @@ class AppCallInbox internal constructor(
         at: Long,
     ) = post { events.posted(notification, at) }
 
+    /** The notification [key] was removed at [at]; [byApp]: by the app itself (`REASON_APP_CANCEL`, `…_ALL`). */
     fun removed(
         key: String,
         at: Long,
-    ) = post { events.removed(key, at) }
+        byApp: Boolean,
+    ) = post { events.removed(key, at, byApp) }
 
     /** The listener was disconnected or Notification access revoked: the calls in progress end as `unknown`. */
     fun listenerLost(at: Long) = post { events.disconnected(at) }

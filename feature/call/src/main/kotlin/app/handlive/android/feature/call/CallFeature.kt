@@ -9,6 +9,7 @@ import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.feature.call.appcall.AndroidAppCallAccess
+import app.handlive.android.feature.call.appcall.AndroidCommunicationMode
 import app.handlive.android.feature.call.appcall.AndroidTapToAnswerNotifier
 import app.handlive.android.feature.call.appcall.AppCallActions
 import app.handlive.android.feature.call.appcall.AppCallBroadcaster
@@ -103,7 +104,8 @@ class CallFeature private constructor(
     // gives; without it the answer is a notification the user taps.
     private val appCallAccess = AndroidAppCallAccess(appContext, loadedSettings::value)
     private val exemption = BackgroundStartExemption { runtime.accessibilityBound.value }
-    private val appTracker = AppCallTracker(UuidV7Generator(clock)::next, PackageAppLabels(appContext))
+    private val appTracker =
+        AppCallTracker(UuidV7Generator(clock)::next, PackageAppLabels(appContext), AndroidCommunicationMode(appContext))
     private val tapNotifier: TapToAnswerNotifier = AndroidTapToAnswerNotifier(appContext)
 
     val module =
@@ -166,7 +168,8 @@ class CallFeature private constructor(
             override fun removed(
                 key: String,
                 at: Long,
-            ) = module.appCalls.removed(key, at)
+                byApp: Boolean,
+            ) = module.appCalls.removed(key, at, byApp)
 
             override fun listenerChanged(
                 connected: Boolean,

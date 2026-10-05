@@ -17,6 +17,9 @@ internal class AppCallEvents(
 ) {
     private val tracker = services.tracker
 
+    /** The audio mode is watched for the detached calls; touched on the A-CALL thread only. */
+    private var watchingMode = false
+
     /** [notification] was posted at [at], its `postTime`. */
     suspend fun posted(
         notification: AppNotification,
@@ -25,18 +28,25 @@ internal class AppCallEvents(
         if (services.access.enabled()) changed(tracker.onPosted(notification, at), at)
     }
 
-    /** The notification [key] was removed; [at] = the wall clock of the listener callback. */
+    /**
+     * The notification [key] was removed; [at] = the wall clock of the listener callback; [byApp]: the app removed it
+     * (an in-call notification removed otherwise detaches its call while a call holds the audio mode).
+     */
     suspend fun removed(
         key: String,
         at: Long,
-    ) = changed(tracker.onRemoved(key, at), at)
+        byApp: Boolean,
+    ) = changed(tracker.onRemoved(key, at, byApp), at)
+
+    /** The audio mode left communication: the detached calls end. */
+    suspend fun communicationLeft(at: Long) = changed(tracker.onLost(AppCallSignal.AUDIO_MODE, at), at)
 
     /** The listener was disconnected: the calls in progress can no longer be followed. */
-    suspend fun disconnected(at: Long) = changed(tracker.onListenerLost(at), at)
+    suspend fun disconnected(at: Long) = changed(tracker.onLost(AppCallSignal.LISTENER, at), at)
 
     /** The setting, Notification access or the background-start exemption changed. */
     suspend fun refresh(at: Long) {
-        if (services.access.enabled()) republish() else changed(tracker.onListenerLost(at), at)
+        if (services.access.enabled()) republish() else changed(tracker.onLost(AppCallSignal.LISTENER, at), at)
     }
 
     /** A session got app calls in effect: it gets the calls in progress. */
@@ -53,6 +63,19 @@ internal class AppCallEvents(
             // The notification of the app is gone or the call moved on: nothing left to tap.
             if (context.state != AppCallState.RINGING || context.answer == null) services.tap.cancel(context.callId)
             if (context.waitingForInCall) waitForInCall(context)
+        }
+        followMode()
+    }
+
+    /** The audio mode is watched exactly while a call is detached; its end comes back through the A-CALL queue. */
+    private fun followMode() {
+        val wanted = tracker.hasDetached
+        if (wanted == watchingMode) return
+        watchingMode = wanted
+        if (wanted) {
+            tracker.mode.watch { later(0) { communicationLeft(clock()) } }
+        } else {
+            tracker.mode.stop()
         }
     }
 

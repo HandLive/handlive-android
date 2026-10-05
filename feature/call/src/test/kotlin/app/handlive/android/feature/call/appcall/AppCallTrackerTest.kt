@@ -530,7 +530,7 @@ class AppCallTrackerTest {
         ring()
         tracker.onPosted(AppCallFixtures.notification("z", ZALO, 1), T0 + 5)
 
-        val ended = tracker.onListenerLost(T0 + 1_000)
+        val ended = tracker.onLost(AppCallSignal.LISTENER, T0 + 1_000)
 
         assertEquals(2, ended.size)
         assertTrue(ended.all { it.ended && it.endReason == AppCallEndReason.UNKNOWN && it.endedAt == T0 + 1_000 })
@@ -543,7 +543,7 @@ class AppCallTrackerTest {
         tracker.onRemoved(RINGING_KEY, T0 + 100)
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500)
 
-        val lost = tracker.onListenerLost(T0 + 2_000).single()
+        val lost = tracker.onLost(AppCallSignal.LISTENER, T0 + 2_000).single()
 
         assertEquals(AppCallEndReason.UNKNOWN, lost.endReason)
         assertNull("unknown means no answer time (call_event/app_call)", lost.answeredAt)
