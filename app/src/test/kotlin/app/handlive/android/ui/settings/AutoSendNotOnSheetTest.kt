@@ -3,13 +3,18 @@ package app.handlive.android.ui.settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import app.handlive.android.core.data.settings.HandLiveSettings
 import app.handlive.android.core.design.theme.HandLiveTheme
 import app.handlive.android.ui.UiSamples
@@ -20,6 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * SET-02 field 39: on without the Accessibility service, a tap on Auto-Send on Copy asks before anything changes;
@@ -81,7 +87,6 @@ class AutoSendNotOnSheetTest {
         compose.onNodeWithText(title).assertDoesNotExist()
     }
 
-    /** HLActionSheet sends Cancel, Back and a tap outside to the same onDismiss. */
     @Test
     fun cancelChangesNothing() {
         show(notOn)
@@ -90,6 +95,38 @@ class AutoSendNotOnSheetTest {
         compose.onNodeWithText(title).assertDoesNotExist()
         compose.onNode(switch).assertIsOn()
         assertEquals(emptyList<Boolean>(), calls)
+    }
+
+    @Test
+    fun backChangesNothing() {
+        show(notOn)
+        tapSwitch()
+        compose.runOnIdle { ShadowDialog.getLatestDialog().onBackPressed() }
+        compose.onNodeWithText(title).assertDoesNotExist()
+        compose.onNode(switch).assertIsOn()
+        assertEquals(emptyList<Boolean>(), calls)
+    }
+
+    @Test
+    fun aTapOutsideChangesNothing() {
+        show(notOn)
+        tapSwitch()
+        // The sheet's own window: its scrim fills it, the actions sit at the bottom.
+        compose.onAllNodes(isRoot()).onLast().performTouchInput { click(Offset(10f, 10f)) }
+        compose.onNodeWithText(title).assertDoesNotExist()
+        compose.onNode(switch).assertIsOn()
+        assertEquals(emptyList<Boolean>(), calls)
+    }
+
+    @Test
+    fun theSheetClosesWhenAutoSendIsTurnedOffElsewhere() {
+        var state by mutableStateOf(notOn)
+        compose.setContent { HandLiveTheme { SettingsScreen(state, StatusBanners(), actions, "English") } }
+        tapSwitch()
+        compose.onNodeWithText(title).assertExists()
+        compose.runOnIdle { state = notOn.copy(settings = consented.copy(clipAutoSend = false)) }
+        compose.onNodeWithText(title).assertDoesNotExist()
+        assertEquals("nothing written by the sheet", emptyList<Boolean>(), calls)
     }
 
     @Test
