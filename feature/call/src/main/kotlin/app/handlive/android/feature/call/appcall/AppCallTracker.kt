@@ -83,7 +83,7 @@ class AppCallTracker(
     fun onRemoved(
         key: String,
         at: Long,
-        byApp: Boolean = true,
+        byApp: Boolean,
     ): List<AppCallContext> {
         standing.remove(key)
         watches.values.forEach { it.forget(key) }
