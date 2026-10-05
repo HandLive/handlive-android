@@ -1,5 +1,6 @@
 package app.handlive.android.feature.call.appcall
 
+import app.handlive.android.core.protocol.ErrorCode
 import app.handlive.android.core.protocol.call.AppCallControls
 import app.handlive.android.core.protocol.call.AppCallEndReason
 import app.handlive.android.core.protocol.call.AppCallState
@@ -101,8 +102,39 @@ class AppCallDetachBroadcastTest {
             assertEquals(1, h.mode.stops)
         }
 
+    @Test
+    fun anUploadOfTheAppAfterTheSwipeNeverBringsEndBackNorHasItsCancelSent() =
+        runTest {
+            val h = CallHarness(this)
+            h.inCall()
+            h.appRemove(IN_CALL_KEY, byApp = false)
+            val callId =
+                h.mac
+                    .appCalls()
+                    .last()
+                    .callId
+            val sentBefore = h.mac.appCalls().size
+            val cancel = FakeAppIntent("cancel upload")
+
+            h.appPost(
+                AppCallFixtures.notification(
+                    UPLOAD_KEY,
+                    AppCallFixtures.TELEGRAM,
+                    ongoing = true,
+                    actions = listOf(cancel),
+                ),
+            )
+            val ack = h.action(h.mac, callId, "end")
+
+            assertEquals("nothing changed for the Mac", sentBefore, h.mac.appCalls().size)
+            assertFalse(ack.ok)
+            assertEquals(ErrorCode.CALL_APP_ACTION_UNAVAILABLE.name, ack.error?.code)
+            assertEquals(0, cancel.sends)
+        }
+
     private companion object {
         const val RINGING_KEY = "0|org.telegram.messenger|203|null|10148"
         const val IN_CALL_KEY = "0|org.telegram.messenger|202|null|10148"
+        const val UPLOAD_KEY = "0|org.telegram.messenger|77|null|10148"
     }
 }

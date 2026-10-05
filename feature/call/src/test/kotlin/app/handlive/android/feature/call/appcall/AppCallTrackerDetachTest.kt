@@ -6,13 +6,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * CALL-05 E11: an in-call notification that goes without the app removing it (the user swiped it away) leaves its call
  * on, detached and without an end action, while a call holds the audio mode; otherwise, and when the mode leaves
- * communication, the call ends `unknown`. A new ongoing notification of the package holds a detached call again.
+ * communication, the call ends `unknown`. Only an in-call notification of the package holds a detached call again.
  */
 class AppCallTrackerDetachTest {
     private var counter = 0
@@ -22,7 +23,7 @@ class AppCallTrackerDetachTest {
     /** A Telegram call answered on the phone: ringing, then the in-call notification [IN_CALL_KEY] holds it. */
     private fun ongoing(): AppCallContext {
         tracker.onPosted(AppCallFixtures.telegramRinging(), T0)
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         return tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500).single()
     }
 
@@ -96,18 +97,117 @@ class AppCallTrackerDetachTest {
         assertNotNull(again.end)
         assertEquals("call-1", again.callId)
         assertFalse(tracker.hasDetached)
-        assertEquals(AppCallEndReason.ENDED, tracker.onRemoved(IN_CALL_KEY, T0 + 70_000).single().endReason)
+        assertEquals(
+            AppCallEndReason.ENDED,
+            tracker.onRemoved(IN_CALL_KEY, T0 + 70_000, byApp = true).single().endReason,
+        )
     }
 
     @Test
-    fun aNewOngoingNotificationOfThePackageHoldsTheDetachedCall() {
+    fun aNewCallStyleOngoingNotificationOfThePackageHoldsTheDetachedCallWithItsHangUp() {
         ongoing()
         swipe(inCommunication = true)
+        val hangUp = FakeAppIntent("hang up")
+        val inCall =
+            AppCallFixtures.notification(
+                NEW_KEY,
+                AppCallFixtures.TELEGRAM,
+                callType = AppCallFixtures.CALL_TYPE_ONGOING,
+                ongoing = true,
+                hangUp = hangUp,
+            )
 
-        val again = tracker.onPosted(AppCallFixtures.telegramInCall(key = NEW_KEY), T0 + 61_000)
+        val again = tracker.onPosted(inCall, T0 + 61_000).single()
 
-        assertEquals(NEW_KEY, again.single().notificationKey)
-        assertFalse(again.single().detached)
+        assertEquals(NEW_KEY, again.notificationKey)
+        assertFalse(again.detached)
+        assertSame(hangUp, again.end)
+        assertFalse(tracker.hasDetached)
+    }
+
+    @Test
+    fun aNewOngoingNotificationOfTheCallCategoryHoldsTheDetachedCallWithItsSingleAction() {
+        ongoing()
+        swipe(inCommunication = true)
+        val end = FakeAppIntent("end")
+        val inCall =
+            AppCallFixtures.notification(
+                NEW_KEY,
+                AppCallFixtures.TELEGRAM,
+                ongoing = true,
+                actions = listOf(end),
+                category = "call",
+            )
+
+        val again = tracker.onPosted(inCall, T0 + 61_000).single()
+
+        assertFalse(again.detached)
+        assertSame(end, again.end)
+    }
+
+    @Test
+    fun anOrdinaryOngoingNotificationOfThePackageNeverHoldsTheDetachedCallNorGivesItEnd() {
+        ongoing()
+        swipe(inCommunication = true)
+        val cancel = FakeAppIntent("cancel upload")
+        val upload =
+            AppCallFixtures.notification(UPLOAD_KEY, AppCallFixtures.TELEGRAM, ongoing = true, actions = listOf(cancel))
+
+        assertTrue("an upload with Cancel", tracker.onPosted(upload, T0 + 61_000).isEmpty())
+        val detached = tracker.current.single()
+        assertTrue(detached.detached)
+        assertNull(detached.end)
+        assertTrue(
+            "its removal does not end the call",
+            tracker.onRemoved(UPLOAD_KEY, T0 + 62_000, byApp = true).isEmpty(),
+        )
+        assertTrue(tracker.current.single().detached)
+        assertEquals(0, cancel.sends)
+    }
+
+    @Test
+    fun theAudioModeLeavingEndsOnlyTheDetachedCallNotAnotherAppsCallInProgress() {
+        ongoing()
+        val whatsApp =
+            AppCallFixtures.notification(
+                WHATSAPP_KEY,
+                WHATSAPP,
+                callType = AppCallFixtures.CALL_TYPE_ONGOING,
+                ongoing = true,
+                hangUp = FakeAppIntent("hang up"),
+            )
+        val other = tracker.onPosted(whatsApp, T0 + 1_000).single()
+        swipe(inCommunication = true)
+
+        val ended = tracker.onLost(AppCallSignal.AUDIO_MODE, T0 + 90_000)
+
+        assertEquals(listOf("call-1"), ended.map { it.callId })
+        assertEquals(AppCallEndReason.UNKNOWN, ended.single().endReason)
+        val left = tracker.current.single()
+        assertEquals(other.callId, left.callId)
+        assertEquals(AppCallState.ONGOING, left.state)
+        assertNotNull("its End stays", left.end)
+    }
+
+    @Test
+    fun theAudioModeLeavingEndsEveryDetachedCall() {
+        ongoing()
+        val zalo =
+            AppCallFixtures.notification(
+                ZALO_KEY,
+                AppCallFixtures.ZALO,
+                callType = AppCallFixtures.CALL_TYPE_ONGOING,
+                ongoing = true,
+            )
+        tracker.onPosted(zalo, T0 + 1_000)
+        swipe(inCommunication = true)
+        tracker.onRemoved(ZALO_KEY, T0 + 61_000, byApp = false)
+
+        val ended = tracker.onLost(AppCallSignal.AUDIO_MODE, T0 + 90_000)
+
+        assertEquals(2, ended.size)
+        assertTrue(ended.all { it.endReason == AppCallEndReason.UNKNOWN })
+        assertTrue(tracker.current.isEmpty())
     }
 
     @Test
@@ -157,5 +257,9 @@ class AppCallTrackerDetachTest {
         const val IN_CALL_KEY = "0|org.telegram.messenger|202|null|10148"
         const val NEW_KEY = "0|org.telegram.messenger|204|null|10148"
         const val PLAYER_KEY = "0|org.telegram.messenger|9|null|10148"
+        const val UPLOAD_KEY = "0|org.telegram.messenger|77|null|10148"
+        const val WHATSAPP = "com.whatsapp"
+        const val WHATSAPP_KEY = "0|com.whatsapp|1|null|10200"
+        const val ZALO_KEY = "0|com.zing.zalo|5|null|10300"
     }
 }

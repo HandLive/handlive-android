@@ -19,7 +19,8 @@ import app.handlive.android.feature.call.CallConstants
  *   the window passes (the caller of [onLinkWindowEnd]), it ends `missed`, or `unknown` after an answer HandLive sent.
  * - The app removing the in-call notification ends the call (`ended`). Any other removal (the user swiped it away)
  *   detaches it while a call holds the audio mode, else ends it `unknown`; a detached call ends `unknown` when the
- *   mode leaves communication, and an ongoing notification of its package that did not stand then holds it again.
+ *   mode leaves communication; its in-call notification posted again, or a new one of its package with the in-call
+ *   shape, holds it again — any other ongoing notification of the package never does.
  *   Losing the listener ends every call as `unknown`.
  *
  * Only a notification that is a call, or the in-call notification of one, is read beyond its shape; the keys of the
@@ -66,7 +67,7 @@ class AppCallTracker(
                 }
 
                 else -> {
-                    detached.heldBy(notification, shape, contexts.values)?.reattachedTo(notification)
+                    detached.heldBy(notification, contexts.values)?.reattachedTo(notification)
                         ?: link(notification, shape, at)
                         ?: shape?.let { create(notification, it, at) }
                 }

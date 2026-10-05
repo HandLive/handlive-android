@@ -92,6 +92,7 @@ object AppCallFixtures {
         hangUp: AppIntent? = null,
         actions: List<AppIntent?> = emptyList(),
         caller: String? = null,
+        category: String? = null,
         onCallerRead: () -> Unit = {},
         onIntentsRead: () -> Unit = {},
     ) = AppNotification(
@@ -111,6 +112,8 @@ object AppCallFixtures {
                     onCallerRead()
                     return caller
                 }
+
+                override fun callCategory() = category == "call"
             },
     )
 }

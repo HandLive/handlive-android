@@ -65,7 +65,7 @@ internal fun AppCallContext.updatedBy(
 
 /**
  * [this], ongoing, lost its in-call notification without the app removing it: it goes on without an end action until
- * [notification], a new ongoing notification of its package, holds it again.
+ * [notification], a new in-call notification of its package (`CallStyle` ongoing or category `call`), holds it again.
  */
 internal fun AppCallContext.reattachedTo(notification: AppNotification): AppCallContext =
     copy(notificationKey = notification.key, end = AppCallEndAction.select(notification), detached = false)

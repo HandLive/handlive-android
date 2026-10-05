@@ -39,6 +39,9 @@ interface AppNotificationDetails {
 
     /** `callPerson.name`, else the notification title. */
     fun caller(): String?
+
+    /** The notification's category is `call` (`Notification.CATEGORY_CALL`). */
+    fun callCategory(): Boolean
 }
 
 /**
@@ -64,6 +67,9 @@ class AppNotification(
     val intents: AppIntents by lazy { details.intents() }
 
     fun caller(): String? = details.caller()
+
+    /** `CallStyle` ongoing, or of category `call`: the shape of an in-call notification. */
+    fun inCallShaped(): Boolean = AppCallParser.shape(this) == AppCallShape.ONGOING || details.callCategory()
 }
 
 /** What a call notification says about its call. */
