@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import app.handlive.android.core.design.component.HLActionRow
 import app.handlive.android.core.design.component.HLGroupedList
@@ -18,7 +17,6 @@ import app.handlive.android.core.strings.R
 import app.handlive.android.ui.main.StatusBanners
 import app.handlive.android.ui.main.bannerLabels
 import app.handlive.android.ui.main.bannerSections
-import java.text.DateFormat
 
 /**
  * SET-02 on the phone: the Clipboard group (fields 1–6, each switch with its one-line description), SMS Messages
@@ -92,41 +90,6 @@ private fun Navigation(
     value: String?,
     onClick: () -> Unit,
 ) = HLNavigationRow(stringResource(title), value, onClick)
-
-/** Field 2 with its status: the description, "Auto-send isn't on yet" (E8), or field 3 "Agreed on …". */
-@Composable
-private fun AutoSendSwitch(
-    state: SettingsUiState,
-    onChange: (Boolean) -> Unit,
-) {
-    val consentAt = state.settings.clipA11yConsentAt
-    val description =
-        when {
-            state.autoSendStatus == AutoSendStatus.NEEDS_ACCESSIBILITY -> {
-                stringResource(R.string.settings_auto_send_not_on)
-            }
-
-            consentAt != null && state.autoSendStatus == AutoSendStatus.ON -> {
-                val locale = LocalConfiguration.current.locales[0]
-                stringResource(
-                    R.string.settings_auto_send_consented_at,
-                    DateFormat.getTimeInstance(DateFormat.SHORT, locale).format(consentAt),
-                    DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(consentAt),
-                )
-            }
-
-            else -> {
-                stringResource(R.string.settings_auto_send_description)
-            }
-        }
-    HLSwitchRow(
-        stringResource(R.string.settings_auto_send),
-        state.settings.clipAutoSend,
-        onChange,
-        unavailableReason = null,
-        description = description,
-    )
-}
 
 /**
  * Field 7: the switch [title], disabled with "Not supported on this phone" without telephony; while it is on with a
