@@ -1,6 +1,7 @@
 package app.handlive.android.ui.settings
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,7 +56,10 @@ internal fun AutoSendSwitch(
         unavailableReason = null,
         description = description,
     )
-    if (asking) AutoSendNotOnSheet(onChange) { asking = false }
+    // Back from Accessibility with the service on (or auto-send off elsewhere): the question no longer applies.
+    val stillNotOn = state.autoSendStatus == AutoSendStatus.NEEDS_ACCESSIBILITY
+    LaunchedEffect(stillNotOn) { if (!stillNotOn) asking = false }
+    if (asking && stillNotOn) AutoSendNotOnSheet(onChange) { asking = false }
 }
 
 /**

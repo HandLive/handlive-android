@@ -1,5 +1,8 @@
 package app.handlive.android.ui.settings
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -103,6 +106,20 @@ class AutoSendNotOnSheetTest {
         tapSwitch()
         compose.onNodeWithText(title).assertDoesNotExist()
         assertEquals(listOf(true), calls)
+    }
+
+    @Test
+    fun theSheetClosesOnceTheServiceIsOn() {
+        var state by mutableStateOf(notOn)
+        compose.setContent { HandLiveTheme { SettingsScreen(state, StatusBanners(), actions, "English") } }
+        tapSwitch()
+        compose.onNodeWithText(title).assertExists()
+        compose.runOnIdle { state = notOn.copy(accessibilityServiceOn = true) }
+        compose.onNodeWithText(title).assertDoesNotExist()
+        // A later resume without the service does not bring it back by itself.
+        compose.runOnIdle { state = notOn }
+        compose.onNodeWithText(title).assertDoesNotExist()
+        assertEquals(emptyList<Boolean>(), calls)
     }
 
     @Test
