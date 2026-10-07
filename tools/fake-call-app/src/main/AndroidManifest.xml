@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fake calling app for tools/e2e (scenario app_calls). No INTERNET permission. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- A phoneCall foreground service, as a VoIP app runs its call: Android then accepts the CallStyle template and
+         vouches for the ringing notification (FLAG_FOREGROUND_SERVICE). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!-- MODE_IN_COMMUNICATION while in call, as a VoIP app holds it. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true">
+
+        <!-- The launcher activity HandLive's MAIN/LAUNCHER query must see; it also takes the adb commands. -->
+        <activity
+            android:name=".CommandActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".FakeCallService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+    </application>
+</manifest>

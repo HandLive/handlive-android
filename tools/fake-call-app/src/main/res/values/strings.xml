@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Test-only texts of the fake calling app; never part of HandLive's string catalog. -->
+<resources>
+    <string name="app_name">E2E Caller</string>
+    <string name="channel_calls">Calls</string>
+    <string name="channel_other">Other</string>
+    <string name="caller">E2E Test Caller</string>
+    <string name="in_call">E2E in call</string>
+    <string name="hang_up">Hang Up</string>
+    <string name="upload">E2E sending file</string>
+    <string name="cancel">Cancel</string>
+</resources>
