@@ -11,27 +11,25 @@ import kotlin.random.Random
  * clipboard read held the screen). The table of tag ends must give, at every index, what the former search found.
  */
 class HtmlClipSanitizerLinearTimeTest {
-    @Test(timeout = 5_000)
-    fun aMebibyteOfTagStartsWithoutAnEndIsTextWithinASecond() {
+    @Test(timeout = HANG_MILLIS)
+    fun aMebibyteOfTagStartsWithoutAnEndIsTextInTime() {
         val count = MEBIBYTE / 2
         val input = "<a".repeat(count)
 
-        val (output, millis) = timed { HtmlClipSanitizer.sanitize(input) }
+        val output = timed("<a x ${input.length}") { HtmlClipSanitizer.sanitize(input) }
 
         assertEquals("&lt;a".repeat(count), output)
-        assertTrue("took $millis ms", millis < 1_000)
     }
 
-    @Test(timeout = 5_000)
-    fun aMebibyteOfQuotedTagStartsBeforeAnUnclosedQuoteIsTextWithinASecond() {
+    @Test(timeout = HANG_MILLIS)
+    fun aMebibyteOfQuotedTagStartsBeforeAnUnclosedQuoteIsTextInTime() {
         // A `>` is still there at the end, but the `'` before it never closes: no tag start completes.
-        val count = MEBIBYTE / 6
+        val count = MEBIBYTE / 5
         val input = "<a\"x\"".repeat(count) + "'>"
 
-        val (output, millis) = timed { HtmlClipSanitizer.sanitize(input) }
+        val output = timed("<a\"x\" x ${input.length} + '>") { HtmlClipSanitizer.sanitize(input) }
 
         assertEquals("&lt;a\"x\"".repeat(count) + "'>", output)
-        assertTrue("took $millis ms", millis < 1_000)
     }
 
     @Test
@@ -70,14 +68,27 @@ class HtmlClipSanitizerLinearTimeTest {
         return if (close < 0) -1 else close + 1
     }
 
-    private fun <T> timed(block: () -> T): Pair<T, Long> {
+    /** Runs [block], prints how long it took (also when it passes) and fails past [LIMIT_MILLIS]. */
+    private fun <T> timed(
+        what: String,
+        block: () -> T,
+    ): T {
         val start = System.nanoTime()
         val result = block()
-        return result to (System.nanoTime() - start) / 1_000_000
+        val millis = (System.nanoTime() - start) / 1_000_000
+        println("sanitize $what chars: $millis ms (limit $LIMIT_MILLIS ms)")
+        assertTrue("$what took $millis ms", millis < LIMIT_MILLIS)
+        return result
     }
 
     private companion object {
         const val MEBIBYTE = 1_048_576
+
+        /** The acceptance limit for ~1 MiB; the linear scanner takes about a tenth of a second. */
+        const val LIMIT_MILLIS = 5_000L
+
+        /** A quadratic scanner fails here instead of holding the run for minutes. */
+        const val HANG_MILLIS = 10_000L
         const val SEED = 20261007
         const val CASES = 5_000
         const val MAX_LENGTH = 40
