@@ -15,9 +15,10 @@
         android:required="false" />
 
     <!-- CALL-05: the apps with an InCallService are cellular dialers, whose call notifications are never app calls;
-         the listener must see them to drop them. Package visibility also hides the calling apps (a notification
-         listener is not exempt), so their labels need them visible: every app with a launcher activity is, never
-         QUERY_ALL_PACKAGES. -->
+         the listener must see them to drop them. Package visibility also hides the calling apps, whose labels the
+         Mac shows: on the API 35 emulator Android makes an app visible to the listener once it posts a notification,
+         and the launcher intent keeps every app with a launcher activity visible on a version or OEM build that does
+         not (API 30–34 not measured); never QUERY_ALL_PACKAGES. -->
     <queries>
         <intent>
             <action android:name="android.telecom.InCallService" />
