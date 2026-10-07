@@ -112,9 +112,11 @@ object HtmlClipSanitizer {
     fun sanitize(html: String): String {
         val text = HtmlPrePasses.stripBogusComments(HtmlPrePasses.stripComments(html))
         val out = StringBuilder(text.length)
+        // Only a text with a `<` can hold a tag: plain text needs no table of tag ends.
+        val ends = if ('<' in text) HtmlTagScanner.tagEnds(text) else IntArray(0)
         var copyFrom = 0
         while (true) {
-            val tag = HtmlTagScanner.nextTag(text, copyFrom)
+            val tag = if (ends.isEmpty()) null else HtmlTagScanner.nextTag(text, copyFrom, ends)
             if (tag == null) {
                 HtmlTagScanner.appendText(out, text, copyFrom, text.length)
                 return out.toString()

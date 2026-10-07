@@ -5,6 +5,10 @@ package app.handlive.android.core.protocol.clipboard
  * over a 180 KiB attribute run would overflow the stack of the JVM regex engine, so the tag grammar of the reference
  * (`<`, optional `/`, a name, attributes where a quoted value may hold `>`, `>`) is walked by index. A `<` that does
  * not start a complete tag is text ([appendText] escapes the ones that look like a tag start).
+ *
+ * Linear time: where a tag's attributes would end depends only on where they begin, so [tagEnds] finds it for every
+ * index in one pass from the end. Searching for each `<` anew made input such as `<a<a<a…` without a `>`, or an
+ * unclosed quote, quadratic (80 KB took seconds).
  */
 internal object HtmlTagScanner {
     /** One complete tag: [start] until [end] (exclusive), its lowercase [name] and the raw [attrs] text. */
@@ -39,17 +43,42 @@ internal object HtmlTagScanner {
         out.append(text, copied, to)
     }
 
-    /** The first complete tag at or after [from], or `null`. */
+    /** The first complete tag at or after [from], or `null`; [ends] = [tagEnds] of [text]. */
     fun nextTag(
         text: String,
         from: Int,
+        ends: IntArray,
     ): Tag? {
         var start = text.indexOf('<', from)
         while (start >= 0) {
-            parseTag(text, start)?.let { return it }
+            parseTag(text, start, ends)?.let { return it }
             start = text.indexOf('<', start + 1)
         }
         return null
+    }
+
+    /**
+     * For each index `i` of [text] (and its length), the index of the `>` that ends tag attributes beginning at `i`, or
+     * -1 when none does: a `>` ends them, a quote skips to just past the same quote (none: no end), any other character
+     * moves on by one. Each answer reuses the one to its right, so the whole array takes one pass.
+     */
+    fun tagEnds(text: String): IntArray {
+        val ends = IntArray(text.length + 1)
+        ends[text.length] = -1
+        var nextDouble = -1
+        var nextSingle = -1
+        for (i in text.indices.reversed()) {
+            ends[i] =
+                when (text[i]) {
+                    '>' -> i
+                    '"' -> if (nextDouble < 0) -1 else ends[nextDouble + 1]
+                    '\'' -> if (nextSingle < 0) -1 else ends[nextSingle + 1]
+                    else -> ends[i + 1]
+                }
+            if (text[i] == '"') nextDouble = i
+            if (text[i] == '\'') nextSingle = i
+        }
+        return ends
     }
 
     /** End of the first `</name` + whitespace + `>` at or after [from], ASCII case-insensitive; `null` if unclosed. */
@@ -95,39 +124,20 @@ internal object HtmlTagScanner {
     private fun parseTag(
         text: String,
         start: Int,
+        ends: IntArray,
     ): Tag? {
         val closing = start + 1 < text.length && text[start + 1] == '/'
         val nameStart = if (closing) start + 2 else start + 1
         if (nameStart >= text.length || !isAsciiLetter(text[nameStart])) return null
         var nameEnd = nameStart
         while (nameEnd < text.length && (isAsciiLetter(text[nameEnd]) || text[nameEnd] in '0'..'9')) nameEnd++
-        val end = tagEnd(text, nameEnd)
+        val end = ends[nameEnd]
         return if (end < 0) {
             null
         } else {
             Tag(start, end + 1, closing, text.substring(nameStart, nameEnd).lowercase(), text.substring(nameEnd, end))
         }
     }
-
-    /** Index of the `>` that ends the tag whose attributes begin at [from]; quoted values may hold `>`; -1 if none. */
-    private fun tagEnd(
-        text: String,
-        from: Int,
-    ): Int {
-        var i = from
-        while (i in text.indices &&
-            text[i] != '>'
-        ) {
-            i = if (text[i] == '"' || text[i] == '\'') pastQuote(text, i) else i + 1
-        }
-        return if (i in text.indices) i else -1
-    }
-
-    /** Index after the quote that closes the one at [open]; -1 when it never closes (the tag is not a tag). */
-    private fun pastQuote(
-        text: String,
-        open: Int,
-    ): Int = text.indexOf(text[open], open + 1).let { if (it < 0) -1 else it + 1 }
 
     private fun isAsciiLetter(c: Char) = c in 'a'..'z' || c in 'A'..'Z'
 

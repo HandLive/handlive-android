@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- Clipboard HTML: the sanitizer runs in linear time. A copied page whose HTML repeats an unfinished tag start (`<a`
+  without `>`, or attributes whose quote never closes) took seconds at 160 KiB and minutes at 1 MiB while the
+  clipboard read held the screen; 1 MiB now takes about a tenth of a second, with the same output byte for byte.
 - Calls from other apps: "Answer" from the Mac starts the app from the background (`answer_mode = direct`) only for a
   call Android vouches for: from Android 14 a ringing notification posted with a foreground service, a user-initiated
   job or a granted full-screen intent; on Android 12–13 any `CallStyle` notification; on Android 10–11 never. Any other
