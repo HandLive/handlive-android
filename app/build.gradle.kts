@@ -25,9 +25,9 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.handlive.android"
+        applicationId = "com.handlive.android"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 4
         versionName = "0.1.0-beta.3"
 
