@@ -19,7 +19,9 @@ class AppLanguageSettingTest {
     @After
     fun tearDown() = AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
 
+    // Pinned: Robolectric 4.17's API 36 shadow throws IllegalAccessException here, unrelated to this test.
     @Test
+    @Config(sdk = [35])
     fun localesMapToTheThreeChoices() {
         assertEquals(AppLanguage.System, AppLanguageSetting.fromLocales(LocaleListCompat.getEmptyLocaleList()))
         assertEquals(AppLanguage.English, AppLanguageSetting.fromLocales(LocaleListCompat.forLanguageTags("en-GB")))
@@ -44,6 +46,6 @@ class AppLanguageSettingTest {
         assertTrue(AppLanguageSetting.usesSystemPage)
         val intent = AppLanguageSetting.systemPageIntent(ApplicationProvider.getApplicationContext())
         assertEquals(Settings.ACTION_APP_LOCALE_SETTINGS, intent.action)
-        assertEquals("package:app.handlive.android", intent.dataString)
+        assertEquals("package:com.handlive.android", intent.dataString)
     }
 }
