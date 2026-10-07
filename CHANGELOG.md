@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] — 2026-10-07
+
+### Added
+
+- Clipboard: a text clip keeps its HTML. The phone reads, sends and writes the `html` of `clipboard/push` (capability
+  `text/html`), cleaned by `HtmlClipSanitizer` against the shared vectors `clipboard-html.json`; a clip whose cleaned
+  HTML outgrows the limit is written as its text alone.
+- Settings › Auto-Send: tapping the switch while it reads "Auto-send isn't on yet" asks first (an action sheet,
+  SET-02 field 39) instead of turning off a service that never came on.
+- `tools/fake-call-app`: a debug-only fake calling app for the end-to-end harness (handlive-shared `tools/e2e`,
+  scenario `app_calls`); a standalone build, never in the product APK.
+
+### Fixed
+
+- Clipboard images: an item that carries an image URI and text is read as the image; a lost URI grant is told to the
+  user on Send Clipboard, and debug builds log why a copy was not read (`clip_read_failed`).
+- PIN pairing on small heaps (the API 29 emulator): Argon2id's 64 MiB no longer throws `OutOfMemoryError`; the app runs
+  with `android:largeHeap`.
+- Restricted settings on a sideloaded install (Android 13+): the guidance comes back once per return when the user
+  leaves Accessibility or Notification access without turning HandLive on, the Accessibility disclosure is asked once,
+  and its first Agree is kept. The block is decided by the install source, not by an app op Android 15 refuses to read.
+- Calls from other apps: the Mac shows the calling app's label instead of its package name. On the API 35 emulator
+  Android already makes an app visible to the notification listener once it posts; `feature/call` also queries the
+  `MAIN`/`LAUNCHER` intent for versions or OEM builds that do not (never `QUERY_ALL_PACKAGES`).
+- Calls from other apps: swiping away an in-call notification that is not `CallStyle` (Telegram's, Android 14+) no
+  longer ends the call on the Mac. Only the app's own cancel ends it as `ended`; otherwise the call stays ongoing with
+  End hidden while a call holds `MODE_IN_COMMUNICATION`, only a later in-call notification of the app holds it again,
+  and it ends `unknown` when the audio mode leaves communication (CALL-05 E11).
+
 ### Security
 
 - Clipboard HTML: the sanitizer runs in linear time. A copied page whose HTML repeats an unfinished tag start (`<a`
