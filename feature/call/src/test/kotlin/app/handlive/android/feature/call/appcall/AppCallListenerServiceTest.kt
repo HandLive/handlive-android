@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.os.Process
+import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.test.core.app.ApplicationProvider
 import app.handlive.android.feature.connection.capability.NotificationAccess
@@ -36,6 +37,7 @@ class AppCallListenerServiceTest {
         var wanted: Boolean? = true
         val posted = mutableListOf<Pair<AppNotification, Long>>()
         val removed = mutableListOf<Pair<String, Long>>()
+        val byApp = mutableListOf<Boolean>()
         val changes = mutableListOf<Pair<Boolean, Long>>()
 
         /** A-CALL fails on the notifications of this package. */
@@ -54,8 +56,10 @@ class AppCallListenerServiceTest {
         override fun removed(
             key: String,
             at: Long,
+            byApp: Boolean,
         ) {
             removed += key to at
+            this.byApp += byApp
         }
 
         override fun listenerChanged(
@@ -143,6 +147,28 @@ class AppCallListenerServiceTest {
         service.onNotificationRemoved(telegram, null, 8)
 
         assertEquals(telegram.key, target.removed.single().first)
+    }
+
+    @Test
+    fun onlyTheAppsOwnCancelCountsAsTheAppRemovingTheNotification() {
+        val telegram = sbn("org.telegram.messenger", 202, 5L)
+        val byApp =
+            listOf(
+                NotificationListenerService.REASON_APP_CANCEL,
+                NotificationListenerService.REASON_APP_CANCEL_ALL,
+            )
+        val otherwise =
+            listOf(
+                NotificationListenerService.REASON_CANCEL,
+                NotificationListenerService.REASON_CLICK,
+                NotificationListenerService.REASON_SNOOZED,
+                NotificationListenerService.REASON_CHANNEL_BANNED,
+                NotificationListenerService.REASON_PACKAGE_BANNED,
+            )
+
+        (byApp + otherwise).forEach { service.onNotificationRemoved(telegram, null, it) }
+
+        assertEquals(byApp.map { true } + otherwise.map { false }, target.byApp)
     }
 
     @Test

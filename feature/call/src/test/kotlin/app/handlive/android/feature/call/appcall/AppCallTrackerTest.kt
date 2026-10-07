@@ -86,7 +86,7 @@ class AppCallTrackerTest {
     @Test
     fun aRingingContextLinksToTheOngoingNotificationOfTheSamePackageWithinTheWindow() {
         val ringing = ring()
-        val removed = tracker.onRemoved(RINGING_KEY, T0 + 4_000).single()
+        val removed = tracker.onRemoved(RINGING_KEY, T0 + 4_000, byApp = true).single()
         assertEquals("waiting for the in-call notification", AppCallState.RINGING, removed.state)
         assertNull("the removed notification offers nothing", removed.answer)
         assertNull(removed.decline)
@@ -108,7 +108,7 @@ class AppCallTrackerTest {
     @Test
     fun anOngoingNotificationAfterTheWindowDoesNotLink() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 4_000)
+        tracker.onRemoved(RINGING_KEY, T0 + 4_000, byApp = true)
 
         val late = tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 4_000 + window + 1)
 
@@ -121,10 +121,10 @@ class AppCallTrackerTest {
         val alone = AppCallFixtures.notification("c", TELEGRAM, ongoing = true, actions = listOf(FakeAppIntent("e")))
         assertTrue(tracker.onPosted(alone, T0).isEmpty())
         assertTrue(tracker.current.isEmpty())
-        tracker.onRemoved("c", T0 + 50)
+        tracker.onRemoved("c", T0 + 50, byApp = true)
 
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         val end = FakeAppIntent("end")
         val linked =
             tracker.onPosted(
@@ -150,7 +150,7 @@ class AppCallTrackerTest {
             AppCallFixtures.notification("a", TELEGRAM, ongoing = true, onCallerRead = read, onIntentsRead = read),
             T0 + 10,
         )
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         tracker.onPosted(
             AppCallFixtures.notification("b", ZALO, ongoing = true, onCallerRead = read, onIntentsRead = read),
             T0 + 150,
@@ -173,7 +173,7 @@ class AppCallTrackerTest {
             AppCallFixtures.notification(MUSIC_KEY, TELEGRAM, ongoing = true, actions = listOf(FakeAppIntent("x")))
         tracker.onPosted(music, T0 - 60_000)
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 4_000)
+        tracker.onRemoved(RINGING_KEY, T0 + 4_000, byApp = true)
 
         val update =
             AppCallFixtures.notification(MUSIC_KEY, TELEGRAM, ongoing = true, actions = listOf(FakeAppIntent("pause")))
@@ -194,7 +194,7 @@ class AppCallTrackerTest {
         ring()
         tracker.onPosted(AppCallFixtures.notification(MUSIC_KEY, TELEGRAM, ongoing = true), T0 + 1_000)
 
-        val removed = tracker.onRemoved(RINGING_KEY, T0 + 2_000).single()
+        val removed = tracker.onRemoved(RINGING_KEY, T0 + 2_000, byApp = true).single()
 
         assertEquals("still waiting for the in-call notification", AppCallState.RINGING, removed.state)
         assertTrue(removed.waitingForInCall)
@@ -209,23 +209,23 @@ class AppCallTrackerTest {
         assertTrue("the ringing notification still stands", early.isEmpty())
         assertEquals(AppCallState.RINGING, tracker.find(ringing.callId)?.state)
 
-        val linked = tracker.onRemoved(RINGING_KEY, T0 + 1_600).single()
+        val linked = tracker.onRemoved(RINGING_KEY, T0 + 1_600, byApp = true).single()
 
         assertEquals(ringing.callId, linked.callId)
         assertEquals(AppCallState.ONGOING, linked.state)
         assertEquals("answered when the in-call notification was posted", T0 + 1_500, linked.answeredAt)
         assertSame(end, linked.end)
         assertNull(linked.unlinkedAt)
-        assertTrue("it holds the call now", tracker.onRemoved(IN_CALL_KEY, T0 + 9_000).single().ended)
+        assertTrue("it holds the call now", tracker.onRemoved(IN_CALL_KEY, T0 + 9_000, byApp = true).single().ended)
     }
 
     @Test
     fun anEarlyInCallNotificationRemovedBeforeTheRingingOneIsForgotten() {
         ring()
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500)
-        tracker.onRemoved(IN_CALL_KEY, T0 + 700)
+        tracker.onRemoved(IN_CALL_KEY, T0 + 700, byApp = true)
 
-        val removed = tracker.onRemoved(RINGING_KEY, T0 + 1_000).single()
+        val removed = tracker.onRemoved(RINGING_KEY, T0 + 1_000, byApp = true).single()
 
         assertTrue(removed.waitingForInCall)
     }
@@ -233,14 +233,14 @@ class AppCallTrackerTest {
     @Test
     fun theWindowComparesThePostTimeWithTheRemoval() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 1_000)
+        tracker.onRemoved(RINGING_KEY, T0 + 1_000, byApp = true)
 
         val inside = tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 1_000 + 2_900).single()
         assertEquals("posted 2.9 s after the removal", AppCallState.ONGOING, inside.state)
 
         val other = AppCallTracker({ "other" }, AppCallFixtures.labels)
         other.onPosted(AppCallFixtures.telegramRinging(), T0)
-        other.onRemoved(RINGING_KEY, T0 + 1_000)
+        other.onRemoved(RINGING_KEY, T0 + 1_000, byApp = true)
         assertTrue(
             "posted 3.2 s after the removal",
             other.onPosted(AppCallFixtures.telegramInCall(), T0 + 1_000 + 3_200).isEmpty(),
@@ -251,7 +251,7 @@ class AppCallTrackerTest {
     fun aRingingCallWithoutACallerNeverAsksTheInCallNotificationForOne() {
         var callerReads = 0
         ring(notification = AppCallFixtures.telegramRinging(caller = null))
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
 
         val linked =
             tracker.onPosted(AppCallFixtures.telegramInCall(onCallerRead = { callerReads++ }), T0 + 300).single()
@@ -266,7 +266,7 @@ class AppCallTrackerTest {
         var callerReads = 0
         var intentReads = 0
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
 
         val inCall =
             AppCallFixtures.notification(
@@ -286,7 +286,7 @@ class AppCallTrackerTest {
     @Test
     fun onlyAnOngoingNotificationOfTheSamePackageLinks() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0)
+        tracker.onRemoved(RINGING_KEY, T0, byApp = true)
 
         val notOngoing = tracker.onPosted(AppCallFixtures.telegramInCall(ongoing = false), T0 + 100)
         val otherApp =
@@ -303,7 +303,7 @@ class AppCallTrackerTest {
     @Test
     fun aCallStyleOngoingNotificationLinksWithItsHangUpIntent() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 500)
+        tracker.onRemoved(RINGING_KEY, T0 + 500, byApp = true)
         val hangUp = FakeAppIntent("hangup")
         val ongoing =
             AppCallFixtures.notification(
@@ -338,7 +338,7 @@ class AppCallTrackerTest {
         assertEquals(AppCallState.ONGOING, linked.state)
         assertTrue(
             "the ringing notification going away changes nothing",
-            tracker.onRemoved(RINGING_KEY, T0 + 950).isEmpty(),
+            tracker.onRemoved(RINGING_KEY, T0 + 950, byApp = true).isEmpty(),
         )
         assertEquals(1, tracker.current.size)
     }
@@ -392,10 +392,10 @@ class AppCallTrackerTest {
     @Test
     fun removingTheInCallNotificationEndsTheCall() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500)
 
-        val ended = tracker.onRemoved(IN_CALL_KEY, T0 + 60_000).single()
+        val ended = tracker.onRemoved(IN_CALL_KEY, T0 + 60_000, byApp = true).single()
 
         assertTrue(ended.ended)
         assertEquals(AppCallState.ENDED, ended.state)
@@ -408,7 +408,7 @@ class AppCallTrackerTest {
     @Test
     fun theInCallNotificationUpdatesTheEndActionAsItsActionsChange() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         val first = FakeAppIntent("end")
         tracker.onPosted(AppCallFixtures.telegramInCall(actions = listOf(first)), T0 + 500)
 
@@ -429,7 +429,7 @@ class AppCallTrackerTest {
         ring()
         tracker.markSent("call-1", AppCallAction.DECLINE)
 
-        val ended = tracker.onRemoved(RINGING_KEY, T0 + 12).single()
+        val ended = tracker.onRemoved(RINGING_KEY, T0 + 12, byApp = true).single()
 
         assertTrue(ended.ended)
         assertEquals(AppCallEndReason.DECLINED, ended.endReason)
@@ -440,7 +440,7 @@ class AppCallTrackerTest {
     @Test
     fun aRingingNotificationThatVanishesAndNothingFollowsIsMissed() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 20_000)
+        tracker.onRemoved(RINGING_KEY, T0 + 20_000, byApp = true)
 
         val ended = tracker.onLinkWindowEnd("call-1", T0 + 20_000, T0 + 20_000 + window).single()
 
@@ -453,7 +453,7 @@ class AppCallTrackerTest {
     fun anAnswerSentButNoInCallNotificationIsUnknown() {
         ring()
         tracker.markSent("call-1", AppCallAction.ANSWER)
-        tracker.onRemoved(RINGING_KEY, T0 + 160)
+        tracker.onRemoved(RINGING_KEY, T0 + 160, byApp = true)
 
         val ended = tracker.onLinkWindowEnd("call-1", T0 + 160, T0 + 160 + window).single()
 
@@ -463,7 +463,7 @@ class AppCallTrackerTest {
     @Test
     fun theWindowEndOfALinkedOrUnknownCallChangesNothing() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500)
 
         assertTrue(tracker.onLinkWindowEnd("call-1", T0 + 100, T0 + 100 + window).isEmpty())
@@ -474,9 +474,9 @@ class AppCallTrackerTest {
     @Test
     fun aTimerOfAnEarlierWaitChangesNothing() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         tracker.onPosted(AppCallFixtures.telegramRinging(), T0 + 200)
-        tracker.onRemoved(RINGING_KEY, T0 + 2_000)
+        tracker.onRemoved(RINGING_KEY, T0 + 2_000, byApp = true)
 
         assertTrue("the first wait is over", tracker.onLinkWindowEnd("call-1", T0 + 100, T0 + 100 + window).isEmpty())
         assertEquals(AppCallState.RINGING, tracker.find("call-1")?.state)
@@ -486,7 +486,7 @@ class AppCallTrackerTest {
     @Test
     fun theRemovalOfAnUntrackedNotificationChangesNothing() {
         ring()
-        assertTrue(tracker.onRemoved("0|other|1|null|1", T0 + 10).isEmpty())
+        assertTrue(tracker.onRemoved("0|other|1|null|1", T0 + 10, byApp = true).isEmpty())
         assertEquals(AppCallState.RINGING, tracker.find("call-1")?.state)
     }
 
@@ -499,7 +499,7 @@ class AppCallTrackerTest {
                 .single()
         assertEquals(setOf(telegram.callId, zalo.callId), tracker.current.map { it.callId }.toSet())
 
-        tracker.onRemoved("z1", T0 + 20)
+        tracker.onRemoved("z1", T0 + 20, byApp = true)
         val zaloInCall =
             AppCallFixtures.notification("z2", ZALO, ongoing = true, actions = listOf(FakeAppIntent("end")))
         assertEquals(zalo.callId, tracker.onPosted(zaloInCall, T0 + 30).single().callId)
@@ -530,7 +530,7 @@ class AppCallTrackerTest {
         ring()
         tracker.onPosted(AppCallFixtures.notification("z", ZALO, 1), T0 + 5)
 
-        val ended = tracker.onListenerLost(T0 + 1_000)
+        val ended = tracker.onLost(AppCallSignal.LISTENER, T0 + 1_000)
 
         assertEquals(2, ended.size)
         assertTrue(ended.all { it.ended && it.endReason == AppCallEndReason.UNKNOWN && it.endedAt == T0 + 1_000 })
@@ -540,18 +540,18 @@ class AppCallTrackerTest {
     @Test
     fun onlyACallThatEndedAsEndedKeepsItsAnswerTime() {
         ring()
-        tracker.onRemoved(RINGING_KEY, T0 + 100)
+        tracker.onRemoved(RINGING_KEY, T0 + 100, byApp = true)
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 500)
 
-        val lost = tracker.onListenerLost(T0 + 2_000).single()
+        val lost = tracker.onLost(AppCallSignal.LISTENER, T0 + 2_000).single()
 
         assertEquals(AppCallEndReason.UNKNOWN, lost.endReason)
         assertNull("unknown means no answer time (call_event/app_call)", lost.answeredAt)
 
         tracker.onPosted(AppCallFixtures.telegramRinging(), T0 + 3_000)
-        tracker.onRemoved(RINGING_KEY, T0 + 3_100)
+        tracker.onRemoved(RINGING_KEY, T0 + 3_100, byApp = true)
         tracker.onPosted(AppCallFixtures.telegramInCall(), T0 + 3_500)
-        assertEquals(T0 + 3_500, tracker.onRemoved(IN_CALL_KEY, T0 + 9_000).single().answeredAt)
+        assertEquals(T0 + 3_500, tracker.onRemoved(IN_CALL_KEY, T0 + 9_000, byApp = true).single().answeredAt)
     }
 
     @Test

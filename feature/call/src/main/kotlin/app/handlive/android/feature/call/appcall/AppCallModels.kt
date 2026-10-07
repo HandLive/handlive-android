@@ -39,6 +39,9 @@ interface AppNotificationDetails {
 
     /** `callPerson.name`, else the notification title. */
     fun caller(): String?
+
+    /** The notification's category is `call` (`Notification.CATEGORY_CALL`). */
+    fun callCategory(): Boolean
 }
 
 /**
@@ -64,10 +67,16 @@ class AppNotification(
     val intents: AppIntents by lazy { details.intents() }
 
     fun caller(): String? = details.caller()
+
+    /** `CallStyle` ongoing, or of category `call`: the shape of an in-call notification. */
+    fun inCallShaped(): Boolean = AppCallParser.shape(this) == AppCallShape.ONGOING || details.callCategory()
 }
 
 /** What a call notification says about its call. */
 enum class AppCallShape { RINGING, ONGOING }
+
+/** What A-CALL follows the app calls by: the notification listener, and the audio mode for a detached call. */
+enum class AppCallSignal { LISTENER, AUDIO_MODE }
 
 /** The three things HandLive can do to an app call, by the app's own intents. */
 enum class AppCallAction { ANSWER, DECLINE, END }
@@ -100,6 +109,11 @@ data class AppCallContext(
     /** HandLive sent the app's decline / answer intent: how the call ended is `declined`, not `missed`. */
     val declineSent: Boolean = false,
     val answerSent: Boolean = false,
+    /**
+     * Ongoing, but its in-call notification went without the app removing it (the user swiped it away): the call goes
+     * on while the audio mode is in communication, with no end action, until a new ongoing notification holds it.
+     */
+    val detached: Boolean = false,
 ) {
     val ended: Boolean get() = state == AppCallState.ENDED
 

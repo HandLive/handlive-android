@@ -17,7 +17,11 @@ import app.handlive.android.feature.call.CallConstants
  *   [CallConstants.APP_CALL_LINK_WINDOW_MILLIS] of that removal. A `CallStyle` ongoing notification of the package is
  *   the in-call notification at once. A decline sent by HandLive ends the call at once as `declined`; otherwise, when
  *   the window passes (the caller of [onLinkWindowEnd]), it ends `missed`, or `unknown` after an answer HandLive sent.
- * - Removing the in-call notification ends the call (`ended`); losing the listener ends every call as `unknown`.
+ * - The app removing the in-call notification ends the call (`ended`). Any other removal (the user swiped it away)
+ *   detaches it while a call holds the audio mode, else ends it `unknown`; a detached call ends `unknown` when the
+ *   mode leaves communication; its in-call notification posted again, or a new one of its package with the in-call
+ *   shape, holds it again — any other ongoing notification of the package never does.
+ *   Losing the listener ends every call as `unknown`.
  *
  * Only a notification that is a call, or the in-call notification of one, is read beyond its shape; the keys of the
  * standing ongoing notifications are kept in memory, nothing is logged or stored.
@@ -25,6 +29,8 @@ import app.handlive.android.feature.call.CallConstants
 class AppCallTracker(
     private val ids: () -> String,
     private val labels: AppLabels,
+    /** The audio mode a detached call lives on: asked when one is detached, watched while one is (by A-CALL). */
+    val mode: CommunicationMode = CommunicationMode.NONE,
 ) {
     private val contexts = LinkedHashMap<String, AppCallContext>()
 
@@ -33,6 +39,11 @@ class AppCallTracker(
 
     /** What may become the in-call notification of each ringing context, by `call_id`. */
     private val watches = HashMap<String, InCallWatch>()
+
+    private val detached = DetachedCalls()
+
+    /** A call is detached: the audio mode must be followed. */
+    val hasDetached: Boolean get() = !detached.isEmpty
 
     /** The calls in progress (ringing or ongoing), oldest first. */
     val current: List<AppCallContext> get() = contexts.values.toList()
@@ -47,17 +58,32 @@ class AppCallTracker(
         val holder = contexts.values.firstOrNull { it.notificationKey == notification.key }
         val changed =
             when {
-                holder != null -> holder.updatedBy(notification, shape, at)
-                shape == AppCallShape.RINGING -> create(notification, shape, at)
-                else -> link(notification, shape, at) ?: shape?.let { create(notification, it, at) }
+                holder != null -> {
+                    holder.updatedBy(notification, shape, at)
+                }
+
+                shape == AppCallShape.RINGING -> {
+                    create(notification, shape, at)
+                }
+
+                else -> {
+                    detached.heldBy(notification, contexts.values)?.reattachedTo(notification)
+                        ?: link(notification, shape, at)
+                        ?: shape?.let { create(notification, it, at) }
+                }
             }
         if (shape == null && notification.ongoing) standing[notification.key] = notification.packageName
         return listOfNotNull(changed?.also(::keep))
     }
 
+    /**
+     * The notification [key] was removed at [at]; [byApp]: the app removed it itself. The [mode] is asked only when the
+     * in-call notification of an ongoing call goes otherwise: a call that holds the audio mode is detached.
+     */
     fun onRemoved(
         key: String,
         at: Long,
+        byApp: Boolean,
     ): List<AppCallContext> {
         standing.remove(key)
         watches.values.forEach { it.forget(key) }
@@ -65,8 +91,17 @@ class AppCallTracker(
         val inCall = watches[context.callId]?.first()
         val changed =
             when {
-                context.state == AppCallState.ONGOING -> {
+                context.state == AppCallState.ONGOING && byApp -> {
                     end(context, AppCallEndReason.ENDED, at)
+                }
+
+                context.state == AppCallState.ONGOING && mode.inCommunication() -> {
+                    detached.add(context.callId, standing.filterValues { it == context.packageName }.keys.toSet())
+                    context.copy(end = null, detached = true).also(::keep)
+                }
+
+                context.state == AppCallState.ONGOING -> {
+                    end(context, AppCallEndReason.UNKNOWN, at)
                 }
 
                 context.waitingForInCall -> {
@@ -104,10 +139,18 @@ class AppCallTracker(
         return listOf(end(context, reason, at))
     }
 
-    /** The notification listener was disconnected: the calls can no longer be followed, nor what stands. */
-    fun onListenerLost(at: Long): List<AppCallContext> {
-        standing.clear()
-        return current.map { end(it, AppCallEndReason.UNKNOWN, at) }
+    /**
+     * [signal] is gone, so the calls it followed end as `unknown`: the notification listener — every call, and what
+     * stands is forgotten — or the audio mode of the detached calls, which left communication.
+     */
+    fun onLost(
+        signal: AppCallSignal,
+        at: Long,
+    ): List<AppCallContext> {
+        if (signal == AppCallSignal.LISTENER) standing.clear()
+        return current
+            .filter { signal == AppCallSignal.LISTENER || it.detached }
+            .map { end(it, AppCallEndReason.UNKNOWN, at) }
     }
 
     /** HandLive sent the app's intent for [action] of [callId]; it decides how the call is said to have ended. */
@@ -192,6 +235,7 @@ class AppCallTracker(
     private fun keep(context: AppCallContext) {
         contexts[context.callId] = context
         if (context.state != AppCallState.RINGING) watches.remove(context.callId)
+        if (!context.detached) detached.remove(context.callId)
     }
 
     private fun end(
@@ -201,40 +245,7 @@ class AppCallTracker(
     ): AppCallContext {
         contexts.remove(context.callId)
         watches.remove(context.callId)
+        detached.remove(context.callId)
         return context.endedAs(reason, at)
     }
-}
-
-/**
- * The candidates for the in-call notification of one ringing call: the ongoing notifications of its package that
- * already stood when it started are never one, and those first posted after it started, while its ringing
- * notification stands, are remembered (oldest first) until they are removed.
- */
-private class InCallWatch(
-    private val before: Set<String>,
-) {
-    class Candidate(
-        val notification: AppNotification,
-        /** The post time of the key's first version: when the call was answered. */
-        val postedAt: Long,
-    )
-
-    private val candidates = LinkedHashMap<String, Candidate>()
-
-    /** [key] did not stand when the call started. */
-    fun isNew(key: String) = key !in before
-
-    /** The latest version of [notification], with the post time of its first. */
-    fun remember(
-        notification: AppNotification,
-        at: Long,
-    ) {
-        candidates[notification.key] = Candidate(notification, candidates[notification.key]?.postedAt ?: at)
-    }
-
-    fun forget(key: String) {
-        candidates.remove(key)
-    }
-
-    fun first(): Candidate? = candidates.values.firstOrNull()
 }

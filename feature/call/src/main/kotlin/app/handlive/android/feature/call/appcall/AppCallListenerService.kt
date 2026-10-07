@@ -20,9 +20,11 @@ interface AppCallListenerTarget {
         at: Long,
     )
 
+    /** The notification [key] was removed at [at]; [byApp]: the app that posted it removed it itself. */
     fun removed(
         key: String,
         at: Long,
+        byApp: Boolean,
     )
 
     /** The listener connected or disconnected: Notification access, so the capability, may have changed. */
@@ -73,7 +75,9 @@ class AppCallListenerService : NotificationListenerService() {
         reason: Int,
     ) {
         val at = System.currentTimeMillis()
-        guarded { if (sbn.packageName != packageName) target.removed(sbn.key, at) }
+        // Only the app's own cancel ends a call; any other reason (a swipe, a snooze, a blocked channel) may not.
+        val byApp = reason == REASON_APP_CANCEL || reason == REASON_APP_CANCEL_ALL
+        guarded { if (sbn.packageName != packageName) target.removed(sbn.key, at, byApp) }
     }
 
     /** Once the settings are known: starts reading when app calls are wanted, else unbinds; once per connection. */

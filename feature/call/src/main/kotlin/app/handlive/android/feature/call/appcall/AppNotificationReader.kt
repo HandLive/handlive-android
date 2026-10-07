@@ -32,6 +32,8 @@ class AppNotificationReader(
                     override fun intents() = intentsOf(notification, sbn.packageName)
 
                     override fun caller() = callerOf(notification)
+
+                    override fun callCategory() = notification.category == Notification.CATEGORY_CALL
                 },
         )
     }

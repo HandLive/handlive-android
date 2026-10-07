@@ -92,6 +92,7 @@ object AppCallFixtures {
         hangUp: AppIntent? = null,
         actions: List<AppIntent?> = emptyList(),
         caller: String? = null,
+        category: String? = null,
         onCallerRead: () -> Unit = {},
         onIntentsRead: () -> Unit = {},
     ) = AppNotification(
@@ -111,8 +112,39 @@ object AppCallFixtures {
                     onCallerRead()
                     return caller
                 }
+
+                override fun callCategory() = category == "call"
             },
     )
+}
+
+/** The phone's audio mode: [inCommunication] switchable; [leave] tells the watcher the mode left communication. */
+class FakeCommunicationMode : CommunicationMode {
+    var inCommunication = true
+    var watches = 0
+        private set
+    var stops = 0
+        private set
+    private var left: (() -> Unit)? = null
+
+    val watching: Boolean get() = left != null
+
+    override fun inCommunication() = inCommunication
+
+    override fun watch(left: () -> Unit) {
+        watches++
+        this.left = left
+    }
+
+    override fun stop() {
+        stops++
+        left = null
+    }
+
+    fun leave() {
+        inCommunication = false
+        left?.invoke()
+    }
 }
 
 /** `call.app_calls` ∧ Notification access ∧ `feature.call`, switchable. */
