@@ -32,10 +32,34 @@ class HtmlClipSanitizerLinearTimeTest {
         assertEquals("&lt;a\"x\"".repeat(count) + "'>", output)
     }
 
+    @Test(timeout = HANG_MILLIS)
+    fun aMebibyteOfNestedQuotesBeforeAnUnclosedQuoteIsTextInTime() {
+        // `'"'` pairs its single quotes around a double one; the last `"` never closes, so no tag start completes.
+        val count = MEBIBYTE / 6
+        val input = "<a '\"'".repeat(count) + "\">"
+
+        val output = timed("<a '\"' x ${input.length}") { HtmlClipSanitizer.sanitize(input) }
+
+        assertEquals("&lt;a '\"'".repeat(count) + "\">", output)
+    }
+
+    @Test(timeout = HANG_MILLIS)
+    fun aMebibyteOfAnOddNumberOfQuotesEndsInOneTagInTime() {
+        // An odd count of `"`: the first tag start leaves one quote open, the second pairs them all up to the `>`.
+        val count = MEBIBYTE / 3 or 1
+        val input = "<a\"".repeat(count) + ">"
+
+        val output = timed("<a\" x ${input.length} (odd)") { HtmlClipSanitizer.sanitize(input) }
+
+        assertEquals("&lt;a\"<a>", output)
+    }
+
     @Test
-    fun smallInputsOfBothShapesComeOutAsText() {
+    fun smallInputsOfEveryShapeComeOutAsBefore() {
         assertEquals("&lt;a&lt;a&lt;a", HtmlClipSanitizer.sanitize("<a<a<a"))
         assertEquals("&lt;a\"x\"&lt;a\"x\"'>", HtmlClipSanitizer.sanitize("<a\"x\"<a\"x\"'>"))
+        assertEquals("&lt;a '\"'&lt;a '\"'\">", HtmlClipSanitizer.sanitize("<a '\"'<a '\"'\">"))
+        assertEquals("&lt;a\"<a>", HtmlClipSanitizer.sanitize("<a\"<a\"<a\">"))
     }
 
     @Test
