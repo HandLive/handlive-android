@@ -1,0 +1,188 @@
+# Play bundle: on demand, from main only, builds the signed gmsRelease AAB for Play.
+# Gradle signs it (signingConfig "upload" in app/build.gradle.kts reads HANDLIVE_UPLOAD_*).
+# This job therefore holds the upload key during the Gradle step. The keystore is written
+# only after the setup actions, mode 600, and removed in a final step that always runs.
+# release-android.yml is unchanged: it still publishes the foss APK, not an AAB.
+# Dispatch (after this file is on main):
+#   gh workflow run play-bundle.yml --repo HandLive/handlive-android --ref main
+# Artifact "play-bundle" (retention 7 days): app-gms-release.aab and mapping.txt.
+# Secrets live in the environment "release" (docs/deployment-guide.md, Release builds).
+# Required: ANDROID_RELEASE_KEYSTORE_BASE64, ANDROID_RELEASE_KEYSTORE_PASSWORD,
+# ANDROID_RELEASE_KEY_ALIAS, HANDLIVE_FCM_APPLICATION_ID, HANDLIVE_FCM_API_KEY,
+# HANDLIVE_FCM_PROJECT_ID, HANDLIVE_FCM_SENDER_ID. A missing one fails the job by name.
+# ANDROID_RELEASE_KEY_PASSWORD is optional (PKCS12 uses the store password).
+# Repository variables HANDLIVE_RELAY_HOST and HANDLIVE_RELAY_EXTRA_PINS are passed through.
+# Empty means the build has no relay, same as release-android. Nothing here prints a secret value.
+name: play-bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-bundle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    name: bundle gmsRelease (signed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.ref == 'refs/heads/main'
+    environment: release
+    steps:
+      - name: Required signing and FCM secrets
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          FCM_APPLICATION_ID: ${{ secrets.HANDLIVE_FCM_APPLICATION_ID }}
+          FCM_API_KEY: ${{ secrets.HANDLIVE_FCM_API_KEY }}
+          FCM_PROJECT_ID: ${{ secrets.HANDLIVE_FCM_PROJECT_ID }}
+          FCM_SENDER_ID: ${{ secrets.HANDLIVE_FCM_SENDER_ID }}
+        run: |
+          # Names only. An empty value (base64 of a file that was not there) counts as missing.
+          missing=""
+          [ -n "$KEYSTORE" ] || missing="$missing ANDROID_RELEASE_KEYSTORE_BASE64"
+          [ -n "$STORE_PASSWORD" ] || missing="$missing ANDROID_RELEASE_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing ANDROID_RELEASE_KEY_ALIAS"
+          [ -n "$FCM_APPLICATION_ID" ] || missing="$missing HANDLIVE_FCM_APPLICATION_ID"
+          [ -n "$FCM_API_KEY" ] || missing="$missing HANDLIVE_FCM_API_KEY"
+          [ -n "$FCM_PROJECT_ID" ] || missing="$missing HANDLIVE_FCM_PROJECT_ID"
+          [ -n "$FCM_SENDER_ID" ] || missing="$missing HANDLIVE_FCM_SENDER_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Play bundle secrets missing or empty:$missing"
+            exit 1
+          fi
+
+      # Hub first: a checkout at the workspace root clears the directory.
+      - name: Kho hub handlive ở gốc workspace
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ github.repository_owner }}/handlive
+          ref: main
+          token: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Kho android trên main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: android
+          persist-credentials: false
+
+      - name: Kho handlive-shared cạnh android/
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ github.repository_owner }}/handlive-shared
+          path: shared
+          ref: main
+          token: ${{ secrets.HANDLIVE_REPOS_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: JDK 21 (Temurin)
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Android SDK platform 37
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: "platform-tools platforms;android-37.0"
+
+      # A Play bundle is built from scratch: no Gradle cache from earlier runs.
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          cache-disabled: true
+
+      - name: Decode the upload keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$RUNNER_TEMP" ]; then
+            echo "::error::RUNNER_TEMP is unset"
+            exit 1
+          fi
+          umask 077
+          keystore="$RUNNER_TEMP/upload.jks"
+          printf '%s' "$KEYSTORE" | base64 --decode > "$keystore"
+          if [ ! -s "$keystore" ]; then
+            echo "::error::ANDROID_RELEASE_KEYSTORE_BASE64 decoded to an empty file"
+            exit 1
+          fi
+          mode="$(stat -c '%a' "$keystore")"
+          if [ "$mode" != 600 ]; then
+            echo "::error::upload keystore is not mode 600"
+            exit 1
+          fi
+
+      - name: ./gradlew :app:bundleGmsRelease
+        working-directory: android
+        env:
+          HANDLIVE_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
+          HANDLIVE_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          HANDLIVE_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          # PKCS12: the key password is the store password when the separate secret is unset.
+          HANDLIVE_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD || secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          HANDLIVE_RELAY_HOST: ${{ vars.HANDLIVE_RELAY_HOST }}
+          HANDLIVE_RELAY_EXTRA_PINS: ${{ vars.HANDLIVE_RELAY_EXTRA_PINS }}
+          HANDLIVE_FCM_APPLICATION_ID: ${{ secrets.HANDLIVE_FCM_APPLICATION_ID }}
+          HANDLIVE_FCM_API_KEY: ${{ secrets.HANDLIVE_FCM_API_KEY }}
+          HANDLIVE_FCM_PROJECT_ID: ${{ secrets.HANDLIVE_FCM_PROJECT_ID }}
+          HANDLIVE_FCM_SENDER_ID: ${{ secrets.HANDLIVE_FCM_SENDER_ID }}
+        # --no-configuration-cache: gradle.properties turns the cache on, and it would store the
+        # upload passwords and FCM values on disk. This job runs once; it does not need that cache.
+        run: ./gradlew :app:bundleGmsRelease --no-build-cache --no-configuration-cache --stacktrace
+
+      - name: jarsigner -verify the AAB
+        working-directory: android
+        run: |
+          aab="app/build/outputs/bundle/gmsRelease/app-gms-release.aab"
+          mapping="app/build/outputs/mapping/gmsRelease/mapping.txt"
+          if [ ! -f "$aab" ]; then
+            echo "::error::Missing AAB app/build/outputs/bundle/gmsRelease/app-gms-release.aab"
+            exit 1
+          fi
+          if [ ! -f "$mapping" ]; then
+            echo "::error::Missing mapping app/build/outputs/mapping/gmsRelease/mapping.txt"
+            exit 1
+          fi
+          # An unsigned archive still makes jarsigner exit 0; it only prints "jar is unsigned."
+          log="$RUNNER_TEMP/jarsigner-verify.txt"
+          if ! jarsigner -verify "$aab" > "$log" 2>&1; then
+            echo "::error::AAB is not signed"
+            cat "$log"
+            exit 1
+          fi
+          if ! grep -qx 'jar verified.' "$log"; then
+            echo "::error::AAB is not signed"
+            cat "$log"
+            exit 1
+          fi
+          # Inside the workspace: upload-artifact rejects files outside it. Not the keystore.
+          dest="build/play-bundle"
+          mkdir -p "$dest"
+          cp "$aab" "$dest/app-gms-release.aab"
+          cp "$mapping" "$dest/mapping.txt"
+
+      - name: Upload the Play bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: play-bundle
+          path: |
+            android/build/play-bundle/app-gms-release.aab
+            android/build/play-bundle/mapping.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove the upload keystore
+        if: always()
+        run: |
+          if [ -z "$RUNNER_TEMP" ]; then
+            echo "::error::RUNNER_TEMP is unset"
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/upload.jks"
