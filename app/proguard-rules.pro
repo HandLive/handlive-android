@@ -104,6 +104,12 @@
     *;
 }
 
+# -keep, not -keepclassmembers: R8 otherwise merges Log4J2Logger into a concrete class
+# whose InternalLogger methods (debug, info, warn, error, trace) stay abstract.
+-keep class io.netty.util.internal.logging.** {
+    *;
+}
+
 # Reactor BlockHound is an optional service file Netty references; the class is not on Android.
 -dontwarn reactor.blockhound.integration.BlockHoundIntegration
 
