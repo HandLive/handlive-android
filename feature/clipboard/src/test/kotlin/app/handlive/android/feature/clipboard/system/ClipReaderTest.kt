@@ -3,6 +3,8 @@ package app.handlive.android.feature.clipboard.system
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.ProviderInfo
 import android.net.Uri
 import android.os.PersistableBundle
 import androidx.test.core.app.ApplicationProvider
@@ -10,16 +12,19 @@ import app.handlive.android.feature.clipboard.engine.ClipLimits
 import app.handlive.android.feature.clipboard.module.ClipFiles
 import app.handlive.android.feature.clipboard.module.LocalRead
 import app.handlive.android.feature.clipboard.module.ReadFailure
+import app.handlive.android.feature.connection.bench.BenchLog
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 import java.io.File
 import java.io.InputStream
 
@@ -31,6 +36,11 @@ class ClipReaderTest {
     private val dir = File(context.cacheDir, "clip")
     private val files = ClipFiles(dir, System::currentTimeMillis)
     private val imageUri = Uri.parse("content://com.example.photos/image/1")
+
+    @Before
+    fun registerExternalGallery() {
+        registerProvider(GALLERY_AUTHORITY, "com.example.photos")
+    }
 
     private fun read(clip: ClipData?) = ClipReader.read(context, clip, "manual", files)
 
@@ -145,5 +155,93 @@ class ClipReaderTest {
         assertEquals("Order number: HL-240917-0042", (read(clip) as LocalRead.Text).text)
     }
 
+    @Test
+    fun anExternalContentProviderImageIsCopied() {
+        val bytes = byteArrayOf(9, 8, 7)
+        shadowOf(context.contentResolver).registerInputStream(imageUri, bytes.inputStream())
+        val image = read(imageClip()) as LocalRead.Image
+        assertEquals("image/png", image.mime)
+        assertArrayEquals(bytes, image.file.readBytes())
+    }
+
+    @Test
+    fun aNonContentImageUriIsNotOpened() {
+        val emptyScheme =
+            Uri
+                .Builder()
+                .authority(GALLERY_AUTHORITY)
+                .path("/private-clip-7f3a.png")
+                .build()
+        assertNull(emptyScheme.scheme)
+        listOf(
+            Uri.parse("file://$GALLERY_AUTHORITY/private-clip-7f3a.png"),
+            Uri.parse("android.resource://$GALLERY_AUTHORITY/private-res-7f3a"),
+            emptyScheme,
+        ).forEach { assertImageRefused(it) }
+    }
+
+    @Test
+    fun theAppsOwnProviderIsNotOpened() {
+        val authority = "app.handlive.clipboard.own"
+        registerProvider(authority, context.packageName)
+        assertImageRefused(Uri.parse("content://$authority/clip.png"))
+    }
+
+    @Test
+    fun anUnresolvedContentAuthorityIsNotOpened() {
+        assertImageRefused(Uri.parse("content://com.missing.photos/clip.png"))
+    }
+
+    @Test
+    fun aFileTextUriIsNotReadAsItsPath() {
+        val uri = Uri.parse("file://$GALLERY_AUTHORITY/note.txt")
+        val clip = ClipData(ClipDescription("note", arrayOf("text/plain")), ClipData.Item(uri))
+        assertEquals(ReadFailure.EMPTY_OR_NOT_TEXT, (read(clip) as LocalRead.Failed).reason)
+    }
+
     private fun imageClip() = ClipData(ClipDescription("photo", arrayOf("image/png")), ClipData.Item(imageUri))
+
+    private fun registerProvider(
+        authority: String,
+        packageName: String,
+    ) {
+        shadowOf(context.packageManager).addOrUpdateProvider(
+            ProviderInfo().apply {
+                this.authority = authority
+                name = "$packageName.FakeProvider"
+                this.packageName = packageName
+                applicationInfo = ApplicationInfo().apply { this.packageName = packageName }
+                enabled = true
+                exported = true
+            },
+        )
+    }
+
+    /** A registered stream would be copied if the URI check were skipped. */
+    private fun assertImageRefused(uri: Uri) {
+        val bytes = ByteArray(8) { it.toByte() }
+        shadowOf(context.contentResolver).registerInputStream(uri, bytes.inputStream())
+        val before = clipNames()
+        context.applicationInfo.flags = context.applicationInfo.flags or ApplicationInfo.FLAG_DEBUGGABLE
+        BenchLog.install(context)
+        ShadowLog.clear()
+        val failed =
+            read(ClipData(ClipDescription("photo", arrayOf("image/png")), ClipData.Item(uri))) as LocalRead.Failed
+        assertEquals(ReadFailure.IMAGE_UNREADABLE, failed.reason)
+        assertEquals(before, clipNames())
+        val line = ShadowLog.getLogs().filter { it.tag == BenchLog.TAG }.joinToString("\n") { it.msg }
+        assertTrue(line, line.contains("why=uri_not_allowed"))
+        uri.path?.let { path -> assertFalse(line, line.contains(path)) }
+    }
+
+    private fun clipNames() =
+        dir
+            .listFiles()
+            ?.map { it.name }
+            ?.toSet()
+            .orEmpty()
+
+    private companion object {
+        const val GALLERY_AUTHORITY = "com.example.photos"
+    }
 }
