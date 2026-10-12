@@ -20,6 +20,37 @@ fun buildSetting(
 /** A Kotlin string literal for `buildConfigField`. */
 fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+/**
+ * Play upload key, same lookup as [buildSetting]. Release is signed only when all four values are set and the
+ * keystore file exists. CI sets none of them, so the unsigned release build still succeeds. The file check goes
+ * through a [ValueSource] so configuration cache fingerprints the keystore instead of reading the disk ad hoc.
+ * Nothing here is logged.
+ */
+abstract class UploadKeystoreExists : ValueSource<Boolean, UploadKeystoreExists.Params> {
+    interface Params : ValueSourceParameters {
+        val keystore: RegularFileProperty
+    }
+
+    override fun obtain(): Boolean =
+        parameters.keystore.asFile
+            .get()
+            .isFile
+}
+
+val uploadStoreFile = buildSetting("handlive.upload.storeFile", "HANDLIVE_UPLOAD_STORE_FILE")
+val uploadStorePassword = buildSetting("handlive.upload.storePassword", "HANDLIVE_UPLOAD_STORE_PASSWORD")
+val uploadKeyAlias = buildSetting("handlive.upload.keyAlias", "HANDLIVE_UPLOAD_KEY_ALIAS")
+val uploadKeyPassword = buildSetting("handlive.upload.keyPassword", "HANDLIVE_UPLOAD_KEY_PASSWORD")
+val uploadSigningReady =
+    uploadStoreFile.isNotEmpty() &&
+        uploadStorePassword.isNotEmpty() &&
+        uploadKeyAlias.isNotEmpty() &&
+        uploadKeyPassword.isNotEmpty() &&
+        providers
+            .of(UploadKeystoreExists::class.java) {
+                parameters.keystore.set(file(uploadStoreFile).absoluteFile)
+            }.get()
+
 android {
     namespace = "app.handlive.android"
     compileSdk = 37
@@ -75,12 +106,26 @@ android {
         }
     }
 
+    if (uploadSigningReady) {
+        signingConfigs {
+            create("upload") {
+                storeFile = file(uploadStoreFile)
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // en-XA (long accented text) and ar-XB (right-to-left) catch clipping and hard-coded text (0.12.5).
             isPseudoLocalesEnabled = true
         }
         release {
+            if (uploadSigningReady) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             // Play Vitals: R8 obfuscates and shrinks the release DEX. Ship mapping.txt with the Play upload.
             isMinifyEnabled = true
             isShrinkResources = true
