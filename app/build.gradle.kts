@@ -28,7 +28,7 @@ android {
         applicationId = "com.handlive.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = "0.1.0-beta.3"
 
         // CONN-03: `{RELAY_HOST}` is configured at build time (0.4.3); without it the build has no relay. The pins are
@@ -81,7 +81,13 @@ android {
             isPseudoLocalesEnabled = true
         }
         release {
-            isMinifyEnabled = false
+            // Play Vitals: R8 obfuscates and shrinks the release DEX. Ship mapping.txt with the Play upload.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
