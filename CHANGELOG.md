@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-10-22
+
+### Changed
+
+- The application id is `com.handlive.android` (was `app.handlive.android`), for the Google Play listing; the
+  `namespace` and the Kotlin packages stay `app.handlive.android`. Android treats it as a new app: a phone with a beta
+  install does not update, it gets a second HandLive beside the old one and must pair again. Remove the old HandLive
+  by hand (Settings › Apps) and remove its pairing on the Mac. `targetSdk` is 36 (was 35); `minSdk` stays 29.
+- Release builds are shrunk and obfuscated by R8 (`proguard-rules.pro` keeps the kotlinx-serialization, Firebase and
+  Netty paths); `mapping.txt` ships with the Play upload.
+- Play upload signing: Gradle signs `release` with the upload key when the four `HANDLIVE_UPLOAD_*` values are set
+  and the keystore exists; CI sets none, so the `foss` APK of a release tag is still signed by `apksigner` in
+  `release-android`. New workflow `play-bundle` (on demand, `main` only, environment `release`) builds the signed
+  `gmsRelease` AAB and its `mapping.txt` as a 7-day artifact.
+
+### Security
+
+- Clipboard: a clip URI is opened only when its scheme is `content` and its provider belongs to another app; `file`,
+  `android.resource`, HandLive's own provider and unresolved authorities are refused before any read, with
+  "Couldn't read the image" (or the text failure) and a debug log that names the authority only (android #13, #15).
+
 ## [0.1.0-beta.3] — 2026-10-07
 
 ### Added
