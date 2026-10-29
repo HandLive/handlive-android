@@ -39,11 +39,8 @@ class VectorFileCoverageTest {
             "bt-frame.json" to "BtRecordCodecTest, BtPreauthRecordTest, BtTransportFrameTest " +
                 "(core:transport: BtTransportCipherTest, BluetoothLongLaneReassemblerTest)",
             "bt-advertisement.json" to "(core:transport: BluetoothAdvertisementDataTest)",
-            // 1 vector dưới chưa có test Android (ghi nhận ở #3447): bt-pairing.json thuộc A7.2 (PAIR-01 qua
-            // Bluetooth, CPace, chưa bắt đầu). Ghi vào đây để test này KHÔNG ngầm bỏ sót — xoá ghi chú và trỏ
-            // đúng test owner khi thẻ tương ứng viết test.
-            "bt-pairing.json" to "(chưa có test Android — A7.2, PAIR-01 qua Bluetooth, chưa bắt đầu)",
-            "cpace.json" to "CPaceX25519SHA512VectorTest",
+            "bt-pairing.json" to "BtQrPairingKeysTest (core:transport)",
+            "cpace.json" to "CPaceX25519SHA512VectorTest, BtPinPairingAcceptorTest (core:transport)",
             EnvelopeRoundtripTest.ANDROID_FILE to "EnvelopeRoundtripTest",
             EnvelopeRoundtripTest.APPLE_FILE to "EnvelopeRoundtripTest",
         )

@@ -8,6 +8,7 @@ import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.core.transport.bluetooth.BluetoothLinkAdmission
 import app.handlive.android.core.transport.bluetooth.BtQrPairingKeys
 import app.handlive.android.feature.connection.bluetooth.BluetoothAdvertising
+import app.handlive.android.feature.connection.bluetooth.BluetoothPairingHooks
 import app.handlive.android.feature.connection.bluetooth.BluetoothQrPairingHooks
 import app.handlive.android.feature.pairing.testing.FakeBtPairingClientLink
 import app.handlive.android.feature.pairing.testing.FakePairingClient
@@ -52,7 +53,7 @@ class BtQrPairingLinkTest {
         BluetoothAdvertising.acceptor(
             admission = BluetoothLinkAdmission(),
             serve = { _, _ -> error("liên kết ghép đôi không bao giờ vào serve() của cặp đã ghép") },
-            qrPairing = BluetoothQrPairingHooks({ window }, flowOf(Unit), { coordinator }),
+            pairing = BluetoothPairingHooks(qr = BluetoothQrPairingHooks({ window }, flowOf(Unit), { coordinator })),
             clock = System::currentTimeMillis,
             linkKeys = { emptyList() },
         )
