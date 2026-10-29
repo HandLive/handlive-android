@@ -1,4 +1,8 @@
 @file:OptIn(ExperimentalUnsignedTypes::class)
+// Các hàm hằng thời gian ở dưới tách nhỏ có chủ đích (addRaw/subRaw/reduceBounded/addMod/subMod/addAt/mulRaw/
+// mulBySmallConstant/mulMod) để mỗi bước của số học trường đứng riêng, dễ soát hằng thời gian từng bước — gộp
+// lại để qua ngưỡng đếm hàm sẽ làm khó soát hơn, không phải lỗi thật.
+@file:Suppress("TooManyFunctions")
 
 package app.handlive.android.core.crypto.primitives
 
@@ -93,8 +97,14 @@ internal class Field25519(
         val q =
             Field25519(
                 uintArrayOf(
-                    0xFFFFFFEDu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
-                    0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x7FFFFFFFu,
+                    0xFFFFFFEDu,
+                    0xFFFFFFFFu,
+                    0xFFFFFFFFu,
+                    0xFFFFFFFFu,
+                    0xFFFFFFFFu,
+                    0xFFFFFFFFu,
+                    0xFFFFFFFFu,
+                    0x7FFFFFFFu,
                 ),
             )
         val zero = Field25519(UIntArray(LIMB_COUNT))

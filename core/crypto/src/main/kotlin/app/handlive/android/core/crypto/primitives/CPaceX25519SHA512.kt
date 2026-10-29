@@ -21,13 +21,27 @@ object CPaceX25519SHA512 {
      * dài thật của `prs` (một PIN bí mật). */
     private const val HASH_INPUT_BLOCK_BYTES = 128
 
+    /** LEB128 (draft Appendix A.1.1): 7 bit dữ liệu mỗi byte, bit cao nhất báo còn byte tiếp theo. */
+    private const val LEB128_GROUP_BITS = 7
+    private const val LEB128_CONTINUATION_BIT = 0x80
+    private const val LEB128_PAYLOAD_MASK = 0x7F
+
+    /** Ước lượng rộng tay số byte LEB128 cần để cấp trước dung lượng [ArrayList], không ảnh hưởng kết quả. */
+    private const val LEB128_CAPACITY_HINT_DIVISOR = 128
+
     /** LEB128 độ dài ‖ data (draft Appendix A.1.1). */
     private fun prependLength(data: ByteArray): ByteArray {
-        val encoded = ArrayList<Byte>(data.size / 128 + 1)
+        val encoded = ArrayList<Byte>(data.size / LEB128_CAPACITY_HINT_DIVISOR + 1)
         var length = data.size
         while (true) {
-            encoded.add(if (length < 0x80) length.toByte() else ((length and 0x7F) or 0x80).toByte())
-            length = length ushr 7
+            encoded.add(
+                if (length < LEB128_CONTINUATION_BIT) {
+                    length.toByte()
+                } else {
+                    ((length and LEB128_PAYLOAD_MASK) or LEB128_CONTINUATION_BIT).toByte()
+                },
+            )
+            length = length ushr LEB128_GROUP_BITS
             if (length == 0) break
         }
         return encoded.toByteArray() + data
@@ -50,11 +64,15 @@ object CPaceX25519SHA512 {
         return lengthValueConcat(dsi, prs, ByteArray(lenZpad), ci, sid)
     }
 
+    /** Che bit cao nhất (bit 255) của byte cuối — RFC 7748 `decodeUCoordinate` cho trường 255-bit. */
+    private const val TOP_BIT_CLEAR_MASK = 0x7F
+
     /** RFC 7748 `decodeUCoordinate` cho trường 255-bit (draft Appendix A.4): che bit cao nhất của byte cuối (32
      * byte little-endian) rồi dựng [Field25519]. */
     private fun decodeUCoordinate(bytes: ByteArray): Field25519 {
         val masked = bytes.copyOf()
-        masked[Field25519.FIELD_SIZE_BYTES - 1] = (masked[Field25519.FIELD_SIZE_BYTES - 1].toInt() and 0x7F).toByte()
+        val lastIndex = Field25519.FIELD_SIZE_BYTES - 1
+        masked[lastIndex] = (masked[lastIndex].toInt() and TOP_BIT_CLEAR_MASK).toByte()
         return Field25519.fromLittleEndianBytes(masked)
     }
 
@@ -121,6 +139,7 @@ object CPaceX25519SHA512 {
      * `ISK = SHA-512(lv_cat(DSI ‖ "_ISK", sid, K) ‖ transcript_ir(Ya, ADa, Yb, ADb))` (draft section 7.2). 6
      * tham số là đúng chữ ký ISK của draft (sid, K, Ya, ADa, Yb, ADb); `k` dưới khớp `K` của draft.
      */
+    @Suppress("LongParameterList")
     fun isk(
         sid: ByteArray,
         k: ByteArray,
