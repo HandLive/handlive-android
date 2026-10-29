@@ -116,7 +116,12 @@ internal class CallBenchTrace(
         mode: String,
     ) = log(CallBenchEvent.APP_CALL_INTENT_SENT, listOf("call" to callId, "action" to action, "mode" to mode))
 
-    private fun via(session: PeerSession) = if (session.channel == PeerSession.Channel.RELAY) "relay" else "lan"
+    private fun via(session: PeerSession) =
+        when (session.channel) {
+            PeerSession.Channel.RELAY -> "relay"
+            PeerSession.Channel.BLUETOOTH -> "bluetooth"
+            PeerSession.Channel.LAN, PeerSession.Channel.USB -> "lan"
+        }
 
     private companion object {
         const val PEER_ID = 8

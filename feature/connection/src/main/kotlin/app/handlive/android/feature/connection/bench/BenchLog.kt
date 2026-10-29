@@ -80,4 +80,13 @@ object BenchEvent {
     const val ACK_SENT = "ack_sent"
     const val ACK_RECEIVED = "ack_received"
     const val NET = "net"
+
+    /** Bluetooth link (0.4.5), for the S25 + Mac checks: `state` of the adapter (`on`, `off`). */
+    const val BT_STATE = "bt_state"
+
+    /** A new advertising set: `psm`, number of `hints`; then `status` (0 = started) when the stack answers. */
+    const val BT_ADVERTISE = "bt_advertise"
+
+    /** An L2CAP channel was accepted (before admission and the link-security handshake). */
+    const val BT_ACCEPT = "bt_accept"
 }

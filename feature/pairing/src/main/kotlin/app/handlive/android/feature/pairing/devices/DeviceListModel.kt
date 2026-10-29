@@ -217,5 +217,8 @@ object DeviceListModel {
             PeerSession.Channel.LAN -> DeviceLink.WIFI
             PeerSession.Channel.RELAY -> DeviceLink.INTERNET
             PeerSession.Channel.USB -> DeviceLink.USB
+            // TODO(A7.1b): chưa có DeviceLink/chuỗi riêng cho Bluetooth (status.connected_bluetooth chưa có trong
+            // ui-strings.json, như placeholder .connectedWiFi đã chấp nhận ở M7.1a phía Apple cho #199/#190).
+            PeerSession.Channel.BLUETOOTH -> DeviceLink.WIFI
         }
 }

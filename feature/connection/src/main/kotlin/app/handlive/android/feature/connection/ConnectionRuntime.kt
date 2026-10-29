@@ -16,6 +16,7 @@ import app.handlive.android.core.transport.server.SessionTransport
 import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
 import app.handlive.android.core.transport.tls.TlsIdentityProvider
 import app.handlive.android.feature.connection.bench.BenchLog
+import app.handlive.android.feature.connection.bluetooth.BluetoothAdvertising
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
 import app.handlive.android.feature.connection.capability.SimChangeWatcher
@@ -48,9 +49,9 @@ import kotlinx.coroutines.withContext
 
 /**
  * A-SVC's engine, one per process (CONN-01, CONN-02): runs the TLS server on 47800–47809, advertises
- * `_handlive._tcp` with hourly hints, keeps this phone's capability current on every session, and hands decrypted
- * envelopes to the feature modules through [router]. [HandLiveService] starts and stops it; the UI and the feature
- * modules read [connectedPeers], [sessions] and [state].
+ * `_handlive._tcp` with hourly hints, serves the Bluetooth link (CONN-05) beside it, keeps this phone's capability
+ * current on every session, and hands decrypted envelopes to the feature modules through [router]. [HandLiveService]
+ * starts and stops it; the UI and the feature modules read [connectedPeers], [sessions] and [state].
  */
 class ConnectionRuntime private constructor(
     context: Context,
@@ -67,6 +68,7 @@ class ConnectionRuntime private constructor(
     private val localCapabilityFlow = MutableStateFlow<CapabilityData?>(null)
     private val simWatcher = SimChangeWatcher(appContext, ::refreshEnvironment)
     private val discovery = DiscoveryAdvertising(appContext, data.pairs, clock)
+    private val bluetooth = BluetoothAdvertising(appContext, data.pairs, clock)
     private var scope: CoroutineScope? = null
     private var server: ControlServer? = null
 
@@ -206,6 +208,8 @@ class ConnectionRuntime private constructor(
         phoneCapability.state.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
         capability.publishUpdates(runtimeScope, phoneCapability.state) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
+        // CONN-05: the Bluetooth link runs beside the LAN server, whatever the network does.
+        bluetooth.start(runtimeScope, controlServer, table.sessions.map { it.keys }, environmentVersion)
         simWatcher.start()
     }
 
@@ -216,6 +220,7 @@ class ConnectionRuntime private constructor(
         server?.stop()
         server = null
         discovery.stop()
+        bluetooth.stop()
         scope?.cancel()
         scope = null
         table.clear()

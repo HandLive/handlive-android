@@ -41,12 +41,10 @@ class SessionTable(
     ) {
         val device = pairs.find(control.pairId)
         val channel =
-            if (control.transport ==
-                SessionTransport.RELAY
-            ) {
-                PeerSession.Channel.RELAY
-            } else {
-                PeerSession.Channel.LAN
+            when (control.transport) {
+                SessionTransport.RELAY -> PeerSession.Channel.RELAY
+                SessionTransport.BLUETOOTH -> PeerSession.Channel.BLUETOOTH
+                SessionTransport.LAN -> PeerSession.Channel.LAN
             }
         val peer =
             PeerSession(
