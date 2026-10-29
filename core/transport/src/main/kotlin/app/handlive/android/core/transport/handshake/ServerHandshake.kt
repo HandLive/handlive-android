@@ -57,15 +57,28 @@ class ServerHandshake(
     private val ephemeralPrivateKey: () -> ByteArray = X25519Keys::generatePrivateKey,
     private val nonce: () -> ByteArray = { SecureRandomBytes.next(NONCE_SIZE) },
 ) {
-    fun respond(helloText: String): HandshakeOutcome =
+    /**
+     * [boundPairId]: trên liên kết Bluetooth, `pair_id` mà `K_bt_link` đã khớp (0.4.5 bước 6) — hello nêu cặp khác bị
+     * `AUTH_FAILED`, kiểm trước khi tra cặp nên không lộ cặp đó có tồn tại hay không.
+     */
+    fun respond(
+        helloText: String,
+        boundPairId: String? = null,
+    ): HandshakeOutcome =
         try {
-            respondChecked(helloText)
+            respondChecked(helloText, boundPairId)
         } catch (e: ProtocolException) {
             if (e.code == ErrorCode.UNSUPPORTED_VERSION) unsupportedVersion() else badRequest()
         }
 
-    private fun respondChecked(helloText: String): HandshakeOutcome {
+    private fun respondChecked(
+        helloText: String,
+        boundPairId: String?,
+    ): HandshakeOutcome {
         val hello = parseHello(helloText)
+        if (boundPairId != null && hello.pairId != boundPairId) {
+            return reject(ErrorCode.AUTH_FAILED, WsCloseCode.AUTH_FAILED)
+        }
         val pair = pairs.find(hello.pairId)
         return rejectionFor(hello, pair) ?: welcome(checkNotNull(pair), hello)
     }

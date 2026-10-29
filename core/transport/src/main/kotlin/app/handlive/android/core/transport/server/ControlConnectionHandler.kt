@@ -6,6 +6,7 @@ import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.protocol.envelope.EnvelopeCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.transport.WsCloseCode
+import app.handlive.android.core.transport.bluetooth.BluetoothLinkAdmission
 import app.handlive.android.core.transport.handshake.HandshakeOutcome
 import app.handlive.android.core.transport.handshake.ServerHandshake
 import io.ktor.websocket.CloseReason
@@ -26,18 +27,28 @@ import kotlinx.coroutines.withTimeoutOrNull
 internal class ControlConnectionHandler(
     private val config: ControlServerConfig,
     private val registry: ActiveSessionRegistry,
+    /** `null` khi phone không bật Bluetooth: không có kênh nào gọi [handle] với `transport = BLUETOOTH`. */
+    private val bluetoothAdmission: BluetoothLinkAdmission? = null,
 ) {
     private val clock = config.options.clock
     private val handshake = ServerHandshake(config.localDeviceId, config.pairs, UuidV7Generator(clock), clock)
     val admission = ConnectionAdmission(config.options.limits, clock)
 
+    /**
+     * [boundPairId]: chỉ cho Bluetooth — `pair_id` của `K_bt_link` đã khớp ở bước 3 (0.4.5); `session/hello` nêu cặp
+     * khác bị `AUTH_FAILED` (bước 6). Admission kênh Bluetooth (`BT_LINK_LIMIT`/`BT_PREAUTH_LIMIT`/bước 5) đã chạy ở
+     * `BluetoothLinkAcceptor` trước khi tới đây; cận theo IP của ConnectionAdmission không áp dụng (BLE không có địa
+     * chỉ ổn định để đếm).
+     */
     suspend fun handle(
         socket: WebSocketSession,
         remoteAddress: String,
         transport: SessionTransport = SessionTransport.LAN,
+        boundPairId: String? = null,
     ) {
-        val ticket = admission.admit(remoteAddress)
-        if (ticket == null) {
+        val isBluetooth = transport == SessionTransport.BLUETOOTH
+        val ticket = if (isBluetooth) null else admission.admit(remoteAddress)
+        if (!isBluetooth && ticket == null) {
             socket.close(RATE_LIMITED)
             return
         }
@@ -47,13 +58,14 @@ internal class ControlConnectionHandler(
             try {
                 withTimeoutOrNull(
                     config.options.handshakeTimeout,
-                ) { establish(socket, frames, remoteAddress, transport, progress) }
+                ) { establish(socket, frames, Origin(remoteAddress, transport, boundPairId), progress) }
             } finally {
-                ticket.release()
+                ticket?.release()
             }
         // CTL_IP_BLOCK: only failures before a session/hello passed its mac check count (a timeout, or 4400).
         val unauthenticatedFailure =
-            !progress.macVerified &&
+            !isBluetooth &&
+                !progress.macVerified &&
                 (result == null || (result as? Result.Closed)?.reason?.code == WsCloseCode.BAD_REQUEST)
         if (unauthenticatedFailure) admission.recordPreHandshakeFailure(remoteAddress)
         when (result) {
@@ -67,7 +79,7 @@ internal class ControlConnectionHandler(
 
             is Result.Established -> {
                 // An established session clears the address's count of pre-handshake failures.
-                admission.clearPreHandshakeFailures(remoteAddress)
+                if (!isBluetooth) admission.clearPreHandshakeFailures(remoteAddress)
                 serve(socket, frames, result.session)
             }
         }
@@ -135,25 +147,46 @@ internal class ControlConnectionHandler(
         ) : Result
     }
 
+    /** Where a connection came from: [boundPairId] only for Bluetooth (the pair whose link psk verified). */
+    private class Origin(
+        val remoteAddress: String,
+        val transport: SessionTransport,
+        val boundPairId: String?,
+    )
+
     /** `session/hello` → `welcome` + `capability/hello` của S; hoặc `session/error` rồi đóng. */
     private suspend fun establish(
         socket: WebSocketSession,
         frames: InboundFrames,
-        remoteAddress: String,
-        transport: SessionTransport,
+        origin: Origin,
         progress: Progress,
     ): Result {
+        val remoteAddress = origin.remoteAddress
+        val transport = origin.transport
         val hello = frames.receive()
         if (hello !is InboundMessage.Text) return Result.Closed(hello.handshakeCloseReason())
-        return when (val outcome = handshake.respond(hello.text)) {
+        return when (val outcome = handshake.respond(hello.text, origin.boundPairId)) {
             is HandshakeOutcome.Rejected -> {
                 when (outcome.code) {
-                    ErrorCode.AUTH_FAILED -> admission.recordAuthFailure(remoteAddress)
+                    // 0.4.5 "Admission": a session/hello rejected AUTH_FAILED over Bluetooth counts toward the
+                    // listener-wide BT_AUTH_FAIL_BLOCK too, not the LAN's per-address counter.
+                    ErrorCode.AUTH_FAILED -> {
+                        if (transport == SessionTransport.BLUETOOTH) {
+                            bluetoothAdmission?.recordAuthFailure()
+                        } else {
+                            admission.recordAuthFailure(remoteAddress)
+                        }
+                    }
 
-                    // `BAD_REQUEST` closes 4400 and is counted by [handle].
-                    ErrorCode.PAIR_UNKNOWN -> admission.recordPreHandshakeFailure(remoteAddress)
+                    // `BAD_REQUEST` closes 4400 and is counted by [handle]; no Bluetooth equivalent (0.4.5 only
+                    // lists key-confirmation failures and AUTH_FAILED toward BT_AUTH_FAIL_BLOCK).
+                    ErrorCode.PAIR_UNKNOWN -> {
+                        if (transport != SessionTransport.BLUETOOTH) admission.recordPreHandshakeFailure(remoteAddress)
+                    }
 
-                    else -> Unit
+                    else -> {
+                        Unit
+                    }
                 }
                 outcome.error?.let { socket.send(Frame.Text(EnvelopeCodec.encode(it))) }
                 Result.Closed(CloseReason(outcome.closeCode, outcome.code.name))
