@@ -39,11 +39,12 @@ android {
                 .file(sharedDir.file("test-vectors/session-handshake.json"))
                 .withPropertyName("sessionHandshakeVector")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
-            // Test liên kết Bluetooth đọc bt-link.json và bt-advertisement.json (0.4.5).
+            // Test liên kết Bluetooth đọc bt-link.json, bt-advertisement.json (0.4.5) và bt-pairing.json (A7.2-B).
             test.inputs
                 .files(
                     sharedDir.file("test-vectors/bt-link.json"),
                     sharedDir.file("test-vectors/bt-advertisement.json"),
+                    sharedDir.file("test-vectors/bt-pairing.json"),
                 ).withPropertyName("bluetoothVectors")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
             test.inputs

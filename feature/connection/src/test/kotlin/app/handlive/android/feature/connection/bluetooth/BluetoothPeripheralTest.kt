@@ -172,6 +172,54 @@ class BluetoothPeripheralTest {
             peripheral.stop()
         }
 
+    private fun expectedWithPairing(
+        psm: Int,
+        epoch: Long,
+        prBt: ByteArray,
+        vararg keys: ByteArray,
+    ) = Hex.encode(
+        BluetoothAdvertisementData.serviceData(
+            psm,
+            listOf(prBt) + keys.map { BluetoothAdvertisementData.hint(it, epoch) },
+        ),
+    )
+
+    @Test
+    fun anOpenQrWindowPutsPrBtFirstAndKeepsOnlyOnePairHint() =
+        runTest {
+            val radio = FakeRadio()
+            val pairing = MutableStateFlow<ByteArray?>(null)
+            val peripheral = BluetoothPeripheral(radio, accept = {}, clock = clock())
+            peripheral.start(backgroundScope, MutableStateFlow(listOf(key1, key2)), pairing)
+            runCurrent()
+            assertEquals(expected(FIRST_PSM, EPOCH, key1, key2), radio.current())
+            pairing.value = PR_BT
+            runCurrent()
+            // Cửa sổ mở: dựng lại bộ quảng bá (server mới, PSM mới) với pr_bt đứng đầu (0.4.5 "Pairing mode").
+            assertTrue(radio.servers[0].closed)
+            assertEquals(expectedWithPairing(FIRST_PSM + 1, EPOCH, PR_BT, key1), radio.current())
+            pairing.value = null
+            runCurrent()
+            assertEquals(expected(FIRST_PSM + 2, EPOCH, key1, key2), radio.current())
+            peripheral.stop()
+        }
+
+    @Test
+    fun aQrWindowAloneAdvertisesEvenWithNoPairs() =
+        runTest {
+            val radio = FakeRadio()
+            val pairing = MutableStateFlow<ByteArray?>(PR_BT)
+            val peripheral = BluetoothPeripheral(radio, accept = {}, clock = clock())
+            peripheral.start(backgroundScope, MutableStateFlow(emptyList()), pairing)
+            runCurrent()
+            assertEquals(expectedWithPairing(FIRST_PSM, EPOCH, PR_BT), radio.current())
+            pairing.value = null
+            runCurrent()
+            assertNull(radio.advertising)
+            assertTrue(radio.servers.all { it.closed })
+            peripheral.stop()
+        }
+
     @Test
     fun eachAcceptedChannelGoesToTheAcceptor() =
         runTest {
@@ -233,5 +281,8 @@ class BluetoothPeripheralTest {
         const val FIRST_PSM = 0x0081
         const val EPOCH = 479_762L
         const val START_OFFSET = 10L
+
+        /** `pr_bt` của "cặp 1" trong bt-pairing.json. */
+        val PR_BT: ByteArray = Hex.decode("24be2584")
     }
 }
