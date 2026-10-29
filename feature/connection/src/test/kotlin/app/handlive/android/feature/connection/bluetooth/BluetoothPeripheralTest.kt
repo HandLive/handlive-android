@@ -137,7 +137,8 @@ class BluetoothPeripheralTest {
                 )
             peripheral.start(backgroundScope, MutableStateFlow(listOf(key1)))
             runCurrent()
-            radio.servers.single().incoming.send(NoIo) // a link accepted before the rotation
+            val first = radio.servers.single()
+            first.incoming.send(NoIo) // a link accepted before the rotation
             runCurrent()
             advanceTimeBy(period - START_OFFSET - 1)
             runCurrent()
@@ -179,8 +180,9 @@ class BluetoothPeripheralTest {
             val peripheral = BluetoothPeripheral(radio, accept = { accepted += it }, clock = clock())
             peripheral.start(backgroundScope, MutableStateFlow(listOf(key1)))
             runCurrent()
-            radio.servers.single().incoming.send(NoIo)
-            radio.servers.single().incoming.send(NoIo)
+            val server = radio.servers.single()
+            server.incoming.send(NoIo)
+            server.incoming.send(NoIo)
             runCurrent()
             assertEquals(2, accepted.size)
             peripheral.stop()

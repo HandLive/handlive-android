@@ -23,17 +23,23 @@ class BluetoothLinkLifecycle(
 
     fun onAdapterState(state: BluetoothAdapterState) {
         when (state) {
-            BluetoothAdapterState.ON -> if (!isRunning) {
-                isRunning = true
-                start()
+            BluetoothAdapterState.ON -> {
+                if (!isRunning) {
+                    isRunning = true
+                    start()
+                }
             }
 
-            BluetoothAdapterState.OFF, BluetoothAdapterState.TURNING_OFF -> if (isRunning) {
-                isRunning = false
-                stop()
+            BluetoothAdapterState.OFF, BluetoothAdapterState.TURNING_OFF -> {
+                if (isRunning) {
+                    isRunning = false
+                    stop()
+                }
             }
 
-            BluetoothAdapterState.TURNING_ON -> Unit
+            BluetoothAdapterState.TURNING_ON -> {
+                // Chờ STATE_ON: chưa mở được server hay quảng bá.
+            }
         }
     }
 }
