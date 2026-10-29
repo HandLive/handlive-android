@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
@@ -30,22 +30,26 @@ class BluetoothPeripheral(
 
     /**
      * [discoveryKeys]: `K_bt_disc` của các cặp cần quảng bá, cặp `last_seen_at` gần nhất trước; chỉ
-     * `BT_ADV_MAX_HINTS` cặp đầu lên sóng. Kênh accept được chạy trong [scope] nên sống qua các lần xoay và [stop].
+     * `BT_ADV_MAX_HINTS` cặp đầu lên sóng. [pairingHints]: `pr_bt` của cửa sổ ghép đôi QR đang mở (`null` khi không
+     * có), luôn đứng đầu và chiếm một chỗ của cặp ("Pairing mode"); cửa sổ mở hay đóng đều dựng lại bộ quảng bá. Kênh
+     * accept được chạy trong [scope] nên sống qua các lần xoay và [stop].
      */
     @Synchronized
     fun start(
         scope: CoroutineScope,
         discoveryKeys: Flow<List<ByteArray>>,
+        pairingHints: Flow<ByteArray?> = flowOf(null),
     ) {
         if (job?.isActive == true) return
         job =
             scope.launch {
                 val advertised =
-                    discoveryKeys
-                        .map { it.take(BluetoothAdvertisementData.MAX_HINTS) }
-                        .distinctUntilChanged { old, new -> old.sameKeys(new) }
-                combine(advertised, epochs()) { keys, epoch -> keys to epoch }
-                    .collectLatest { (keys, epoch) -> if (keys.isNotEmpty()) serve(scope, keys, epoch) }
+                    combine(discoveryKeys, pairingHints) { keys, pairing -> Advertised(pairing, keys) }
+                        .distinctUntilChanged { old, new -> old.sameAs(new) }
+                combine(advertised, epochs()) { content, epoch -> content to epoch }
+                    .collectLatest { (content, epoch) ->
+                        if (content.isNotEmpty()) serve(scope, content.hints(epoch))
+                    }
             }
     }
 
@@ -58,12 +62,11 @@ class BluetoothPeripheral(
     /** Một bộ quảng bá + server cho tới khi bị huỷ; server hỏng thì mở lại sau [RETRY_DELAY_MILLIS]. */
     private suspend fun serve(
         linkScope: CoroutineScope,
-        keys: List<ByteArray>,
-        epoch: Long,
+        hints: List<ByteArray>,
     ) {
         while (true) {
             // Stack Bluetooth bỏ socket (đang tắt radio, lỗi tạm): advertiseAndAccept đã dừng sạch, thử lại.
-            val failure = runCatching { advertiseAndAccept(linkScope, keys, epoch) }.exceptionOrNull()
+            val failure = runCatching { advertiseAndAccept(linkScope, hints) }.exceptionOrNull()
             if (failure is CancellationException) throw failure
             delay(RETRY_DELAY_MILLIS)
         }
@@ -71,12 +74,10 @@ class BluetoothPeripheral(
 
     private suspend fun advertiseAndAccept(
         linkScope: CoroutineScope,
-        keys: List<ByteArray>,
-        epoch: Long,
+        hints: List<ByteArray>,
     ) {
         val server = radio.listen()
         try {
-            val hints = keys.map { BluetoothAdvertisementData.hint(it, epoch) }
             radio.startAdvertising(BluetoothAdvertisementData.serviceData(server.psm, hints))
             try {
                 while (true) {
@@ -104,10 +105,28 @@ class BluetoothPeripheral(
             }
         }
 
+    /** Nội dung cần quảng bá: `pr_bt` (nếu có cửa sổ QR) rồi `K_bt_disc` của các cặp, tối đa `BT_ADV_MAX_HINTS`. */
+    private class Advertised(
+        val pairing: ByteArray?,
+        allKeys: List<ByteArray>,
+    ) {
+        val keys: List<ByteArray> =
+            allKeys.take(BluetoothAdvertisementData.MAX_HINTS - if (pairing == null) 0 else 1)
+
+        fun isNotEmpty(): Boolean = pairing != null || keys.isNotEmpty()
+
+        fun hints(epoch: Long): List<ByteArray> =
+            listOfNotNull(pairing) + keys.map { BluetoothAdvertisementData.hint(it, epoch) }
+
+        fun sameAs(other: Advertised): Boolean =
+            pairing.sameBytes(other.pairing) && keys.size == other.keys.size &&
+                keys.zip(other.keys).all { (a, b) -> a.contentEquals(b) }
+    }
+
     companion object {
         const val RETRY_DELAY_MILLIS = 2_000L
 
-        private fun List<ByteArray>.sameKeys(other: List<ByteArray>): Boolean =
-            size == other.size && zip(other).all { (a, b) -> a.contentEquals(b) }
+        private fun ByteArray?.sameBytes(other: ByteArray?): Boolean =
+            if (this == null) other == null else other != null && contentEquals(other)
     }
 }

@@ -13,13 +13,22 @@ import androidx.core.content.ContextCompat
 import app.handlive.android.core.crypto.derivation.BtLinkKeyDerivation
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.transport.bluetooth.BluetoothLinkAcceptor
+import app.handlive.android.core.transport.bluetooth.BluetoothLinkAdmission
 import app.handlive.android.core.transport.bluetooth.BluetoothPairKeys
+import app.handlive.android.core.transport.bluetooth.BluetoothPairingKeySource
+import app.handlive.android.core.transport.bluetooth.BluetoothPreauthSession
+import app.handlive.android.core.transport.bluetooth.BluetoothQrPairingWindow
+import app.handlive.android.core.transport.bluetooth.BtQrPairingLink
+import app.handlive.android.core.transport.bluetooth.BtQrPairingSlot
 import app.handlive.android.core.transport.server.ControlServer
+import app.handlive.android.core.transport.server.PairingEndpoint
 import app.handlive.android.feature.connection.bench.BenchEvent
 import app.handlive.android.feature.connection.bench.BenchLog
+import io.ktor.websocket.WebSocketSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -31,7 +40,9 @@ import kotlinx.coroutines.flow.onEach
  * tắt (điều kiện 2 của spike G7); thiếu "Nearby devices" trên Android 12+ coi như adapter tắt.
  *
  * Quảng bá hint của các cặp chưa thu hồi KHÔNG có session sống trên route nào, `last_seen_at` gần nhất trước; thử
- * `K_bt_link` của mọi cặp chưa thu hồi khi kênh mở (một session mới thay session cũ, 0.4.1).
+ * `K_bt_link` của mọi cặp chưa thu hồi khi kênh mở (một session mới thay session cũ, 0.4.1). Cửa sổ ghép đôi QR
+ * ([BluetoothQrPairingHooks], 0.4.5 "Pairing mode"): `pr_bt` đứng đầu quảng bá, `K_bt_plink` được thử trước mọi cặp
+ * qua MỘT [BtQrPairingSlot] cho cả listener, và liên kết ghép đôi chạy PAIR-01 ở `PairingCoordinator`.
  */
 class BluetoothAdvertising(
     context: Context,
@@ -55,16 +66,18 @@ class BluetoothAdvertising(
         server: ControlServer,
         liveSessions: Flow<Set<String>>,
         environment: Flow<*>,
+        qrPairing: BluetoothQrPairingHooks = BluetoothQrPairingHooks.NONE,
     ) {
         if (appContext.getSystemService(BluetoothManager::class.java)?.adapter == null) return
         val acceptor =
-            BluetoothLinkAcceptor(server.bluetoothAdmission, BluetoothPairKeys { linkKeys }, server::serveBluetoothPeer)
+            acceptor(server.bluetoothAdmission, server::serveBluetoothPeer, qrPairing, clock) { linkKeys }
         val radioPeripheral = BluetoothPeripheral(AndroidBluetoothRadio(appContext), acceptor::accept, clock)
         peripheral = radioPeripheral
         val discoveryKeys = discoveryKeys(liveSessions)
+        val pairingHints = qrPairing.pairingHints()
         val stateMachine =
             BluetoothLinkLifecycle(
-                start = { radioPeripheral.start(scope, discoveryKeys) },
+                start = { radioPeripheral.start(scope, discoveryKeys, pairingHints) },
                 stop = radioPeripheral::stop,
             ).also { lifecycle = it }
         receiver =
@@ -130,15 +143,59 @@ class BluetoothAdvertising(
                 ContextCompat.checkSelfPermission(appContext, it) == PackageManager.PERMISSION_GRANTED
             }
 
-    private companion object {
-        val NEARBY_DEVICES = listOf(Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT)
+    companion object {
+        private val NEARBY_DEVICES =
+            listOf(Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT)
 
-        fun adapterStateOf(state: Int): BluetoothAdapterState =
+        /**
+         * Bộ accept của listener: thử `K_bt_plink` (qua MỘT slot cho mọi kênh của listener này) rồi `K_bt_link` của
+         * từng cặp; liên kết cặp vào [serve] (`ControlServer.serveBluetoothPeer`), liên kết ghép đôi QR vào endpoint
+         * của [qrPairing]. Tách ra để test dựng đúng bộ accept của app mà không cần radio thật.
+         */
+        fun acceptor(
+            admission: BluetoothLinkAdmission,
+            serve: suspend (WebSocketSession, String) -> Unit,
+            qrPairing: BluetoothQrPairingHooks,
+            clock: () -> Long,
+            linkKeys: () -> List<Pair<String, ByteArray>>,
+        ): BluetoothLinkAcceptor {
+            val slot = BtQrPairingSlot()
+            val pairingKeys = BluetoothPairingKeySource { qrPairing.window()?.currentPlinkKey() }
+            return BluetoothLinkAcceptor(
+                admission = admission,
+                serve = serve,
+                newSession = { BluetoothPreauthSession(BluetoothPairKeys(linkKeys), pairingKeys, slot) },
+                servePairing = { socket ->
+                    qrPairing.endpoint()?.let { BtQrPairingLink.serve(socket, it, clock) }
+                },
+            )
+        }
+
+        private fun adapterStateOf(state: Int): BluetoothAdapterState =
             when (state) {
                 BluetoothAdapter.STATE_ON -> BluetoothAdapterState.ON
                 BluetoothAdapter.STATE_TURNING_ON -> BluetoothAdapterState.TURNING_ON
                 BluetoothAdapter.STATE_TURNING_OFF -> BluetoothAdapterState.TURNING_OFF
                 else -> BluetoothAdapterState.OFF
             }
+    }
+}
+
+/**
+ * Cửa sổ ghép đôi QR cho listener Bluetooth (0.4.5 "Pairing mode"), do `ConnectionRuntime` cấp: [window] đọc cửa sổ
+ * đang mở ngay lúc cần (khoá `noise1`, `pr_bt`), [windowChanges] phát lại mỗi khi cửa sổ mở hay đóng để quảng bá
+ * dựng lại (phải phát ngay một lần lúc đầu, như một `StateFlow`), [endpoint] chạy PAIR-01 (`PairingCoordinator`,
+ * như `/v1/pair`).
+ */
+class BluetoothQrPairingHooks(
+    val window: () -> BluetoothQrPairingWindow?,
+    val windowChanges: Flow<*>,
+    val endpoint: () -> PairingEndpoint?,
+) {
+    fun pairingHints(): Flow<ByteArray?> = windowChanges.map { window()?.currentPrBt() }
+
+    companion object {
+        /** Không có cửa sổ QR nào: phát một lần để quảng bá các cặp vẫn chạy (combine cần một giá trị). */
+        val NONE = BluetoothQrPairingHooks({ null }, flowOf(Unit), { null })
     }
 }

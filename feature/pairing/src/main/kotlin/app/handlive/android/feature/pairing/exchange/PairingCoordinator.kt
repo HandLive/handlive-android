@@ -105,6 +105,12 @@ class PairingCoordinator(
 
     val state: StateFlow<PairingState> = stateFlow.asStateFlow()
 
+    /**
+     * `pairing_secret` của cửa sổ QR đang mở, hoặc `null` khi không có cửa sổ hay cửa sổ hiện tại là PIN
+     * (0.4.5 "Pairing mode"): nguồn của `K_bt_pdisc`/`K_bt_plink` cho ghép đôi qua Bluetooth (A7.2-B).
+     */
+    val currentQrPairingSecret: ByteArray? get() = (window as? PairingWindow.Qr)?.invite?.pairingSecret
+
     /** PAIR-01 step 4: E1 for a code that is not HandLive's, E6 when 8 pairs exist already. */
     suspend fun onScanned(text: String) {
         val invite = PairingInvite.parse(text)

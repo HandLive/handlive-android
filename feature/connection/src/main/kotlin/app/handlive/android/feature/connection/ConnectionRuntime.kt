@@ -6,6 +6,7 @@ import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.transport.bluetooth.BluetoothQrPairingWindow
 import app.handlive.android.core.transport.handshake.PairRecord
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.server.ControlServer
@@ -17,6 +18,7 @@ import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
 import app.handlive.android.core.transport.tls.TlsIdentityProvider
 import app.handlive.android.feature.connection.bench.BenchLog
 import app.handlive.android.feature.connection.bluetooth.BluetoothAdvertising
+import app.handlive.android.feature.connection.bluetooth.BluetoothQrPairingHooks
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
 import app.handlive.android.feature.connection.capability.SimChangeWatcher
@@ -98,6 +100,13 @@ class ConnectionRuntime private constructor(
     /** Installed by the pairing feature; `/v1/pair` delegates to it (PAIR-01). */
     @Volatile
     var pairingEndpoint: PairingEndpoint? = null
+
+    /**
+     * Installed by the pairing feature: the QR pairing window as the Bluetooth listener sees it (0.4.5 "Pairing mode",
+     * PAIR-01 B1–B3) — `pr_bt` in the advertising, `K_bt_plink` for `noise1`; pairing links then run [pairingEndpoint].
+     */
+    @Volatile
+    var bluetoothQrWindow: BluetoothQrPairingWindow? = null
 
     /** SHA-256 of the TLS certificate (`tls_sha256` of PAIR-01 API 3), known once the server runs. */
     @Volatile
@@ -209,7 +218,9 @@ class ConnectionRuntime private constructor(
         capability.publishUpdates(runtimeScope, phoneCapability.state) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
         // CONN-05: the Bluetooth link runs beside the LAN server, whatever the network does.
-        bluetooth.start(runtimeScope, controlServer, table.sessions.map { it.keys }, environmentVersion)
+        // A QR window opens or closes through setPairingAdvert, so the same flow restarts the Bluetooth advertising.
+        val qrPairing = BluetoothQrPairingHooks({ bluetoothQrWindow }, pairingAdvert, { pairingEndpoint })
+        bluetooth.start(runtimeScope, controlServer, table.sessions.map { it.keys }, environmentVersion, qrPairing)
         simWatcher.start()
     }
 

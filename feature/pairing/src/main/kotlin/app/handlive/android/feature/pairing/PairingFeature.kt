@@ -8,6 +8,7 @@ import app.handlive.android.feature.connection.ConnectionRuntime
 import app.handlive.android.feature.connection.LocalDeviceName
 import app.handlive.android.feature.pairing.devices.DeviceListItem
 import app.handlive.android.feature.pairing.devices.DeviceListModel
+import app.handlive.android.feature.pairing.exchange.BtQrPairingKeySource
 import app.handlive.android.feature.pairing.exchange.LocalPairingDevice
 import app.handlive.android.feature.pairing.exchange.PairingCoordinator
 import app.handlive.android.feature.pairing.revoke.UnpairController
@@ -78,6 +79,7 @@ class PairingFeature private constructor(
         fun install(context: Context) {
             val feature = get(context)
             feature.runtime.pairingEndpoint = feature.coordinator
+            feature.runtime.bluetoothQrWindow = BtQrPairingKeySource(feature.coordinator)
             feature.runtime.router.register(MessageType.PAIR, feature.unpair.handler)
             feature.runtime.sessionEnded
                 .onEach(feature.unpair::onSessionEnded)

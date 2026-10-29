@@ -10,6 +10,7 @@ import io.ktor.websocket.WebSocketExtension
 import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.GeneralSecurityException
 import kotlin.coroutines.CoroutineContext
 
@@ -51,6 +53,9 @@ internal class BluetoothPeerSocket(
     private val scheduler = BluetoothLinkScheduler()
     private val reassembler = BluetoothLongLaneReassembler()
     private var anyRecordOpened = false
+
+    /** Vòng ghi đã dừng: mọi frame xếp trước một `Frame.Close` đã lên dây (hoặc dây đã đứt). */
+    private val writesFinished = CompletableDeferred<Unit>()
 
     override val incoming: ReceiveChannel<Frame> = incomingFrames
     override val outgoing: SendChannel<Frame> = outgoingFrames
@@ -116,8 +121,18 @@ internal class BluetoothPeerSocket(
             throw e
         } catch (_: BtLinkException) {
             // The link died mid-write (`more`/`dlen` only this side can produce correctly) — nothing to retry.
+        } finally {
+            writesFinished.complete(Unit)
         }
         end()
+    }
+
+    /**
+     * Chờ vòng ghi xả xong (sau một `Frame.Close`), tối đa [timeoutMillis]: bên gọi sắp huỷ socket mà vừa gửi một
+     * envelope cuối (như `pair/error`) thì không để lệnh huỷ nuốt mất nó.
+     */
+    suspend fun awaitWritesFinished(timeoutMillis: Long) {
+        withTimeoutOrNull(timeoutMillis) { writesFinished.await() }
     }
 
     private fun enqueueEnvelope(json: String) {
