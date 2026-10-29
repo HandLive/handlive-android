@@ -52,6 +52,7 @@ enum class ErrorCode {
     USB_ADB_UNAVAILABLE,
     MAC_EXTENSION_NOT_ACTIVE,
     MAC_MIC_DRIVER_MISSING,
+    DIRECT_WIFI_UNAVAILABLE,
     ;
 
     companion object {
