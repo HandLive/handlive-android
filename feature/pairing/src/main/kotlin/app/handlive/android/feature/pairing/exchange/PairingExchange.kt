@@ -25,6 +25,7 @@ import app.handlive.android.core.protocol.pairing.PairHelloData
 import app.handlive.android.core.protocol.pairing.PairOfferData
 import app.handlive.android.core.protocol.pairing.PairOp
 import app.handlive.android.core.transport.WsCloseCode
+import app.handlive.android.core.transport.bluetooth.BluetoothPinSecretSocket
 import app.handlive.android.core.transport.server.TextMessageSocket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -160,7 +161,7 @@ class PairingExchange(
     ): Handshake {
         val clientNonce = Base64Codecs.decodeB64u(hello.nonce, NONCE_SIZE)
         val serverNonce = nonce()
-        val secret = secretFor(clientNonce, serverNonce)
+        val secret = secretFor(socket, clientNonce, serverNonce)
         // A4: at most 3 offers per PIN, counted here; a used-up PIN gets no offer (the coordinator closes the window).
         if (window is PairingWindow.Pin && !window.takeOffer()) throw refused(ErrorCode.PAIRING_CLOSED)
         val transcript =
@@ -212,21 +213,31 @@ class PairingExchange(
         }
     }
 
-    /** `pairing_secret` from the QR code, or `K_pin` from the PIN the user typed (A4), awaited within the window. */
+    /**
+     * `pairing_secret` from the QR code, `K_bt_pin` of this Bluetooth link (0.4.5 "PIN", A7.2-C: already proven by
+     * the CPace + Noise handshake before `pair/hello`, so it replaces `K_pin` outright, no Argon2id), or `K_pin`
+     * from the PIN the user typed on the LAN (A4), awaited within the window.
+     */
     private suspend fun secretFor(
+        socket: TextMessageSocket,
         clientNonce: ByteArray,
         serverNonce: ByteArray,
     ): ByteArray =
-        when (window) {
+        when (val current = window) {
             is PairingWindow.Qr -> {
-                window.invite.pairingSecret
+                current.invite.pairingSecret
             }
 
             is PairingWindow.Pin -> {
-                val pin =
-                    withTimeoutOrNull(window.expiresAt - clock()) { window.awaitPin() }
-                        ?: throw refused(ErrorCode.PAIRING_CLOSED)
-                withContext(Dispatchers.Default) { PairingAuthDerivation.pinKey(pin, clientNonce, serverNonce) }
+                val bluetoothPinKey = (socket as? BluetoothPinSecretSocket)?.kBtPin
+                if (bluetoothPinKey != null) {
+                    bluetoothPinKey
+                } else {
+                    val pin =
+                        withTimeoutOrNull(current.expiresAt - clock()) { current.awaitPin() }
+                            ?: throw refused(ErrorCode.PAIRING_CLOSED)
+                    withContext(Dispatchers.Default) { PairingAuthDerivation.pinKey(pin, clientNonce, serverNonce) }
+                }
             }
         }
 

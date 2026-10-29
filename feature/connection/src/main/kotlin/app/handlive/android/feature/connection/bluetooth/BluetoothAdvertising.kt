@@ -12,12 +12,16 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import app.handlive.android.core.crypto.derivation.BtLinkKeyDerivation
 import app.handlive.android.core.data.pairing.PairStore
+import app.handlive.android.core.transport.bluetooth.BluetoothAdvertisementData
 import app.handlive.android.core.transport.bluetooth.BluetoothLinkAcceptor
 import app.handlive.android.core.transport.bluetooth.BluetoothLinkAdmission
 import app.handlive.android.core.transport.bluetooth.BluetoothPairKeys
 import app.handlive.android.core.transport.bluetooth.BluetoothPairingKeySource
+import app.handlive.android.core.transport.bluetooth.BluetoothPinPairingWindow
 import app.handlive.android.core.transport.bluetooth.BluetoothPreauthSession
 import app.handlive.android.core.transport.bluetooth.BluetoothQrPairingWindow
+import app.handlive.android.core.transport.bluetooth.BtPinPairingLink
+import app.handlive.android.core.transport.bluetooth.BtPinPairingResponder
 import app.handlive.android.core.transport.bluetooth.BtQrPairingLink
 import app.handlive.android.core.transport.bluetooth.BtQrPairingSlot
 import app.handlive.android.core.transport.server.ControlServer
@@ -66,15 +70,16 @@ class BluetoothAdvertising(
         server: ControlServer,
         liveSessions: Flow<Set<String>>,
         environment: Flow<*>,
-        qrPairing: BluetoothQrPairingHooks = BluetoothQrPairingHooks.NONE,
+        pairing: BluetoothPairingHooks = BluetoothPairingHooks(),
     ) {
         if (appContext.getSystemService(BluetoothManager::class.java)?.adapter == null) return
         val acceptor =
-            acceptor(server.bluetoothAdmission, server::serveBluetoothPeer, qrPairing, clock) { linkKeys }
+            acceptor(server.bluetoothAdmission, server::serveBluetoothPeer, pairing, clock) { linkKeys }
         val radioPeripheral = BluetoothPeripheral(AndroidBluetoothRadio(appContext), acceptor::accept, clock)
         peripheral = radioPeripheral
         val discoveryKeys = discoveryKeys(liveSessions)
-        val pairingHints = qrPairing.pairingHints()
+        // `pr_bt` (QR) và `BT_PIN_HINT` không bao giờ cùng mở (một cửa sổ ghép đôi một lúc, PairingCoordinator).
+        val pairingHints = combine(pairing.qr.pairingHints(), pairing.pin.pinHints()) { pr, pin -> pr ?: pin }
         val stateMachine =
             BluetoothLinkLifecycle(
                 start = { radioPeripheral.start(scope, discoveryKeys, pairingHints) },
@@ -149,24 +154,40 @@ class BluetoothAdvertising(
 
         /**
          * Bộ accept của listener: thử `K_bt_plink` (qua MỘT slot cho mọi kênh của listener này) rồi `K_bt_link` của
-         * từng cặp; liên kết cặp vào [serve] (`ControlServer.serveBluetoothPeer`), liên kết ghép đôi QR vào endpoint
-         * của [qrPairing]. Tách ra để test dựng đúng bộ accept của app mà không cần radio thật.
+         * từng cặp; liên kết cặp vào [serve] (`ControlServer.serveBluetoothPeer`), liên kết ghép đôi QR hay PIN (CPace,
+         * A7.2-C) vào endpoint của [pairing]. Tách ra để test dựng đúng bộ accept của app mà không cần radio thật.
          */
         fun acceptor(
             admission: BluetoothLinkAdmission,
             serve: suspend (WebSocketSession, String) -> Unit,
-            qrPairing: BluetoothQrPairingHooks,
+            pairing: BluetoothPairingHooks,
             clock: () -> Long,
             linkKeys: () -> List<Pair<String, ByteArray>>,
         ): BluetoothLinkAcceptor {
             val slot = BtQrPairingSlot()
+            val qrPairing = pairing.qr
+            val pinPairing = pairing.pin
             val pairingKeys = BluetoothPairingKeySource { qrPairing.window()?.currentPlinkKey() }
+            val pinWindow =
+                object : BluetoothPinPairingWindow {
+                    override fun currentPin(): ByteArray? = pinPairing.window()?.currentPin()
+
+                    override fun onPinChannelFailedAfterCpace1() {
+                        pinPairing.window()?.onPinChannelFailedAfterCpace1()
+                    }
+                }
             return BluetoothLinkAcceptor(
                 admission = admission,
                 serve = serve,
-                newSession = { BluetoothPreauthSession(BluetoothPairKeys(linkKeys), pairingKeys, slot) },
+                newSession = {
+                    val pinResponder = BtPinPairingResponder(pinWindow)
+                    BluetoothPreauthSession(BluetoothPairKeys(linkKeys), pairingKeys, slot, pinResponder)
+                },
                 servePairing = { socket ->
                     qrPairing.endpoint()?.let { BtQrPairingLink.serve(socket, it, clock) }
+                },
+                servePinPairing = { socket, kBtPin ->
+                    pinPairing.endpoint()?.let { BtPinPairingLink.serve(socket, kBtPin, it, clock) }
                 },
             )
         }
@@ -180,6 +201,12 @@ class BluetoothAdvertising(
             }
     }
 }
+
+/** Cửa sổ ghép đôi của listener Bluetooth (0.4.5 "Pairing mode"): QR (luồng B) và PIN (luồng C), mỗi lúc chỉ một mở. */
+class BluetoothPairingHooks(
+    val qr: BluetoothQrPairingHooks = BluetoothQrPairingHooks.NONE,
+    val pin: BluetoothPinPairingHooks = BluetoothPinPairingHooks.NONE,
+)
 
 /**
  * Cửa sổ ghép đôi QR cho listener Bluetooth (0.4.5 "Pairing mode"), do `ConnectionRuntime` cấp: [window] đọc cửa sổ
@@ -197,5 +224,26 @@ class BluetoothQrPairingHooks(
     companion object {
         /** Không có cửa sổ QR nào: phát một lần để quảng bá các cặp vẫn chạy (combine cần một giá trị). */
         val NONE = BluetoothQrPairingHooks({ null }, flowOf(Unit), { null })
+    }
+}
+
+/**
+ * Cửa sổ ghép đôi PIN cho listener Bluetooth (0.4.5 "PIN", A7.2-C), do `ConnectionRuntime` cấp — cùng hình dạng
+ * [BluetoothQrPairingHooks]: [window] đọc cửa sổ đang mở ngay lúc cần (PIN cho CPace, bộ đếm sai), [windowChanges]
+ * phát lại mỗi khi cửa sổ mở hay đóng để quảng bá `BT_PIN_HINT` dựng lại, [endpoint] chạy PAIR-01 trên liên kết đã
+ * xác nhận bằng `K_bt_pinlink`.
+ */
+class BluetoothPinPairingHooks(
+    val window: () -> BluetoothPinPairingWindow?,
+    val windowChanges: Flow<*>,
+    val endpoint: () -> PairingEndpoint?,
+) {
+    /** `BT_PIN_HINT` khi có cửa sổ PIN đang mở; marker giống nhau cho mọi điện thoại, không suy ra từ PIN (AC9). */
+    fun pinHints(): Flow<ByteArray?> =
+        windowChanges.map { if (window()?.currentPin() != null) BluetoothAdvertisementData.PIN_HINT else null }
+
+    companion object {
+        /** Không có cửa sổ PIN nào: phát một lần để `combine` ở [BluetoothAdvertising.start] có giá trị. */
+        val NONE = BluetoothPinPairingHooks({ null }, flowOf(Unit), { null })
     }
 }

@@ -82,6 +82,10 @@ class PairingCoordinator(
     private var expiry: Job? = null
     private var rendezvousId: String? = null
 
+    /** `BT_PIN_LOCKOUT` (0.4.5 "PIN", E10): no new PIN window, LAN or Bluetooth, until this time. */
+    @Volatile
+    private var pinLockedUntil: Long = 0
+
     /** Orders a client taking the window against the PIN being confirmed, so "Pairing…" starts exactly once. */
     private val pinLock = Any()
 
@@ -110,6 +114,19 @@ class PairingCoordinator(
      * (0.4.5 "Pairing mode"): nguồn của `K_bt_pdisc`/`K_bt_plink` cho ghép đôi qua Bluetooth (A7.2-B).
      */
     val currentQrPairingSecret: ByteArray? get() = (window as? PairingWindow.Qr)?.invite?.pairingSecret
+
+    /**
+     * PIN của cửa sổ PIN đang mở, hoặc `null` khi không có cửa sổ nào, cửa sổ hiện tại là QR, hay PIN chưa gõ
+     * xong (0.4.5 "PIN"): PRS cho CPace qua Bluetooth (A7.2-C).
+     */
+    val currentPinWindowSecret: ByteArray?
+        get() = currentPinWindow?.confirmedPin?.toByteArray(Charsets.UTF_8)
+
+    /**
+     * The open PIN window, the one object holding the wrong-PIN count of both transports (0.4.5 "PIN", C3): the LAN
+     * counts its `pair/offer` here ([PairingExchange]), Bluetooth its failed channels ([BtPinPairingKeySource]).
+     */
+    internal val currentPinWindow: PairingWindow.Pin? get() = window as? PairingWindow.Pin
 
     /** PAIR-01 step 4: E1 for a code that is not HandLive's, E6 when 8 pairs exist already. */
     suspend fun onScanned(text: String) {
@@ -158,14 +175,28 @@ class PairingCoordinator(
 
     /**
      * The user confirmed the PIN (end of A3). The first PIN opens the 120 s window with TXT `pm = 1` (A4); after
-     * `PIN_INVALID` the window is still open and takes the new PIN.
+     * `PIN_INVALID` the window is still open and takes the new PIN. During `BT_PIN_LOCKOUT` it opens no window
+     * (E10) — an existing window (another wrong PIN on the same one) is unaffected, the lockout only blocks a
+     * brand new one. Reuses `PIN_EXPIRED`'s text until shared/strings carries a dedicated `BT_PIN_LOCKOUT` key.
      */
     fun submitPin(pin: String) {
+        val existing = window as? PairingWindow.Pin
+        if (existing == null && clock() < pinLockedUntil) {
+            stateFlow.value = PairingState.Failed(PairingFailure.PIN_EXPIRED)
+            return
+        }
+        // The third failed attempt was a Bluetooth channel (C3): same end as the LAN's third offer (A4).
+        val onUsedUp: (PairingWindow.Pin) -> Unit = { usedUp ->
+            if (window === usedUp) {
+                closeWindow()
+                pinLockedUntil = clock() + PairingWindow.Pin.LOCKOUT_DURATION_MILLIS
+                stateFlow.value = PairingState.Failed(PairingFailure.PIN_EXPIRED)
+            }
+        }
         val current =
-            window as? PairingWindow.Pin
-                ?: PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS).also {
-                    open(it, PairingAdvert(pinMode = true))
-                }
+            existing ?: PairingWindow.Pin(clock() + PairingWindow.DURATION_MILLIS, onUsedUp).also {
+                open(it, PairingAdvert(pinMode = true))
+            }
         synchronized(pinLock) {
             current.submit(pin)
             // A client that connected while the PIN was typed has been waiting for it: checking starts now.
@@ -218,6 +249,11 @@ class PairingCoordinator(
         if (window !== current || !claimed) return
         val (next, close) = current.after(outcome, shown = stateFlow.value, now = clock(), firstPair = noPairBefore)
         if (close) closeWindow()
+        // A4: the window's own third failed offer (`PIN_MAX_ATTEMPTS`, not a plain 120 s timeout — that path never
+        // reaches here) starts BT_PIN_LOCKOUT, same as a third failed Bluetooth channel.
+        if (current is PairingWindow.Pin && current.offersLeft == 0) {
+            pinLockedUntil = clock() + PairingWindow.Pin.LOCKOUT_DURATION_MILLIS
+        }
         if (outcome is PairingOutcome.Paired) onPaired(outcome.pairId)
         stateFlow.value = next
     }
