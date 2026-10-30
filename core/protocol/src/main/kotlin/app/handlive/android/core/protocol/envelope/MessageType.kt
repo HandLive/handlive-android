@@ -1,6 +1,6 @@
 package app.handlive.android.core.protocol.envelope
 
-/** Giá trị `type` của envelope (0.7.1): tập đã chốt cộng `session`, `camera`, `web` (P6). */
+/** Giá trị `type` của envelope (0.7.1): tập đã chốt cộng `session`, `camera`, `web` (P6), `direct`, `bulk` (P7). */
 enum class MessageType(
     val wire: String,
 ) {
@@ -15,6 +15,8 @@ enum class MessageType(
     SESSION("session"),
     CAMERA("camera"),
     WEB("web"),
+    DIRECT("direct"),
+    BULK("bulk"),
     ;
 
     companion object {

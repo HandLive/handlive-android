@@ -72,6 +72,7 @@ val DeviceLink.status: HLConnectionStatus
     get() =
         when (this) {
             DeviceLink.WIFI -> HLConnectionStatus.ConnectedWiFi
+            DeviceLink.BLUETOOTH -> HLConnectionStatus.ConnectedBluetooth
             DeviceLink.INTERNET -> HLConnectionStatus.ConnectedInternet
             DeviceLink.USB -> HLConnectionStatus.Usb
             DeviceLink.DISCONNECTED -> HLConnectionStatus.Disconnected

@@ -11,6 +11,22 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- CONN-05, SET-01 API 10: the Bluetooth link (0.4.5). Android 12+ asks once for "Nearby devices": A-SVC
+         advertises (BLUETOOTH_ADVERTISE) and accepts L2CAP channels (BLUETOOTH_CONNECT). It never scans, so it
+         declares no BLUETOOTH_SCAN, the only one of the three that takes neverForLocation. Android 10–11 use the
+         legacy install-time pair below. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+
     <!-- SET-01 part B: requested with the SMS feature (and calls in Phase 3); the capability lists the active SIMs
          (`features.sms.sims`) only while it is granted. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />

@@ -33,6 +33,14 @@ class VectorFileCoverageTest {
             "relay-frame.json" to "RelayFrameVectorTest",
             "revoke.json" to "RevokeStatementVectorTest",
             "clipboard-html.json" to "HtmlClipSanitizerVectorTest",
+            "bt-link.json" to "BtLinkKeyDerivationTest, NoiseNNpsk0Test " +
+                "(core:transport: BtTransportCipherTest, BluetoothPreauthSessionTest, BluetoothLinkAcceptorTest, " +
+                "BluetoothAdvertisementDataTest)",
+            "bt-frame.json" to "BtRecordCodecTest, BtPreauthRecordTest, BtTransportFrameTest " +
+                "(core:transport: BtTransportCipherTest, BluetoothLongLaneReassemblerTest)",
+            "bt-advertisement.json" to "(core:transport: BluetoothAdvertisementDataTest)",
+            "bt-pairing.json" to "BtQrPairingKeysTest (core:transport)",
+            "cpace.json" to "CPaceX25519SHA512VectorTest, BtPinPairingAcceptorTest (core:transport)",
             EnvelopeRoundtripTest.ANDROID_FILE to "EnvelopeRoundtripTest",
             EnvelopeRoundtripTest.APPLE_FILE to "EnvelopeRoundtripTest",
         )

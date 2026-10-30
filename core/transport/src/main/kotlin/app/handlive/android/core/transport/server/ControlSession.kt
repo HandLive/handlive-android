@@ -41,6 +41,9 @@ enum class SessionTransport {
 
     /** Envelopes wrapped `{to, env}` / `{from, env}` through `/v1/relay` (CONN-03). */
     RELAY,
+
+    /** Noise transport records inside a BLE L2CAP CoC link, no network (CONN-05, 0.4.5). */
+    BLUETOOTH,
 }
 
 /**
@@ -112,8 +115,9 @@ class ControlSession internal constructor(
 
     /**
      * Ends the session with [code]. A relayed session has no close frame between the peers (the `/v1/relay` link
-     * stays open), so unless a `session/bye` was already exchanged it first sends `session/bye {reason: shutdown}` —
-     * the end of an idle (4411), failed rekey (4410), bad request (4400) or internal error (4500) close on the LAN
+     * stays open) and a Bluetooth link has no close codes at all (0.4.5 "No close codes"), so on either route,
+     * unless a `session/bye` was already exchanged, it first sends `session/bye {reason: shutdown}` — the end of
+     * an idle (4411), failed rekey (4410), bad request (4400) or internal error (4500) close on the LAN
      * (CONN-02 API 4, CONN-03 API 6 logic 7).
      */
     suspend fun close(
@@ -121,7 +125,9 @@ class ControlSession internal constructor(
         message: String,
     ) {
         if (!closing.compareAndSet(false, true)) return
-        if (transport == SessionTransport.RELAY) goodbye.send(BYE_SHUTDOWN)
+        if (transport == SessionTransport.RELAY || transport == SessionTransport.BLUETOOTH) {
+            goodbye.send(BYE_SHUTDOWN)
+        }
         markClosed()
         socket.close(CloseReason(code, message))
     }

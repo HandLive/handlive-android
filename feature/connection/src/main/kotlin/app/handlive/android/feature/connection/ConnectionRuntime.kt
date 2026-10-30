@@ -6,6 +6,8 @@ import app.handlive.android.core.data.db.PeerPlatform
 import app.handlive.android.core.data.pairing.PairStore
 import app.handlive.android.core.protocol.ProtocolJson
 import app.handlive.android.core.protocol.capability.CapabilityData
+import app.handlive.android.core.transport.bluetooth.BluetoothPinPairingWindow
+import app.handlive.android.core.transport.bluetooth.BluetoothQrPairingWindow
 import app.handlive.android.core.transport.handshake.PairRecord
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.server.ControlServer
@@ -16,6 +18,10 @@ import app.handlive.android.core.transport.server.SessionTransport
 import app.handlive.android.core.transport.tls.AndroidTlsIdentityStorage
 import app.handlive.android.core.transport.tls.TlsIdentityProvider
 import app.handlive.android.feature.connection.bench.BenchLog
+import app.handlive.android.feature.connection.bluetooth.BluetoothAdvertising
+import app.handlive.android.feature.connection.bluetooth.BluetoothPairingHooks
+import app.handlive.android.feature.connection.bluetooth.BluetoothPinPairingHooks
+import app.handlive.android.feature.connection.bluetooth.BluetoothQrPairingHooks
 import app.handlive.android.feature.connection.capability.CapabilityPublisher
 import app.handlive.android.feature.connection.capability.LocalEnvironmentReader
 import app.handlive.android.feature.connection.capability.SimChangeWatcher
@@ -48,9 +54,9 @@ import kotlinx.coroutines.withContext
 
 /**
  * A-SVC's engine, one per process (CONN-01, CONN-02): runs the TLS server on 47800–47809, advertises
- * `_handlive._tcp` with hourly hints, keeps this phone's capability current on every session, and hands decrypted
- * envelopes to the feature modules through [router]. [HandLiveService] starts and stops it; the UI and the feature
- * modules read [connectedPeers], [sessions] and [state].
+ * `_handlive._tcp` with hourly hints, serves the Bluetooth link (CONN-05) beside it, keeps this phone's capability
+ * current on every session, and hands decrypted envelopes to the feature modules through [router]. [HandLiveService]
+ * starts and stops it; the UI and the feature modules read [connectedPeers], [sessions] and [state].
  */
 class ConnectionRuntime private constructor(
     context: Context,
@@ -67,6 +73,7 @@ class ConnectionRuntime private constructor(
     private val localCapabilityFlow = MutableStateFlow<CapabilityData?>(null)
     private val simWatcher = SimChangeWatcher(appContext, ::refreshEnvironment)
     private val discovery = DiscoveryAdvertising(appContext, data.pairs, clock)
+    private val bluetooth = BluetoothAdvertising(appContext, data.pairs, clock)
     private var scope: CoroutineScope? = null
     private var server: ControlServer? = null
 
@@ -96,6 +103,20 @@ class ConnectionRuntime private constructor(
     /** Installed by the pairing feature; `/v1/pair` delegates to it (PAIR-01). */
     @Volatile
     var pairingEndpoint: PairingEndpoint? = null
+
+    /**
+     * Installed by the pairing feature: the QR pairing window as the Bluetooth listener sees it (0.4.5 "Pairing mode",
+     * PAIR-01 B1–B3) — `pr_bt` in the advertising, `K_bt_plink` for `noise1`; pairing links then run [pairingEndpoint].
+     */
+    @Volatile
+    var bluetoothQrWindow: BluetoothQrPairingWindow? = null
+
+    /**
+     * Installed by the pairing feature: the PIN pairing window as the Bluetooth listener sees it (0.4.5 "PIN",
+     * PAIR-01 C1–C3) — PIN for CPace, the shared wrong-PIN counter; pairing links then run [pairingEndpoint].
+     */
+    @Volatile
+    var bluetoothPinWindow: BluetoothPinPairingWindow? = null
 
     /** SHA-256 of the TLS certificate (`tls_sha256` of PAIR-01 API 3), known once the server runs. */
     @Volatile
@@ -206,6 +227,17 @@ class ConnectionRuntime private constructor(
         phoneCapability.state.onEach { localCapabilityFlow.value = it }.launchIn(runtimeScope)
         capability.publishUpdates(runtimeScope, phoneCapability.state) { controlServer.sessions.all() }
         discovery.start(runtimeScope, port, pairingAdvert)
+        // CONN-05: the Bluetooth link runs beside the LAN server, whatever the network does.
+        // A QR window opens or closes through setPairingAdvert, so the same flow restarts the Bluetooth advertising.
+        val qrPairing = BluetoothQrPairingHooks({ bluetoothQrWindow }, pairingAdvert, { pairingEndpoint })
+        val pinPairing = BluetoothPinPairingHooks({ bluetoothPinWindow }, pairingAdvert, { pairingEndpoint })
+        bluetooth.start(
+            runtimeScope,
+            controlServer,
+            table.sessions.map { it.keys },
+            environmentVersion,
+            BluetoothPairingHooks(qrPairing, pinPairing),
+        )
         simWatcher.start()
     }
 
@@ -216,6 +248,7 @@ class ConnectionRuntime private constructor(
         server?.stop()
         server = null
         discovery.stop()
+        bluetooth.stop()
         scope?.cancel()
         scope = null
         table.clear()

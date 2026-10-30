@@ -54,7 +54,7 @@ class PeerSession(
     )
 
     /** How the session reaches the phone (0.11, PAIR-02 field 5). */
-    enum class Channel { LAN, RELAY, USB }
+    enum class Channel { LAN, RELAY, USB, BLUETOOTH }
 
     val pairId: String get() = peer.pairId
     val peerDeviceId: String get() = peer.peerDeviceId

@@ -4,6 +4,7 @@ import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.WsCloseCode
+import app.handlive.android.core.transport.bluetooth.BluetoothLinkAdmission
 import app.handlive.android.core.transport.handshake.PairRegistry
 import app.handlive.android.core.transport.relay.RelayPeerLink
 import app.handlive.android.core.transport.tls.TlsIdentity
@@ -17,6 +18,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocketRaw
 import io.ktor.websocket.CloseReason
+import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import kotlinx.coroutines.CancellationException
 import java.net.BindException
@@ -56,9 +58,11 @@ class ControlServerOptions(
  */
 class ControlServer(
     private val config: ControlServerConfig,
+    /** Dùng chung với A-SVC phía liên kết Bluetooth (A7.1b): cùng một bộ đếm BT_LINK_LIMIT/BT_AUTH_FAIL_BLOCK. */
+    val bluetoothAdmission: BluetoothLinkAdmission = BluetoothLinkAdmission(),
 ) {
     val sessions = ActiveSessionRegistry()
-    private val handler = ControlConnectionHandler(config, sessions)
+    private val handler = ControlConnectionHandler(config, sessions, bluetoothAdmission)
     private val pairAdmission = ConnectionAdmission(config.options.limits.pairing, config.options.clock)
 
     /** Connections admitted but still in their handshake (CONN-01 API 3: at most 16). */
@@ -101,6 +105,18 @@ class ControlServer(
         link: RelayPeerLink,
         peerDeviceId: String,
     ) = handler.handle(link.socket, "$RELAY_ADDRESS_PREFIX$peerDeviceId", SessionTransport.RELAY)
+
+    /**
+     * Runs one `/v1/ctl` session over a confirmed Bluetooth link (0.4.5 step 6): [socket] is the `BluetoothPeerSocket`
+     * that `BluetoothLinkAcceptor` built once the link passed admission and steps 1–5; [pairId] is the pair whose
+     * `K_bt_link` verified, and `session/hello` must name it. Handshake, limits and rekey are those of the LAN; the
+     * LAN's per-address admission does not apply (BLE addresses rotate) and an `AUTH_FAILED` hello counts toward
+     * [bluetoothAdmission].
+     */
+    suspend fun serveBluetoothPeer(
+        socket: WebSocketSession,
+        pairId: String,
+    ) = handler.handle(socket, BLUETOOTH_PSEUDO_ADDRESS, SessionTransport.BLUETOOTH, boundPairId = pairId)
 
     /**
      * `relay.enabled` turned off (SET-02 API 1 step 6): each session through the relay gets the current capability,
@@ -169,6 +185,9 @@ class ControlServer(
     private companion object {
         /** Admission limits count relay peers by `device_id`, as LAN clients by IP address. */
         const val RELAY_ADDRESS_PREFIX = "relay:"
+
+        /** Not used for admission (Bluetooth has its own, listener-wide); kept for logs only. */
+        const val BLUETOOTH_PSEUDO_ADDRESS = "bluetooth"
         const val BYE_SHUTDOWN = "shutdown"
         const val TLS_1_3 = "TLSv1.3"
         const val STOP_GRACE_MILLIS = 500L

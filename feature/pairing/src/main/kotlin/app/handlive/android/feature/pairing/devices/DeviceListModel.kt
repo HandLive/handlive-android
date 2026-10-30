@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerializationException
 
 /** Link of a paired client as the Devices tab shows it (PAIR-02 fields 4–5, 0.11 seen from the phone). */
-enum class DeviceLink { WIFI, INTERNET, USB, DISCONNECTED }
+enum class DeviceLink { WIFI, BLUETOOTH, INTERNET, USB, DISCONNECTED }
 
 /** The clipboard row of the details (PAIR-02 field 8, SET-02 field 24). */
 enum class ClipboardAvailability {
@@ -217,5 +217,6 @@ object DeviceListModel {
             PeerSession.Channel.LAN -> DeviceLink.WIFI
             PeerSession.Channel.RELAY -> DeviceLink.INTERNET
             PeerSession.Channel.USB -> DeviceLink.USB
+            PeerSession.Channel.BLUETOOTH -> DeviceLink.BLUETOOTH
         }
 }

@@ -39,6 +39,14 @@ android {
                 .file(sharedDir.file("test-vectors/session-handshake.json"))
                 .withPropertyName("sessionHandshakeVector")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
+            // Test liên kết Bluetooth đọc bt-link.json, bt-advertisement.json (0.4.5) và bt-pairing.json (A7.2-B).
+            test.inputs
+                .files(
+                    sharedDir.file("test-vectors/bt-link.json"),
+                    sharedDir.file("test-vectors/bt-advertisement.json"),
+                    sharedDir.file("test-vectors/bt-pairing.json"),
+                ).withPropertyName("bluetoothVectors")
+                .withPathSensitivity(PathSensitivity.RELATIVE)
             test.inputs
                 .file(sharedDir.file("schemas/common.schema.json"))
                 .withPropertyName("commonSchema")
@@ -80,7 +88,7 @@ dependencies {
         exclude(group = "org.eclipse.jetty.alpn", module = "alpn-api")
         // Giữ netty-transport-classes-epoll/kqueue: Ktor gọi Epoll/KQueue.isAvailable() khi chọn event loop.
     }
-    implementation(libs.ktor.server.websockets)
+    api(libs.ktor.server.websockets)
     // Relay client (CONN-03): HTTPS and WebSocket with SPKI pinning of the relay's certificate chain.
     implementation(libs.okhttp)
 
