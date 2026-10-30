@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerializationException
 
 /** Link of a paired client as the Devices tab shows it (PAIR-02 fields 4–5, 0.11 seen from the phone). */
-enum class DeviceLink { WIFI, INTERNET, USB, DISCONNECTED }
+enum class DeviceLink { WIFI, BLUETOOTH, INTERNET, USB, DISCONNECTED }
 
 /** The clipboard row of the details (PAIR-02 field 8, SET-02 field 24). */
 enum class ClipboardAvailability {
@@ -220,8 +220,6 @@ object DeviceListModel {
 
             PeerSession.Channel.USB -> DeviceLink.USB
 
-            // TODO(A7.1b): chưa có DeviceLink/chuỗi riêng cho Bluetooth (status.connected_bluetooth chưa có trong
-            // ui-strings.json, như placeholder .connectedWiFi đã chấp nhận ở M7.1a phía Apple cho #199/#190).
-            PeerSession.Channel.BLUETOOTH -> DeviceLink.WIFI
+            PeerSession.Channel.BLUETOOTH -> DeviceLink.BLUETOOTH
         }
 }

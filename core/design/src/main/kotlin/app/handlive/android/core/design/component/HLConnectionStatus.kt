@@ -12,6 +12,7 @@ import app.handlive.android.core.strings.R
  */
 enum class HLConnectionStatus {
     ConnectedWiFi,
+    ConnectedBluetooth,
     ConnectedInternet,
     Usb,
     Connecting,
@@ -26,6 +27,7 @@ internal val HLConnectionStatus.textRes: Int
     get() =
         when (this) {
             HLConnectionStatus.ConnectedWiFi -> R.string.status_connected_wifi
+            HLConnectionStatus.ConnectedBluetooth -> R.string.status_connected_bluetooth
             HLConnectionStatus.ConnectedInternet -> R.string.status_connected_internet
             HLConnectionStatus.Usb -> R.string.status_connected_usb
             HLConnectionStatus.Connecting -> R.string.status_connecting
@@ -38,6 +40,7 @@ internal val HLConnectionStatus.withDeviceRes: Int?
     get() =
         when (this) {
             HLConnectionStatus.ConnectedWiFi -> R.string.status_connected_wifi_to
+            HLConnectionStatus.ConnectedBluetooth -> R.string.status_connected_bluetooth_to
             HLConnectionStatus.ConnectedInternet -> R.string.status_connected_internet_to
             HLConnectionStatus.Usb -> R.string.status_connected_usb_to
             HLConnectionStatus.Connecting, HLConnectionStatus.Disconnected -> null
@@ -55,13 +58,14 @@ internal val HLConnectionStatus.symbol: HLSymbol?
             HLConnectionStatus.ConnectedInternet -> HLSymbol.Public
             HLConnectionStatus.Usb -> HLSymbol.Usb
             HLConnectionStatus.Disconnected -> HLSymbol.WifiOff
-            HLConnectionStatus.Connecting -> null
+            HLConnectionStatus.ConnectedBluetooth, HLConnectionStatus.Connecting -> null
         }
 
 /** Connected is green, connecting orange, disconnected grey — never red for an ordinary disconnection. */
 internal fun HLConnectionStatus.tint(colors: HandLiveColors): Color =
     when (this) {
         HLConnectionStatus.ConnectedWiFi,
+        HLConnectionStatus.ConnectedBluetooth,
         HLConnectionStatus.ConnectedInternet,
         HLConnectionStatus.Usb,
         -> colors.statusConnected
