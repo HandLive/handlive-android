@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-10-30
+
+### Added
+
+- **Offline connectivity (Phase 7):** Bluetooth L2CAP pairing and control channel over BLE (foreground service `connectedDevice`
+  advertises the service UUID and rotating hint, link-security handshake with Noise keyed by the pairing secret). Link codec
+  (channel IDs, short and long control lanes, scheduler: control > bulk), Bluetooth admission policy (pre-auth link cap,
+  nonce challenge, authentication failure counter and lockout).
+
+- **Pairing over Bluetooth:** offline first pairing (flow B): QR scan, advertise proof (HMAC of pairing secret), phone grants
+  pairing slot after MAC check, handshake and store as paired. PIN pairing over Bluetooth (flow C): advertise PIN hint,
+  perform CPace-X25519-SHA512 exchange, three online attempts per PIN with global counter and lockout.
+
+- **UI labels and prompts:** "Connected via Bluetooth" status line (`HLConnectionStatus.ConnectedBluetooth`, `core/design` +
+  `ui/devices/DeviceRows`); Bluetooth permission decision logic (SET-01: ask "Nearby devices" once on Android 12+, re-ask
+  `ACTION_REQUEST_ENABLE` on an interval when there is no LAN and Bluetooth is off — `BluetoothPermissionPrompts`).
+
+### Specs
+
+- Designed but not wired into the app yet: per-connection bulk stream keys (`K_bulk`) for clipboard images over the
+  Bluetooth bulk lane — `core/transport`'s `BluetoothLinkScheduler`/`BtLinkConstants` reserve channel `0x02` and the
+  chunking/priority logic, but nothing calls `enqueueBulk` and no feature encrypts or sends bulk content yet (0.4.7,
+  A7.4). Wi-Fi Direct itself (A7.5: SSID/passphrase, P2P socket binding, Location prompt) has no code at all.
+
 ## [0.1.1] — 2026-10-22
 
 ### Changed
