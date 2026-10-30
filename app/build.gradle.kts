@@ -59,8 +59,8 @@ android {
         applicationId = "com.handlive.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.1.1"
+        versionCode = 7
+        versionName = "0.2.0"
 
         // CONN-03: `{RELAY_HOST}` is configured at build time (0.4.3); without it the build has no relay. The pins are
         // ISRG Root X1 and X2 (in the code) plus the project's backup key, `sha256/<base64>` values separated by commas.
