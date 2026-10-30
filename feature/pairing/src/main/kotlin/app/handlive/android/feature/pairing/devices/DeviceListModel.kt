@@ -215,11 +215,8 @@ object DeviceListModel {
     private fun PeerSession.Channel.toLink() =
         when (this) {
             PeerSession.Channel.LAN -> DeviceLink.WIFI
-
             PeerSession.Channel.RELAY -> DeviceLink.INTERNET
-
             PeerSession.Channel.USB -> DeviceLink.USB
-
             PeerSession.Channel.BLUETOOTH -> DeviceLink.BLUETOOTH
         }
 }
