@@ -20,6 +20,9 @@ object BluetoothLinkConstants {
     /** Số bản ghi làn dài + bulk cùng lúc đã gửi mà chưa xả (0.4.5 "Priority"). */
     const val BULK_INFLIGHT = 2
 
+    /** `BT_BULK_QUEUED` (0.4.7 bulk rule 4): số envelope bulk tối đa xếp hàng mà chưa xả xong hết; `sendBulk` chờ. */
+    const val BULK_QUEUED = 2
+
     /** `BT_ENABLE_PROMPT_INTERVAL` (SET-01 API 10): tối đa một lần xin bật Bluetooth tự động trong khoảng này. */
     val ENABLE_PROMPT_INTERVAL: Duration = 24.hours
 }

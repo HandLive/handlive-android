@@ -39,7 +39,7 @@ class CallPermissionNotifierTest {
             PeerSession.Channel.LAN,
             MutableStateFlow(emptySet()),
             MutableStateFlow<CapabilityData?>(null),
-            { _, _, _ -> },
+            { _, _, _, _ -> },
             { now },
         )
 

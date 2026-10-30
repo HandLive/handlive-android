@@ -58,7 +58,7 @@ class SessionTable(
                 channel = channel,
                 effectiveFeatures = control.effectiveFeatures,
                 peerCapability = control.peerCapability,
-                sender = { type, plaintext, id -> control.send(type, plaintext, id) },
+                sender = { type, plaintext, id, lane -> control.send(type, plaintext, id, lane) },
                 clock = clock,
             ).also { it.ledger = ledgers.getOrPut(control.pairId) { EnvelopeLedger(clock) } }
         sessionsFlow.update { it + (control.pairId to peer) }

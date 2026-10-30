@@ -79,6 +79,8 @@ class BtTransportFrame(
             // Luật "more=1 với long=0 → đóng kênh" chỉ áp dụng cho làn ngắn của control (chan=0x01); bulk
             // (chan=0x02) không dùng bit `long` nhưng vẫn hợp lệ cắt mảnh nhiều `more=1` (0.4.7).
             if (chan == BtLinkConstants.CHAN_CONTROL && more && !long) fail("more without long")
+            // 0.4.7 bulk rule 5: chan 0x02 never sets long=1 (it has its own reassembly buffer, not the long lane's).
+            if (chan == BtLinkConstants.CHAN_BULK && long) fail("long set on bulk channel")
             val dlen =
                 ((plaintext[2].toInt() and BYTE_MASK) shl BITS_PER_BYTE) or
                     (plaintext[DLEN_LOW_BYTE_INDEX].toInt() and BYTE_MASK)

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Bulk lane on the Bluetooth link (0.4.7, A7.4):** the clipboard engine now picks `EnvelopeLane` (`CONTROL`/`BULK`)
+  on every send path for chunked (CLIP-03) transfers — `clipboard/push` with `transfer`, every `clipboard/chunk`,
+  `clipboard/cancel` from either side, and the matching `ack`/`clipboard/conflict` all travel on channel `0x02`
+  instead of the control lane `0x01`. `BluetoothPeerSocket` now implements `BulkLaneSocket.sendBulk`, reassembles
+  channel `0x02` in its own buffer (`BluetoothBulkLaneReassembler`), and backpressures the sender at `BT_BULK_QUEUED`
+  (2) envelopes queued and not fully written. A duplicate request's kept `ack` (0.5.1 rule 2) now resends on the lane
+  it was first sent on. Until Wi-Fi Direct (A7.5) ships, every bulk transfer over Bluetooth runs in the background
+  regardless of size.
+
 ## [0.2.0] — 2026-10-30
 
 ### Added

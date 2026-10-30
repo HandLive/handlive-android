@@ -159,7 +159,7 @@ class DeviceListModelTest {
                         ),
                 ),
             ),
-        sender = { _, _, _ -> },
+        sender = { _, _, _, _ -> },
         clock = { 0 },
     )
 }

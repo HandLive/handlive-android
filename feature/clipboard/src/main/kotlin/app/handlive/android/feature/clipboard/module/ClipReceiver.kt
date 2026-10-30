@@ -10,6 +10,7 @@ import app.handlive.android.core.protocol.clipboard.ClipboardPushData
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.clipboard.HtmlClipSanitizer
 import app.handlive.android.core.protocol.envelope.MessageType
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.feature.clipboard.engine.Acceptance
 import app.handlive.android.feature.clipboard.engine.Clip
@@ -38,7 +39,10 @@ class ClipReceiver(
     private val outgoing: OutgoingTransfers,
 ) {
     private val state = context.state
-    val incoming = IncomingTransfers(context, ::reply, ::onVerified)
+
+    /** CLIP-03 là chủ của làn bulk (0.4.7 bulk rule 1): IncomingTransfers chỉ xử lý push có `transfer`. */
+    private val replyBulk: suspend (PeerSession, Ack, String) -> Unit = { s, a, c -> reply(s, a, c, EnvelopeLane.BULK) }
+    val incoming = IncomingTransfers(context, replyBulk, ::onVerified)
 
     suspend fun onPush(
         session: PeerSession,
@@ -60,15 +64,18 @@ class ClipReceiver(
                 ("html" to 1).takeIf { push.html != null },
             ),
         )
+        // 0.4.7 bulk rule 1: the ack of a push with `transfer` (and chunks/cancel) is bulk; an inline push's ack isn't.
+        val lane = if (push.transfer != null) EnvelopeLane.BULK else EnvelopeLane.CONTROL
         val rejection = PushValidator.check(push, acceptance(session))
         when {
             rejection != null -> {
                 state.ledger.recordRejected(push.clipId)
-                reply(session, ClipWire.rejected(pushId, push.clipId, rejection), push.clipId)
+                reply(session, ClipWire.rejected(pushId, push.clipId, rejection), push.clipId, lane)
             }
 
             state.ledger.isDuplicate(push.clipId) -> {
-                reply(session, ClipWire.ignored(pushId, push.clipId, ClipboardValues.REASON_DUPLICATE), push.clipId)
+                val ignored = ClipWire.ignored(pushId, push.clipId, ClipboardValues.REASON_DUPLICATE)
+                reply(session, ignored, push.clipId, lane)
             }
 
             else -> {
@@ -76,7 +83,7 @@ class ClipReceiver(
                 if (text == null) {
                     incoming.start(session, pushId, push)
                 } else {
-                    apply(session, pushId, push, ClipContent.Text(text, sanitizedHtml(push.html)))
+                    apply(session, pushId, push, ClipContent.Text(text, sanitizedHtml(push.html)), lane)
                 }
             }
         }
@@ -168,9 +175,11 @@ class ClipReceiver(
                     Rejection(ErrorCode.BAD_REQUEST, "text is not valid UTF-8"),
                 ),
                 push.clipId,
+                EnvelopeLane.BULK,
             )
         } else {
-            apply(done.session, done.pushId, push, content)
+            // onVerified chỉ chạy sau một transfer CLIP-03 hoàn tất: ack của nó luôn đi làn bulk (bulk rule 1).
+            apply(done.session, done.pushId, push, content, EnvelopeLane.BULK)
         }
     }
 
@@ -180,8 +189,9 @@ class ClipReceiver(
         pushId: String,
         push: ClipboardPushData,
         content: ClipContent,
+        lane: EnvelopeLane,
     ) {
-        if (state.loopGuard.alreadyHolds(content.sha256)) return acknowledgeHeld(session, pushId, push, content)
+        if (state.loopGuard.alreadyHolds(content.sha256)) return acknowledgeHeld(session, pushId, push, content, lane)
         val now = context.clock.wall()
         val decision =
             ConflictPolicy.decide(
@@ -191,7 +201,7 @@ class ClipReceiver(
                 state.latest?.asLocalChange(),
                 now,
             )
-        if (decision != ConflictDecision.APPLY) return keepLocal(session, pushId, push, content, decision)
+        if (decision != ConflictDecision.APPLY) return keepLocal(session, pushId, push, content, decision, lane)
         val written =
             runCatching {
                 val writer = context.platform.writer
@@ -217,6 +227,7 @@ class ClipReceiver(
                 session,
                 ClipWire.rejected(pushId, push.clipId, Rejection(ErrorCode.INTERNAL, "clipboard write failed")),
                 push.clipId,
+                lane,
             )
         } else {
             BenchLog.event(BenchEvent.CLIP_APPLIED, "clip" to push.clipId)
@@ -233,7 +244,7 @@ class ClipReceiver(
                 )
             state.remember(clip)
             state.ledger.recordFinal(push.clipId)
-            reply(session, ClipWire.applied(pushId, push.clipId), push.clipId)
+            reply(session, ClipWire.applied(pushId, push.clipId), push.clipId, lane)
             sender.distribute(clip, manual = false)
         }
     }
@@ -247,10 +258,11 @@ class ClipReceiver(
         pushId: String,
         push: ClipboardPushData,
         content: ClipContent,
+        lane: EnvelopeLane,
     ) {
         (content as? ClipContent.FileBacked)?.file?.delete()
         state.ledger.recordFinal(push.clipId)
-        reply(session, ClipWire.applied(pushId, push.clipId), push.clipId)
+        reply(session, ClipWire.applied(pushId, push.clipId), push.clipId, lane)
     }
 
     /** QC8: `ignored`/`conflict`; case (a) also tells the sender which device kept its content (API 6 logic 1). */
@@ -260,24 +272,27 @@ class ClipReceiver(
         push: ClipboardPushData,
         content: ClipContent,
         decision: ConflictDecision,
+        lane: EnvelopeLane,
     ) {
         (content as? ClipContent.FileBacked)?.file?.delete()
         state.ledger.recordFinal(push.clipId)
-        reply(session, ClipWire.ignored(pushId, push.clipId, ClipboardValues.REASON_CONFLICT), push.clipId)
+        reply(session, ClipWire.ignored(pushId, push.clipId, ClipboardValues.REASON_CONFLICT), push.clipId, lane)
         if (decision == ConflictDecision.KEEP_LOCAL_AND_NOTIFY) {
+            // 0.4.7 bulk rule 1: this conflict follows the ack above, same lane, so it cannot overtake it.
             val local = context.network.local()
             val conflict = ClipboardConflictData(push.clipId, push.originDeviceId, local.deviceId, local.name)
-            runCatching { session.send(MessageType.CLIPBOARD, ClipWire.conflict(conflict)) }
+            runCatching { session.send(MessageType.CLIPBOARD, ClipWire.conflict(conflict), lane) }
         }
     }
 
-    /** Sends the `ack` of a push (and keeps it for duplicates); a closed session is not an error here. */
+    /** Sends the `ack` of a push on [lane] (and keeps it for duplicates); a closed session is not an error here. */
     private suspend fun reply(
         session: PeerSession,
         ack: Ack,
         clipId: String?,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
     ) {
-        runCatching { session.sendAck(ack) }
+        runCatching { session.sendAck(ack, lane) }
         BenchLog.event(
             BenchEvent.ACK_SENT,
             "clip" to (clipId ?: "-"),

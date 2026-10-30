@@ -223,7 +223,7 @@ class FakeClient(
             PeerSession.Channel.LAN,
             effective,
             MutableStateFlow<CapabilityData?>(null),
-            { type, plaintext, _ -> sent += Sent(type, plaintext) },
+            { type, plaintext, _, _ -> sent += Sent(type, plaintext) },
             clock,
         )
 

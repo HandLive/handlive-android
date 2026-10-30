@@ -7,8 +7,10 @@ import app.handlive.android.core.protocol.ProtocolException
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.protocol.envelope.EnvelopeHeader
 import app.handlive.android.core.protocol.id.UuidV7Generator
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.TransportConstants
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -91,6 +93,18 @@ class SessionCipherReplayTest {
         val unknown = seal()
         server.recordAck(unknown.id, ack)
         assertNull(server.accept(unknown).earlierAck)
+    }
+
+    @Test
+    fun aDuplicateGetsItsEarlierAckOnTheLaneItWasFirstSentOn() {
+        // 0.4.7 bulk rule 2.
+        val request = seal()
+        server.accept(request)
+        val ack = "{\"re\":\"${request.id}\",\"ok\":true}".toByteArray()
+        server.recordAck(request.id, ack, EnvelopeLane.BULK)
+        val replay = server.accept(request)
+        assertArrayEquals(ack, replay.earlierAck)
+        assertEquals(EnvelopeLane.BULK, replay.earlierLane)
     }
 
     @Test

@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -89,6 +90,66 @@ class BluetoothPeerSocketTest {
             a.outgoing.send(Frame.Text(sent))
             val received = withTimeout(WAIT) { b.incoming.receive() as Frame.Text }
             assertEquals(sent, received.readText())
+        }
+
+    @Test
+    fun aBulkEnvelopeRoundTripsOnChannel0x02() =
+        runBlocking {
+            // 0.4.7: BulkLaneSocket.sendBulk, separate from the control lane's Frame.Text(outgoing.send).
+            val (a, b) = link()
+            val sent = envelope("clipboard", payloadBytes = 8)
+            a.sendBulk(sent)
+            val received = withTimeout(WAIT) { b.incoming.receive() as Frame.Text }
+            assertEquals(sent, received.readText())
+        }
+
+    @Test
+    fun aBulkEnvelopeOverFragmentMaxReassemblesWholeOnTheOtherSide() =
+        runBlocking {
+            val (a, b) = link()
+            val sent = envelope("clipboard", payloadBytes = BtLinkConstants.BULK_FRAGMENT_MAX * 3)
+            a.sendBulk(sent)
+            val received = withTimeout(WAIT) { b.incoming.receive() as Frame.Text }
+            assertEquals(sent, received.readText())
+        }
+
+    @Test
+    fun sendBulkNeverHangsPastBtBulkQueuedConsecutiveEnvelopes() =
+        runBlocking {
+            // 0.4.7 bulk rule 4 (BT_BULK_QUEUED = 2): the gate that backpressures sendBulk must always release
+            // once an earlier envelope fully writes — more envelopes than the queue depth must still all land,
+            // not deadlock. BluetoothLinkSchedulerTest covers the exact drain-signal accounting in isolation.
+            val (a, b) = link()
+            val sent = (1..5).map { envelope("clipboard", payloadBytes = 8) }
+            val sender = launch { sent.forEach { a.sendBulk(it) } }
+            val received = (1..5).map { withTimeout(WAIT) { (b.incoming.receive() as Frame.Text).readText() } }
+            withTimeout(WAIT) { sender.join() }
+            assertEquals(sent, received)
+        }
+
+    @Test
+    fun aBulkFragmentWithLongBitSetClosesTheLink() =
+        runBlocking {
+            // BtTransportFrame.decode already enforces 0.4.7 bulk rule 5 (long=1 on chan 0x02); here end-to-end:
+            // a malformed record written straight to the raw link (no real sender ever builds this) must still
+            // make the receiving BluetoothPeerSocket close instead of delivering garbage.
+            val c1 = SecureRandomBytes.next(KEY_SIZE)
+            val c2 = SecureRandomBytes.next(KEY_SIZE)
+            val (ioA, ioB) = InMemoryBluetoothLinkIo.pair()
+            val b = BluetoothPeerSocket(ioB, BtTransportCipher(c2), BtTransportCipher(c1), scope)
+            val plaintext = ByteArray(256)
+            plaintext[0] = BtLinkConstants.CHAN_BULK.toByte()
+            plaintext[1] = 0x02 // flags: long = 1
+            ioA.writeRecord(BtTransportCipher(c1).seal(plaintext))
+            withTimeout(WAIT) {
+                var closed = false
+                try {
+                    b.incoming.receive()
+                } catch (_: Exception) {
+                    closed = true
+                }
+                assertTrue(closed || b.incoming.isClosedForReceive)
+            }
         }
 
     @Test
