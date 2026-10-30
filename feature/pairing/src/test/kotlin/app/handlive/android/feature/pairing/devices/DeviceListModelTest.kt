@@ -47,6 +47,17 @@ class DeviceListModelTest {
     }
 
     @Test
+    fun bluetoothChannelIsItsOwnLinkNotWifi() {
+        val item =
+            DeviceListModel.item(
+                device,
+                session(setOf(Feature.CLIPBOARD), clipboardOnPeer = true, channel = PeerSession.Channel.BLUETOOTH),
+                true,
+            )
+        assertEquals(DeviceLink.BLUETOOTH, item.link)
+    }
+
+    @Test
     fun clipboardOffOnEitherSideIsExplained() {
         assertEquals(
             ClipboardAvailability.OFF_ON_PEER,
@@ -127,9 +138,10 @@ class DeviceListModelTest {
         clipboardOnPeer: Boolean,
         smsOnPeer: Boolean = false,
         callsOnPeer: Boolean = false,
+        channel: PeerSession.Channel = PeerSession.Channel.LAN,
     ) = PeerSession(
         peer = PeerSession.PeerInfo(device.pairId, device.peerDeviceId, device.peerName, device.peerPlatform),
-        channel = PeerSession.Channel.LAN,
+        channel = channel,
         effectiveFeatures = MutableStateFlow(effective),
         peerCapability =
             MutableStateFlow(

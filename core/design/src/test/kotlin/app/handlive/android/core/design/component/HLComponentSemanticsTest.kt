@@ -103,6 +103,7 @@ class HLComponentSemanticsTest {
             HandLiveTheme(darkTheme = false, highContrast = false) {
                 Column {
                     HLStatusIndicator(status = HLConnectionStatus.ConnectedWiFi, deviceName = "Pixel 8 của Lan")
+                    HLStatusIndicator(status = HLConnectionStatus.ConnectedBluetooth, deviceName = "MacBook của Lan")
                     HLStatusIndicator(status = HLConnectionStatus.ConnectedInternet, deviceName = "iPad")
                     // Not connected: the device name is not read.
                     HLStatusIndicator(status = HLConnectionStatus.Disconnected, deviceName = "Pixel 8 của Lan")
@@ -112,6 +113,7 @@ class HLComponentSemanticsTest {
         compose
             .onNodeWithContentDescription("Đã kết nối qua Wi-Fi với Pixel 8 của Lan")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+        compose.onNodeWithContentDescription("Đã kết nối qua Bluetooth với MacBook của Lan").assertExists()
         compose.onNodeWithContentDescription("Đã kết nối qua Internet với iPad").assertExists()
         compose.onNodeWithContentDescription("Mất kết nối").assertExists()
     }
