@@ -45,9 +45,9 @@ sealed interface ClipMessage {
 }
 
 /**
- * Progress of an image over 1 MiB, or of at least `BULK_DIRECT_MIN` over Bluetooth (CLIP-03 fields 2–4);
- * `percent = null` removes it. [overBluetooth]: the transfer runs on the Bluetooth bulk lane (0.4.7), so CLIP-03
- * field 10 shows under the progress.
+ * Tiến độ của một ảnh trên 1 MiB, hoặc từ `BULK_DIRECT_MIN` trở lên khi qua Bluetooth (CLIP-03 field 2–4);
+ * `percent = null` thì gỡ nó đi. [overBluetooth]: transfer chạy trên làn bulk Bluetooth (0.4.7), nên dòng chữ
+ * CLIP-03 field 10 hiện dưới tiến độ.
  */
 data class TransferProgress(
     val transferId: String,

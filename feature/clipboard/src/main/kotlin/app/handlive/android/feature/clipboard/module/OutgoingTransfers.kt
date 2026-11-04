@@ -137,8 +137,8 @@ class OutgoingTransfers(
 }
 
 /**
- * CLIP-03 field 2: an image shows progress above `PROGRESS_MIN_BYTES`, or from `BULK_DIRECT_MIN` up when the session
- * is over Bluetooth (0.4.7 "Timeouts and progress": about 10 s at 12.9 KB/s, so the user sees it is still running).
+ * CLIP-03 field 2: ảnh hiện tiến độ khi lớn hơn `PROGRESS_MIN_BYTES`, hoặc từ `BULK_DIRECT_MIN` trở lên khi phiên
+ * đi qua Bluetooth (0.4.7 "Timeouts and progress": khoảng 10 s ở 12,9 KB/s, để người dùng thấy việc vẫn đang chạy).
  */
 internal fun showsProgress(
     session: PeerSession,
