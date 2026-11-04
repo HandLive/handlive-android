@@ -18,6 +18,7 @@ import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.core.transport.server.InboundEnvelope
 import app.handlive.android.feature.clipboard.ClipMessage
@@ -175,11 +176,13 @@ class FakeClient(
     val deviceId: String,
     val pairId: String,
     clock: () -> Long,
+    channel: PeerSession.Channel = PeerSession.Channel.LAN,
 ) {
     class Sent(
         val type: MessageType,
         val plaintext: ByteArray,
         val id: String,
+        val lane: EnvelopeLane,
     )
 
     val sent = mutableListOf<Sent>()
@@ -189,12 +192,12 @@ class FakeClient(
     val session =
         PeerSession(
             PeerSession.PeerInfo(pairId, deviceId, name, PeerPlatform.MACOS),
-            PeerSession.Channel.LAN,
+            channel,
             effective,
             capability,
-            { type, plaintext, id ->
+            { type, plaintext, id, lane ->
                 check(connected) { "session closed" }
-                sent += Sent(type, plaintext, id)
+                sent += Sent(type, plaintext, id, lane)
             },
             clock,
         )
@@ -210,6 +213,20 @@ class FakeClient(
 
     fun cancels(): List<ClipboardCancelData> =
         ops(ClipboardOp.CANCEL, ClipboardCancelData.serializer()).map { it.second }
+
+    /** 0.4.7: the lane of the envelope with [id] — `sent` keeps every envelope this client has received. */
+    fun laneOf(id: String): EnvelopeLane = sent.first { it.id == id }.lane
+
+    /** Lane of every `clipboard/cancel`, same order as [cancels]. */
+    fun cancelLanes(): List<EnvelopeLane> =
+        ops(ClipboardOp.CANCEL, ClipboardCancelData.serializer()).map { laneOf(it.first) }
+
+    /** Lane of every `clipboard/chunk`, same order as [chunks]. */
+    fun chunkLanes(): List<EnvelopeLane> =
+        sent.filter { it.type == MessageType.CLIPBOARD && it.plaintext.first() == 0.toByte() }.map { it.lane }
+
+    /** Lane of every `ack`, same order as [acks]. */
+    fun ackLanes(): List<EnvelopeLane> = sent.filter { it.type == MessageType.ACK }.map { it.lane }
 
     fun conflicts(): List<ClipboardConflictData> =
         ops(ClipboardOp.CONFLICT, ClipboardConflictData.serializer()).map {
@@ -272,6 +289,9 @@ class ClipboardHarness(
 
     val mac = FakeClient("MacBook của Lan", MAC_ID, "pair-mac", wall)
     val ipad = FakeClient("iPad của Lan", IPAD_ID, "pair-ipad", wall)
+
+    /** The same Mac reached over the Bluetooth link (0.4.5); connect it instead of [mac], never both. */
+    val macOverBluetooth = FakeClient("MacBook của Lan", MAC_ID, "pair-mac", wall, PeerSession.Channel.BLUETOOTH)
 
     init {
         module.start()

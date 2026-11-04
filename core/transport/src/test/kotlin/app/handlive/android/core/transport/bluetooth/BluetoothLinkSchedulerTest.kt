@@ -3,6 +3,7 @@ package app.handlive.android.core.transport.bluetooth
 import app.handlive.android.core.protocol.bluetooth.BtLinkConstants
 import app.handlive.android.core.protocol.bluetooth.BtTransportFrame
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -96,6 +97,34 @@ class BluetoothLinkSchedulerTest {
         scheduler.enqueueControlEnvelope("session", ByteArray(5))
         val frame = BtTransportFrame.decode(scheduler.poll()!!)
         assertTrue(frame.long)
+    }
+
+    @Test
+    fun onDrainedReportsTheLastFragmentOfABulkEnvelopeOnlyAtTheVeryLastFragment() {
+        // 0.4.7 bulk rule 4: the signal `BluetoothPeerSocket` uses to free a `BT_BULK_QUEUED` slot.
+        val scheduler = BluetoothLinkScheduler(bulkInflight = 100)
+        scheduler.enqueueBulk(ByteArray(BtLinkConstants.BULK_FRAGMENT_MAX * 2 + 1)) // 3 fragments
+        requireNotNull(scheduler.poll())
+        assertFalse(scheduler.onDrained())
+        requireNotNull(scheduler.poll())
+        assertFalse(scheduler.onDrained())
+        requireNotNull(scheduler.poll())
+        assertTrue(scheduler.onDrained())
+    }
+
+    @Test
+    fun onDrainedOfAShortFrameNeverSignalsABulkCompletion() {
+        // poll() must push an entry for EVERY frame it returns (short included) to stay in lockstep with
+        // onDrained(), since the real write loop calls onDrained() once per poll() — not just for long/bulk.
+        val scheduler = BluetoothLinkScheduler()
+        scheduler.enqueueBulk(ByteArray(10)) // 1 fragment, last of its envelope
+        scheduler.enqueueControlEnvelope("ping", ByteArray(5))
+        val first = BtTransportFrame.decode(scheduler.poll()!!)
+        assertEquals(false, first.long)
+        assertFalse(scheduler.onDrained())
+        val second = BtTransportFrame.decode(scheduler.poll()!!)
+        assertEquals(BtLinkConstants.CHAN_BULK, second.chan)
+        assertTrue(scheduler.onDrained())
     }
 
     @Test

@@ -8,6 +8,7 @@ import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.session.SessionByeData
 import app.handlive.android.core.protocol.session.SessionOp
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.WsCloseCode
 import app.handlive.android.core.transport.capability.Feature
 import app.handlive.android.core.transport.session.SessionCipher
@@ -92,13 +93,19 @@ class ControlSession internal constructor(
 
     /**
      * Gửi một envelope ứng dụng đã mã hóa; trả `id` của envelope. A caller-chosen UUIDv7 [id] lets a request's `ack`
-     * waiter exist before the envelope leaves.
+     * waiter exist before the envelope leaves. [lane] (0.4.7): ignored on a LAN or relay session (single lane).
      */
     suspend fun send(
         type: MessageType,
         plaintext: ByteArray,
         id: String? = null,
-    ): String = if (id == null) channel.send(type.wire, plaintext) else channel.send(type.wire, plaintext, id)
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
+    ): String =
+        if (id == null) {
+            channel.send(type.wire, plaintext, lane = lane)
+        } else {
+            channel.send(type.wire, plaintext, id, lane)
+        }
 
     /** Gửi `capability/update` (ảnh chụp đầy đủ) khi cấu hình Android đổi, và tính lại tính năng hiệu lực. */
     suspend fun sendCapabilityUpdate() {

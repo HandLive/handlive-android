@@ -53,7 +53,7 @@ class UnpairControllerTest {
             channel = channel,
             effectiveFeatures = MutableStateFlow(emptySet()),
             peerCapability = MutableStateFlow(null),
-            sender = { type, plaintext, id ->
+            sender = { type, plaintext, id, _ ->
                 sent += type to plaintext
                 if (type == MessageType.PAIR && answerRevoke) {
                     // The Mac acknowledges before it cleans up (API 1 rule 1).

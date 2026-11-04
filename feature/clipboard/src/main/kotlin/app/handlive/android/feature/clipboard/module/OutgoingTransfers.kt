@@ -5,6 +5,7 @@ import app.handlive.android.core.protocol.clipboard.ClipboardChunkPlaintext
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.id.UuidV7Generator
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.feature.clipboard.ClipNotices
 import app.handlive.android.feature.clipboard.TransferProgress
 import app.handlive.android.feature.clipboard.engine.ChunkSource
@@ -46,12 +47,17 @@ class OutgoingTransfers(
         val progress = progressOf(session, clip, transferId)
         return try {
             ChunkSource.open(clip.content).use { source ->
-                session.request(MessageType.CLIPBOARD, ClipWire.chunkedPush(clip, transferId)) {
+                session.request(
+                    MessageType.CLIPBOARD,
+                    ClipWire.chunkedPush(clip, transferId),
+                    lane = EnvelopeLane.BULK,
+                ) {
                     onPushSent()
                     for (index in 0 until source.chunkCount) {
                         session.send(
                             MessageType.CLIPBOARD,
                             ClipboardChunkPlaintext(transferId, index, source.next()).encode(),
+                            EnvelopeLane.BULK,
                         )
                         progress?.let { notices.progress(it.copy(percent = percentOf(index + 1, source.chunkCount))) }
                     }
@@ -71,7 +77,10 @@ class OutgoingTransfers(
         val entry = active[session.pairId]?.takeIf { it.transferId == transferId } ?: return
         stop(session.pairId, entry)
         entry.clip.deliveredTo += session.pairId
-        runCatching { session.send(MessageType.CLIPBOARD, ClipWire.cancel(transferId, ClipboardValues.CANCEL_USER)) }
+        runCatching {
+            val cancel = ClipWire.cancel(transferId, ClipboardValues.CANCEL_USER)
+            session.send(MessageType.CLIPBOARD, cancel, EnvelopeLane.BULK)
+        }
     }
 
     /** The receiver cancelled (`user` or `timeout`, API 5 rule 2); `user` means the clip is not replayed to it. */
@@ -95,7 +104,8 @@ class OutgoingTransfers(
         val previous = active[session.pairId] ?: return
         stop(session.pairId, previous)
         runCatching {
-            session.send(MessageType.CLIPBOARD, ClipWire.cancel(previous.transferId, ClipboardValues.CANCEL_SUPERSEDED))
+            val cancel = ClipWire.cancel(previous.transferId, ClipboardValues.CANCEL_SUPERSEDED)
+            session.send(MessageType.CLIPBOARD, cancel, EnvelopeLane.BULK)
         }
     }
 
@@ -112,12 +122,35 @@ class OutgoingTransfers(
         clip: Clip,
         transferId: String,
     ): TransferProgress? =
-        if (clip.kind == ClipboardValues.KIND_IMAGE && clip.content.size > ClipLimits.PROGRESS_MIN_BYTES) {
-            TransferProgress(transferId, session.pairId, session.peerName, sending = true, percent = null)
+        if (showsProgress(session, clip.kind, clip.content.size)) {
+            TransferProgress(
+                transferId,
+                session.pairId,
+                session.peerName,
+                sending = true,
+                percent = null,
+                overBluetooth = session.channel == PeerSession.Channel.BLUETOOTH,
+            )
         } else {
             null
         }
 }
+
+/**
+ * CLIP-03 field 2: ảnh hiện tiến độ khi lớn hơn `PROGRESS_MIN_BYTES`, hoặc từ `BULK_DIRECT_MIN` trở lên khi phiên
+ * đi qua Bluetooth (0.4.7 "Timeouts and progress": khoảng 10 s ở 12,9 KB/s, để người dùng thấy việc vẫn đang chạy).
+ */
+internal fun showsProgress(
+    session: PeerSession,
+    kind: String,
+    size: Long,
+): Boolean =
+    kind == ClipboardValues.KIND_IMAGE &&
+        if (session.channel == PeerSession.Channel.BLUETOOTH) {
+            size >= ClipLimits.BULK_DIRECT_MIN_BYTES
+        } else {
+            size > ClipLimits.PROGRESS_MIN_BYTES
+        }
 
 /** Progress in whole percent (CLIP-03 API 3 rule 6: chunks done / `chunk_count`). */
 internal fun percentOf(

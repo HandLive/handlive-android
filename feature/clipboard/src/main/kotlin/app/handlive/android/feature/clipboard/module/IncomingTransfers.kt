@@ -6,6 +6,7 @@ import app.handlive.android.core.protocol.clipboard.ClipboardChunkPlaintext
 import app.handlive.android.core.protocol.clipboard.ClipboardPushData
 import app.handlive.android.core.protocol.clipboard.ClipboardValues
 import app.handlive.android.core.protocol.envelope.MessageType
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.feature.clipboard.ClipMessage
 import app.handlive.android.feature.clipboard.TransferProgress
 import app.handlive.android.feature.clipboard.engine.ClipLimits
@@ -148,7 +149,11 @@ class IncomingTransfers(
     ) {
         finish(incoming)
         val transferId = incoming.transfer.transfer.transferId
-        cancel?.let { runCatching { incoming.session.send(MessageType.CLIPBOARD, ClipWire.cancel(transferId, it)) } }
+        cancel?.let {
+            runCatching {
+                incoming.session.send(MessageType.CLIPBOARD, ClipWire.cancel(transferId, it), EnvelopeLane.BULK)
+            }
+        }
         // A cancelled clip may come again (a timeout is "not received", QC7), so it is not a final outcome.
         context.state.ledger.recordRejected(incoming.push.clipId)
         reply(incoming.session, ClipWire.ignored(incoming.pushId, incoming.push.clipId, reason), incoming.push.clipId)
@@ -180,8 +185,15 @@ class IncomingTransfers(
         push: ClipboardPushData,
     ): TransferProgress? {
         val transfer = checkNotNull(push.transfer)
-        return if (push.kind == ClipboardValues.KIND_IMAGE && transfer.size > ClipLimits.PROGRESS_MIN_BYTES) {
-            TransferProgress(transfer.transferId, session.pairId, session.peerName, sending = false, percent = null)
+        return if (showsProgress(session, push.kind, transfer.size)) {
+            TransferProgress(
+                transfer.transferId,
+                session.pairId,
+                session.peerName,
+                sending = false,
+                percent = null,
+                overBluetooth = session.channel == PeerSession.Channel.BLUETOOTH,
+            )
         } else {
             null
         }

@@ -68,6 +68,18 @@ class BtTransportFrameTest {
     }
 
     @Test
+    fun bulkChanWithLongBitSetClosesTheLink() {
+        // 0.4.7 bulk rule 5: bulk (chan 0x02) never sets long=1; không có vector sẵn cho tổ hợp này nên dựng thủ công
+        // như bulkFragmentOverMaxClosesTheLink.
+        val padded = ByteArray(256)
+        padded[0] = BtLinkConstants.CHAN_BULK.toByte()
+        padded[1] = 0x02 // flags: long = 1, more = 0
+        padded[2] = 0
+        padded[3] = 0
+        assertThrows(BtLinkException::class.java) { BtTransportFrame.decode(padded) }
+    }
+
+    @Test
     fun maxDlenMatchesEachLane() {
         val control = BtLinkConstants.CHAN_CONTROL
         val bulk = BtLinkConstants.CHAN_BULK

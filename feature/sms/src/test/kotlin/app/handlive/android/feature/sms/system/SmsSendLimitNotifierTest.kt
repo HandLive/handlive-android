@@ -29,7 +29,7 @@ class SmsSendLimitNotifierTest {
             PeerSession.Channel.LAN,
             MutableStateFlow(emptySet()),
             MutableStateFlow<CapabilityData?>(null),
-            { _, _, _ -> },
+            { _, _, _, _ -> },
             { 0L },
         )
 

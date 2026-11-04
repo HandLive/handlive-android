@@ -11,6 +11,8 @@ import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
 import app.handlive.android.core.protocol.session.SessionOp
 import app.handlive.android.core.protocol.session.SessionRekeyData
+import app.handlive.android.core.transport.BulkLaneSocket
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.session.RekeyRequestResult
 import app.handlive.android.core.transport.session.SessionCipher
@@ -43,16 +45,18 @@ internal class EncryptedEnvelopeChannel(
 
     /**
      * Mã hóa và gửi; nếu đến ngưỡng rekey và chưa có rekey đang chờ thì gửi `session/rekey` trước. [id] lets a
-     * caller that waits for an `ack` register its waiter before the envelope leaves.
+     * caller that waits for an `ack` register its waiter before the envelope leaves. [lane] (0.4.7): bên gọi
+     * (mô-đun tính năng) chọn, không phải transport tự đoán; bị bỏ qua khi [socket] không phải [BulkLaneSocket].
      */
     suspend fun send(
         type: String,
         plaintext: ByteArray,
         id: String = ids.next(),
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
     ): String =
         lock.withLock {
             startRekeyIfDueLocked()
-            id.also { writeLocked(type, plaintext, it) }
+            id.also { writeLocked(type, plaintext, it, lane) }
         }
 
     suspend fun startRekeyIfDue() = lock.withLock { startRekeyIfDueLocked() }
@@ -101,18 +105,33 @@ internal class EncryptedEnvelopeChannel(
         }
     }
 
-    /** 0.5.1 rule 2: a duplicate gets the earlier `ack` again, sealed anew under the current keys. */
-    suspend fun resendAck(ack: ByteArray) = lock.withLock { writeLocked(MessageType.ACK.wire, ack, ids.next()) }
+    /**
+     * 0.5.1 rule 2: a duplicate gets the earlier `ack` again, sealed anew under the current keys, on [lane] — the
+     * lane it was first sent on (0.4.7 bulk rule 2), so it cannot overtake a bulk envelope still queued.
+     */
+    suspend fun resendAck(
+        ack: ByteArray,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
+    ) = lock.withLock { writeLocked(MessageType.ACK.wire, ack, ids.next(), lane) }
 
     private suspend fun writeLocked(
         type: String,
         plaintext: ByteArray,
         id: String,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
     ) {
         if (type == MessageType.ACK.wire) {
-            runCatching { PlaintextCodec.decodeAck(plaintext).re }.getOrNull()?.let { cipher.recordAck(it, plaintext) }
+            runCatching { PlaintextCodec.decodeAck(plaintext).re }.getOrNull()?.let {
+                cipher.recordAck(it, plaintext, lane)
+            }
         }
         val envelope = cipher.seal(EnvelopeHeader(type, id, clock()), plaintext)
-        socket.send(Frame.Text(EnvelopeCodec.encode(envelope)))
+        val encoded = EnvelopeCodec.encode(envelope)
+        val bulkSocket = socket as? BulkLaneSocket
+        if (lane == EnvelopeLane.BULK && bulkSocket != null) {
+            bulkSocket.sendBulk(encoded)
+        } else {
+            socket.send(Frame.Text(encoded))
+        }
     }
 }

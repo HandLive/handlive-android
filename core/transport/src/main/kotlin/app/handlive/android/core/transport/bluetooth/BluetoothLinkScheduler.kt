@@ -29,6 +29,9 @@ class BluetoothLinkScheduler(
     private var longBulkInflight = 0
     private val typesPendingLong = mutableSetOf<String>()
 
+    /** Song song với thứ tự [dispatch]: `true` khi mảnh đó là mảnh cuối của một envelope bulk, cho [onDrained]. */
+    private val inflightCompletesBulkEnvelope = ArrayDeque<Boolean>()
+
     /** Phong bì JSON (0.5.1) trên kênh điều khiển `0x01`; tự chọn làn ngắn hay dài theo 0.4.5 "Control channel". */
     fun enqueueControlEnvelope(
         type: String,
@@ -52,23 +55,33 @@ class BluetoothLinkScheduler(
 
     fun hasPending(): Boolean = short.isNotEmpty() || long.isNotEmpty() || bulk.isNotEmpty()
 
-    /** Mảnh plaintext kế tiếp theo ưu tiên 0.4.5 "Priority", hay `null` nếu không còn gì để gửi ngay. */
+    /**
+     * Mảnh plaintext kế tiếp theo ưu tiên 0.4.5 "Priority", hay `null` nếu không còn gì để gửi ngay. Bên gọi viết
+     * mảnh này lên dây rồi gọi [onDrained] đúng một lần cho nó (vòng ghi của `BluetoothPeerSocket` làm vậy, tuần
+     * tự) — [inflightCompletesBulkEnvelope] phải nhận một mục cho MỌI mảnh trả về ở đây, không riêng dài/bulk, để
+     * khớp thứ tự với [onDrained].
+     */
     fun poll(): ByteArray? =
-        short.removeFirstOrNull()
-            ?: if (longBulkInflight >= bulkInflight) {
-                null
-            } else {
-                long.removeFirstOrNull()?.let { dispatch(it) }
-                    ?: bulk.removeFirstOrNull()?.let { dispatch(it) }
-            }
+        short.removeFirstOrNull()?.also { inflightCompletesBulkEnvelope.addLast(false) }
+            ?: nextLongOrBulk()?.let { dispatch(it) }
 
-    /** Gọi khi một bản ghi dài/bulk đã [poll] trước đó thật sự xả khỏi bộ đệm ghi (mở lại một chỗ inflight). */
-    fun onDrained() {
+    /** Làn dài trước làn bulk, và chỉ khi còn chỗ trong [bulkInflight]; hết chỗ thì `null` dù hàng đợi còn mảnh. */
+    private fun nextLongOrBulk(): QueuedFrame? =
+        if (longBulkInflight >= bulkInflight) null else long.removeFirstOrNull() ?: bulk.removeFirstOrNull()
+
+    /**
+     * Gọi khi một bản ghi dài/bulk đã [poll] trước đó thật sự xả khỏi bộ đệm ghi (mở lại một chỗ inflight).
+     * Trả `true` khi bản ghi đó là mảnh cuối của một envelope bulk — envelope ấy giờ đã "fully written" (0.4.7
+     * bulk rule 4), bên gọi (chủ của [enqueueBulk]) có thể mở thêm một chỗ hàng đợi `BT_BULK_QUEUED`.
+     */
+    fun onDrained(): Boolean {
         if (longBulkInflight > 0) longBulkInflight--
+        return inflightCompletesBulkEnvelope.removeFirstOrNull() == true
     }
 
     private fun dispatch(frame: QueuedFrame): ByteArray {
         longBulkInflight++
+        inflightCompletesBulkEnvelope.addLast(frame.isLastOfMessage && frame.type == null)
         if (frame.isLastOfMessage) frame.type?.let { typesPendingLong -= it }
         return frame.bytes
     }

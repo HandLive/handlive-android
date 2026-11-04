@@ -6,6 +6,7 @@ import app.handlive.android.core.crypto.message.EnvelopeCipher
 import app.handlive.android.core.protocol.ProtocolException
 import app.handlive.android.core.protocol.envelope.Envelope
 import app.handlive.android.core.protocol.envelope.EnvelopeHeader
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.TransportConstants
 import java.util.UUID
 import kotlin.time.Duration
@@ -48,12 +49,14 @@ class SessionCipher(
 
     /**
      * A decrypted envelope. [replayed]: its `id` was already accepted in this epoch or the previous one; [earlierAck]
-     * is the `ack` plaintext sent for it, if kept. [overflow]: the direction reached `MAX_TRACKED_IDS` (close 4410).
+     * is the `ack` plaintext sent for it, if kept, on [earlierLane] (0.4.7 bulk rule 2: resent on the lane it was
+     * first sent on). [overflow]: the direction reached `MAX_TRACKED_IDS` (close 4410).
      */
     class Opened(
         val plaintext: ByteArray,
         val replayed: Boolean,
         val earlierAck: ByteArray? = null,
+        val earlierLane: EnvelopeLane = EnvelopeLane.CONTROL,
         val overflow: Boolean = false,
     )
 
@@ -78,15 +81,16 @@ class SessionCipher(
     fun accept(envelope: Envelope): Opened {
         val (plaintext, withPrevious) = decrypt(envelope)
         val seen = window.record(UUID.fromString(envelope.id), withPrevious)
-        return Opened(plaintext, seen.replayed, seen.earlierAck, seen.overflow)
+        return Opened(plaintext, seen.replayed, seen.earlierAck, seen.earlierLane, seen.overflow)
     }
 
-    /** The `ack` this side sends for request [re], kept to answer a duplicate for the whole epoch. */
+    /** The `ack` this side sends for request [re], kept to answer a duplicate for the whole epoch, on [lane]. */
     fun recordAck(
         re: String,
         ack: ByteArray,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
     ) {
-        runCatching { UUID.fromString(re) }.getOrNull()?.let { window.recordAck(it, ack) }
+        runCatching { UUID.fromString(re) }.getOrNull()?.let { window.recordAck(it, ack, lane) }
     }
 
     private fun decrypt(envelope: Envelope): Pair<ByteArray, Boolean> {

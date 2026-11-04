@@ -1,5 +1,6 @@
 package app.handlive.android.core.transport.session
 
+import app.handlive.android.core.transport.EnvelopeLane
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,6 +47,21 @@ class ReplayWindowTest {
         window.rotate()
         assertEquals(2L, window.storedAckBytes)
         assertEquals(1, window.storedAcks)
+    }
+
+    @Test
+    fun theEarlierAckIsResentOnTheLaneItWasFirstSentOn() {
+        // 0.4.7 bulk rule 2: an ack kept to answer duplicates is resent on the lane it was first sent on.
+        val id = accepted()
+        window.recordAck(id, ByteArray(4), EnvelopeLane.BULK)
+        val seen = window.record(id, false)
+        assertArrayEquals(ByteArray(4), seen.earlierAck)
+        assertEquals(EnvelopeLane.BULK, seen.earlierLane)
+    }
+
+    @Test
+    fun anUnseenIdHasNoEarlierLaneEither() {
+        assertEquals(EnvelopeLane.CONTROL, window.record(UUID.randomUUID(), false).earlierLane)
     }
 
     @Test

@@ -259,7 +259,7 @@ internal class ControlConnectionHandler(
 
                 // 0.5.1 rule 2: the earlier ack again if one was sent; never processed twice.
                 opened.replayed -> {
-                    opened.earlierAck?.let { session.channel.resendAck(it) }
+                    opened.earlierAck?.let { session.channel.resendAck(it, opened.earlierLane) }
                     null
                 }
 

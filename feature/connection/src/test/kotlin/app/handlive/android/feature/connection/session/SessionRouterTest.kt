@@ -45,7 +45,7 @@ class SessionRouterTest {
             channel = PeerSession.Channel.LAN,
             effectiveFeatures = MutableStateFlow(emptySet()),
             peerCapability = MutableStateFlow(null),
-            sender = { type, plaintext, id -> sent += Sent(type, plaintext, id) },
+            sender = { type, plaintext, id, _ -> sent += Sent(type, plaintext, id) },
             clock = { now },
         )
     private val router = SessionRouter(clock = { now })
@@ -122,7 +122,7 @@ class SessionRouterTest {
                     channel = PeerSession.Channel.RELAY,
                     effectiveFeatures = MutableStateFlow(emptySet()),
                     peerCapability = MutableStateFlow(null),
-                    sender = { type, plaintext, id -> sent += Sent(type, plaintext, id) },
+                    sender = { type, plaintext, id, _ -> sent += Sent(type, plaintext, id) },
                     clock = { now },
                 )
             relayed.ledger = session.ledger

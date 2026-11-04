@@ -7,6 +7,7 @@ import app.handlive.android.core.protocol.capability.CapabilityData
 import app.handlive.android.core.protocol.envelope.MessageType
 import app.handlive.android.core.protocol.envelope.PlaintextCodec
 import app.handlive.android.core.protocol.id.UuidV7Generator
+import app.handlive.android.core.transport.EnvelopeLane
 import app.handlive.android.core.transport.TransportConstants
 import app.handlive.android.core.transport.capability.Feature
 import kotlinx.coroutines.CompletableDeferred
@@ -21,6 +22,7 @@ fun interface EnvelopeSender {
         type: MessageType,
         plaintext: ByteArray,
         id: String,
+        lane: EnvelopeLane,
     )
 }
 
@@ -66,28 +68,30 @@ class PeerSession(
 
     fun isEffective(feature: Feature): Boolean = feature in effectiveFeatures.value
 
-    /** Sends an event (no `ack`); returns its `id`. */
+    /** Sends an event (no `ack`) on [lane] (0.4.7); returns its `id`. */
     suspend fun send(
         type: MessageType,
         plaintext: ByteArray,
-    ): String = ids.next().also { sender.send(type, plaintext, it) }
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
+    ): String = ids.next().also { sender.send(type, plaintext, it, lane) }
 
     /**
      * Sends a request and waits for its `ack` (0.5.1 rule 1); throws [AckTimeoutException] after [timeout], counted
      * from the end of [afterSend] — a chunked clip sends its chunks there and the 10 s start after the last one
-     * (CLIP-03 API 3 rule 3). [afterSend] gets the request's `id`.
+     * (CLIP-03 API 3 rule 3). [afterSend] gets the request's `id`. [lane] (0.4.7): the caller picks it.
      */
     suspend fun request(
         type: MessageType,
         plaintext: ByteArray,
         timeout: Duration = TransportConstants.REQUEST_TIMEOUT,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
         afterSend: suspend (String) -> Unit = {},
     ): Ack {
         val id = ids.next()
         val waiter = CompletableDeferred<Ack>()
         pendingAcks[id] = waiter
         return try {
-            sender.send(type, plaintext, id)
+            sender.send(type, plaintext, id, lane)
             afterSend(id)
             withTimeoutOrNull(timeout) { waiter.await() } ?: throw AckTimeoutException()
         } finally {
@@ -95,17 +99,21 @@ class PeerSession(
         }
     }
 
-    /** Sends the `ack` of request [re] and keeps it for duplicates. */
-    suspend fun sendAck(ack: Ack) {
+    /** Sends the `ack` of request [re] on [lane] and keeps it for duplicates. */
+    suspend fun sendAck(
+        ack: Ack,
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
+    ) {
         ledger.recordAck(ack)
-        send(MessageType.ACK, PlaintextCodec.encodeAck(ack))
+        send(MessageType.ACK, PlaintextCodec.encodeAck(ack), lane)
     }
 
     suspend fun sendError(
         re: String,
         code: ErrorCode,
         message: String,
-    ) = sendAck(Ack.failure(re, code, message))
+        lane: EnvelopeLane = EnvelopeLane.CONTROL,
+    ) = sendAck(Ack.failure(re, code, message), lane)
 
     /** An `ack` for no waiter (late, after a timeout) is dropped. */
     internal fun completeAck(ack: Ack) {
