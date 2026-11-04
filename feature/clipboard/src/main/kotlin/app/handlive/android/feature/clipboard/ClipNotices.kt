@@ -44,13 +44,18 @@ sealed interface ClipMessage {
     ) : ClipMessage
 }
 
-/** Progress of an image over 1 MiB (CLIP-03 fields 2–4); `percent = null` removes it. */
+/**
+ * Progress of an image over 1 MiB, or of at least `BULK_DIRECT_MIN` over Bluetooth (CLIP-03 fields 2–4);
+ * `percent = null` removes it. [overBluetooth]: the transfer runs on the Bluetooth bulk lane (0.4.7), so CLIP-03
+ * field 10 shows under the progress.
+ */
 data class TransferProgress(
     val transferId: String,
     val pairId: String,
     val deviceName: String,
     val sending: Boolean,
     val percent: Int?,
+    val overBluetooth: Boolean = false,
 )
 
 /**

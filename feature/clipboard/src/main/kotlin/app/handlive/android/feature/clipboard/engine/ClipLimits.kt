@@ -17,6 +17,9 @@ object ClipLimits {
     /** Images above 1 MiB show progress (CLIP-03 field 2). */
     const val PROGRESS_MIN_BYTES = 1_048_576L
 
+    /** `BULK_DIRECT_MIN` (0.4.7): over Bluetooth, images of at least 128 KiB show progress (CLIP-03 field 2, 10). */
+    const val BULK_DIRECT_MIN_BYTES = 128 * 1024L
+
     /** `CLIP_STALE_AFTER`: replay window (QC7), sensitive content and "Send Again" lifetime (QC3, CLIP-01 field 13). */
     const val STALE_AFTER_MILLIS = 120_000L
 

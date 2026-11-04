@@ -122,12 +122,35 @@ class OutgoingTransfers(
         clip: Clip,
         transferId: String,
     ): TransferProgress? =
-        if (clip.kind == ClipboardValues.KIND_IMAGE && clip.content.size > ClipLimits.PROGRESS_MIN_BYTES) {
-            TransferProgress(transferId, session.pairId, session.peerName, sending = true, percent = null)
+        if (showsProgress(session, clip.kind, clip.content.size)) {
+            TransferProgress(
+                transferId,
+                session.pairId,
+                session.peerName,
+                sending = true,
+                percent = null,
+                overBluetooth = session.channel == PeerSession.Channel.BLUETOOTH,
+            )
         } else {
             null
         }
 }
+
+/**
+ * CLIP-03 field 2: an image shows progress above `PROGRESS_MIN_BYTES`, or from `BULK_DIRECT_MIN` up when the session
+ * is over Bluetooth (0.4.7 "Timeouts and progress": about 10 s at 12.9 KB/s, so the user sees it is still running).
+ */
+internal fun showsProgress(
+    session: PeerSession,
+    kind: String,
+    size: Long,
+): Boolean =
+    kind == ClipboardValues.KIND_IMAGE &&
+        if (session.channel == PeerSession.Channel.BLUETOOTH) {
+            size >= ClipLimits.BULK_DIRECT_MIN_BYTES
+        } else {
+            size > ClipLimits.PROGRESS_MIN_BYTES
+        }
 
 /** Progress in whole percent (CLIP-03 API 3 rule 6: chunks done / `chunk_count`). */
 internal fun percentOf(

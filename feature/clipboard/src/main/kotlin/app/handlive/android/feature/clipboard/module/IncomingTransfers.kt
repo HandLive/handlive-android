@@ -185,8 +185,15 @@ class IncomingTransfers(
         push: ClipboardPushData,
     ): TransferProgress? {
         val transfer = checkNotNull(push.transfer)
-        return if (push.kind == ClipboardValues.KIND_IMAGE && transfer.size > ClipLimits.PROGRESS_MIN_BYTES) {
-            TransferProgress(transfer.transferId, session.pairId, session.peerName, sending = false, percent = null)
+        return if (showsProgress(session, push.kind, transfer.size)) {
+            TransferProgress(
+                transfer.transferId,
+                session.pairId,
+                session.peerName,
+                sending = false,
+                percent = null,
+                overBluetooth = session.channel == PeerSession.Channel.BLUETOOTH,
+            )
         } else {
             null
         }
