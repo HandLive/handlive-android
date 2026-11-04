@@ -129,7 +129,7 @@ class ClipNotifier(
                 NumberFormat.getPercentInstance().format(percent / FULL.toDouble()),
             )
         val cancel = ClipActionReceiver.cancelTransfer(context, progress.pairId, progress.transferId, progress.sending)
-        val notification =
+        val builder =
             builder()
                 .setSmallIcon(DesignR.drawable.ic_symbol_image)
                 .setContentText(text)
@@ -137,8 +137,22 @@ class ClipNotifier(
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .addAction(0, context.getString(R.string.common_cancel), cancel)
-                .build()
-        post(ID_PROGRESS, progress.transferId, notification)
+        // CLIP-03 field 10: qua liên kết Bluetooth (0.4.7) thêm dòng báo có thể mất vài phút, ngay dưới dòng phần trăm.
+        if (progress.overBluetooth) {
+            val noteId =
+                if (progress.sending) {
+                    R.string.clipboard_bulk_bluetooth_sending
+                } else {
+                    R.string.clipboard_bulk_bluetooth_receiving
+                }
+            val bigText =
+                buildString {
+                    appendLine(text)
+                    append(context.getString(noteId))
+                }
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+        }
+        post(ID_PROGRESS, progress.transferId, builder.build())
     }
 
     private fun builder() =
