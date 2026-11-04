@@ -33,7 +33,13 @@ class BluetoothPeerSocketPriorityTest {
         type: String,
         bytes: Int,
     ) = EnvelopeCodec.encode(
-        Envelope(Envelope.VERSION, type, ids.next(), System.currentTimeMillis(), Base64Codecs.encodeB64(ByteArray(bytes))),
+        Envelope(
+            Envelope.VERSION,
+            type,
+            ids.next(),
+            System.currentTimeMillis(),
+            Base64Codecs.encodeB64(ByteArray(bytes)),
+        ),
     )
 
     @Test

@@ -4,12 +4,10 @@ import app.handlive.android.core.protocol.bluetooth.BtLinkConstants
 import app.handlive.android.core.protocol.bluetooth.BtLinkException
 import app.handlive.android.core.protocol.bluetooth.BtTransportFrame
 import app.handlive.android.core.protocol.envelope.Envelope
-import app.handlive.android.core.protocol.envelope.EnvelopeCodec
 import app.handlive.android.core.transport.BulkLaneSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
 import io.ktor.websocket.WebSocketSession
-import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -28,9 +26,9 @@ import kotlin.coroutines.CoroutineContext
  * Một phiên `/v1/ctl` qua liên kết Bluetooth đã qua bắt tay bảo mật liên kết (0.4.5 bước 4-5, #191): như
  * `RelayPeerSocket` của relay, `ControlServer.serveBluetoothPeer` nhận socket ảo này mà không đụng tới dây L2CAP
  * bên dưới — E2E `session/hello` (0.6.3) chạy y nguyên bên trong (0.4.5 bước 6). [sendCipher]/[receiveCipher] là
- * hai nửa của `Split()`; việc cắt mảnh/ưu tiên là [BluetoothLinkScheduler], ghép lại làn dài là
- * [BluetoothLongLaneReassembler], làn bulk (`chan` = 0x02, 0.4.7) là [BluetoothBulkLane] và [sendBulk] (cả ba
- * của #191/A7.4). [onFirstRecordOpened]/[onFirstRecordRejected] báo bước 5 cho
+ * hai nửa của `Split()`; việc cắt mảnh/ưu tiên là [BluetoothLinkScheduler] (vòng ghi: [BluetoothLinkWritePump]),
+ * ghép lại làn dài là [BluetoothLongLaneReassembler], làn bulk (`chan` = 0x02, 0.4.7) là [BluetoothBulkLane] và
+ * [sendBulk] (cả ba của #191/A7.4). [onFirstRecordOpened]/[onFirstRecordRejected] báo bước 5 cho
  * `BluetoothLinkAcceptor` (admission, `BT_PREAUTH_TIMEOUT`).
  */
 internal data class BluetoothPeerSocketCallbacks(
@@ -52,9 +50,14 @@ internal class BluetoothPeerSocket(
 
     private val incomingFrames = Channel<Frame>(Channel.UNLIMITED)
     private val outgoingFrames = Channel<Frame>(Channel.UNLIMITED)
-    private val scheduler = BluetoothLinkScheduler()
     private val reassembler = BluetoothLongLaneReassembler()
     private val bulkLane = BluetoothBulkLane()
+    private val writePump =
+        BluetoothLinkWritePump(
+            outgoing = outgoingFrames,
+            writePlaintext = { io.writeRecord(sendCipher.seal(it)) },
+            onBulkEnvelopeWritten = bulkLane::onEnvelopeWritten,
+        )
     private var anyRecordOpened = false
 
     /** Vòng ghi đã dừng: mọi frame xếp trước một `Frame.Close` đã lên dây (hoặc dây đã đứt). */
@@ -118,15 +121,7 @@ internal class BluetoothPeerSocket(
 
     private suspend fun writeLoop() {
         try {
-            for (frame in outgoingFrames) {
-                when (frame) {
-                    is Frame.Text -> enqueueControlEnvelope(frame.readText())
-                    is Frame.Binary -> scheduler.enqueueBulk(frame.data)
-                    is Frame.Close -> break
-                    else -> Unit
-                }
-                drainScheduler()
-            }
+            writePump.run()
         } catch (e: CancellationException) {
             throw e
         } catch (_: BtLinkException) {
@@ -143,19 +138,6 @@ internal class BluetoothPeerSocket(
      */
     suspend fun awaitWritesFinished(timeoutMillis: Long) {
         withTimeoutOrNull(timeoutMillis) { writesFinished.await() }
-    }
-
-    /** Phong bì JSON của làn điều khiển: [BluetoothLinkScheduler] tự chọn làn ngắn hay dài theo `type` và cỡ. */
-    private fun enqueueControlEnvelope(json: String) =
-        scheduler.enqueueControlEnvelope(EnvelopeCodec.decode(json).type, json.toByteArray(Charsets.UTF_8))
-
-    private suspend fun drainScheduler() {
-        var plaintext = scheduler.poll()
-        while (plaintext != null) {
-            io.writeRecord(sendCipher.seal(plaintext))
-            if (scheduler.onDrained()) bulkLane.onEnvelopeWritten()
-            plaintext = scheduler.poll()
-        }
     }
 
     /** Dây L2CAP đứt hoặc phiên đóng: đóng cả hai hàng đợi và dây vật lý bên dưới. */
