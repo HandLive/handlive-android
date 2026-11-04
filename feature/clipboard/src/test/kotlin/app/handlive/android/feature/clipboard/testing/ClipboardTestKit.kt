@@ -176,6 +176,7 @@ class FakeClient(
     val deviceId: String,
     val pairId: String,
     clock: () -> Long,
+    channel: PeerSession.Channel = PeerSession.Channel.LAN,
 ) {
     class Sent(
         val type: MessageType,
@@ -191,7 +192,7 @@ class FakeClient(
     val session =
         PeerSession(
             PeerSession.PeerInfo(pairId, deviceId, name, PeerPlatform.MACOS),
-            PeerSession.Channel.LAN,
+            channel,
             effective,
             capability,
             { type, plaintext, id, lane ->
@@ -288,6 +289,9 @@ class ClipboardHarness(
 
     val mac = FakeClient("MacBook của Lan", MAC_ID, "pair-mac", wall)
     val ipad = FakeClient("iPad của Lan", IPAD_ID, "pair-ipad", wall)
+
+    /** The same Mac reached over the Bluetooth link (0.4.5); connect it instead of [mac], never both. */
+    val macOverBluetooth = FakeClient("MacBook của Lan", MAC_ID, "pair-mac", wall, PeerSession.Channel.BLUETOOTH)
 
     init {
         module.start()

@@ -106,7 +106,8 @@ class BulkLaneContractTest {
         test { h ->
             h.connect(h.mac)
             h.readImage(Random(3).nextBytes(100_000))
-            val transferId = checkNotNull(h.mac.pushes().single().second.transfer).transferId
+            val (_, push) = h.mac.pushes().single()
+            val transferId = checkNotNull(push.transfer).transferId
             h.module.cancelTransfer("pair-mac", transferId, sending = true)
             h.run()
             assertEquals(listOf(EnvelopeLane.BULK), h.mac.cancelLanes())
@@ -146,5 +147,57 @@ class BulkLaneContractTest {
             h.connect(h.mac)
             h.push(h.mac, h.macText("hi"))
             assertEquals(listOf(EnvelopeLane.CONTROL), h.mac.ackLanes())
+        }
+
+    @Test
+    fun anImageOfBulkDirectMinOverBluetoothShowsSendingProgressWithTheBluetoothNote() =
+        test { h ->
+            // 0.4.7 "Timeouts and progress": over Bluetooth, progress from `BULK_DIRECT_MIN` (CLIP-03 field 2, 10).
+            h.connect(h.macOverBluetooth)
+            h.readImage(Random(6).nextBytes(ClipLimits.BULK_DIRECT_MIN_BYTES.toInt()))
+            val progress = h.notices.progress.filter { it.sending }
+            assertTrue(progress.isNotEmpty())
+            assertTrue(progress.all { it.overBluetooth })
+            assertTrue(progress.any { it.percent != null })
+        }
+
+    @Test
+    fun anImageUnderBulkDirectMinOverBluetoothShowsNoProgress() =
+        test { h ->
+            h.connect(h.macOverBluetooth)
+            h.readImage(Random(7).nextBytes(ClipLimits.BULK_DIRECT_MIN_BYTES.toInt() - 1))
+            assertTrue(h.mac.pushes().isEmpty())
+            assertEquals(1, h.macOverBluetooth.pushes().size)
+            assertTrue(h.notices.progress.isEmpty())
+        }
+
+    @Test
+    fun theSameImageOnLanKeepsTheOneMebibyteThreshold() =
+        test { h ->
+            // LAN keeps CLIP-03 field 2 as before: images over 1 MiB only.
+            h.connect(h.mac)
+            h.readImage(Random(8).nextBytes(ClipLimits.BULK_DIRECT_MIN_BYTES.toInt()))
+            assertEquals(1, h.mac.pushes().size)
+            assertTrue(h.notices.progress.isEmpty())
+        }
+
+    @Test
+    fun anIncomingImageOfBulkDirectMinOverBluetoothShowsReceivingProgressWithTheBluetoothNote() =
+        test { h ->
+            h.connect(h.macOverBluetooth)
+            val bytes = Random(9).nextBytes(ClipLimits.BULK_DIRECT_MIN_BYTES.toInt())
+            val push = imagePush(h, bytes)
+            h.push(h.macOverBluetooth, push)
+            val transferId = checkNotNull(push.transfer).transferId
+            val count = ChunkPlan.chunkCount(bytes.size.toLong())
+            (0 until count).forEach { index ->
+                val from = index * ChunkPlan.CHUNK_SIZE
+                val part = bytes.copyOfRange(from, minOf(bytes.size, from + ChunkPlan.CHUNK_SIZE))
+                h.chunk(h.macOverBluetooth, transferId, index, part)
+            }
+            val progress = h.notices.progress.filter { !it.sending }
+            assertTrue(progress.all { it.overBluetooth })
+            assertEquals(0, progress.first().percent)
+            assertEquals(null, progress.last().percent)
         }
 }
