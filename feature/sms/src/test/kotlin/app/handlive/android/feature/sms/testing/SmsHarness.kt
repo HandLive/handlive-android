@@ -139,7 +139,7 @@ class FakeClient(
         PeerSession.Channel.LAN,
         effective,
         capability,
-        { type, plaintext, _ -> sent += Sent(type, plaintext) },
+        { type, plaintext, _, _ -> sent += Sent(type, plaintext) },
         clock,
     )
 

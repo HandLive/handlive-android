@@ -20,7 +20,6 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeoutOrNull
 import java.security.GeneralSecurityException
 import kotlin.coroutines.CoroutineContext
@@ -30,8 +29,8 @@ import kotlin.coroutines.CoroutineContext
  * `RelayPeerSocket` của relay, `ControlServer.serveBluetoothPeer` nhận socket ảo này mà không đụng tới dây L2CAP
  * bên dưới — E2E `session/hello` (0.6.3) chạy y nguyên bên trong (0.4.5 bước 6). [sendCipher]/[receiveCipher] là
  * hai nửa của `Split()`; việc cắt mảnh/ưu tiên là [BluetoothLinkScheduler], ghép lại làn dài là
- * [BluetoothLongLaneReassembler], làn bulk (`chan` = 0x02, 0.4.7) là [BluetoothBulkLaneReassembler] và
- * [sendBulk] (cả ba của #191/A7.4). [onFirstRecordOpened]/[onFirstRecordRejected] báo bước 5 cho
+ * [BluetoothLongLaneReassembler], làn bulk (`chan` = 0x02, 0.4.7) là [BluetoothBulkLane] và [sendBulk] (cả ba
+ * của #191/A7.4). [onFirstRecordOpened]/[onFirstRecordRejected] báo bước 5 cho
  * `BluetoothLinkAcceptor` (admission, `BT_PREAUTH_TIMEOUT`).
  */
 internal data class BluetoothPeerSocketCallbacks(
@@ -46,7 +45,8 @@ internal class BluetoothPeerSocket(
     private val receiveCipher: BtTransportCipher,
     parent: CoroutineScope,
     private val callbacks: BluetoothPeerSocketCallbacks = BluetoothPeerSocketCallbacks(),
-) : WebSocketSession, BulkLaneSocket {
+) : WebSocketSession,
+    BulkLaneSocket {
     override val coroutineContext: CoroutineContext =
         parent.coroutineContext + SupervisorJob(parent.coroutineContext.job)
 
@@ -54,10 +54,7 @@ internal class BluetoothPeerSocket(
     private val outgoingFrames = Channel<Frame>(Channel.UNLIMITED)
     private val scheduler = BluetoothLinkScheduler()
     private val reassembler = BluetoothLongLaneReassembler()
-    private val bulkReassembler = BluetoothBulkLaneReassembler()
-
-    /** `BT_BULK_QUEUED` (0.4.7 bulk rule 4): [sendBulk] chờ ở đây khi đã đủ envelope bulk chưa xả hết. */
-    private val bulkQueueGate = Semaphore(BluetoothLinkConstants.BULK_QUEUED)
+    private val bulkLane = BluetoothBulkLane()
     private var anyRecordOpened = false
 
     /** Vòng ghi đã dừng: mọi frame xếp trước một `Frame.Close` đã lên dây (hoặc dây đã đứt). */
@@ -78,10 +75,15 @@ internal class BluetoothPeerSocket(
     private suspend fun readLoop() {
         try {
             while (true) {
-                val body = io.readRecord()
-                val plaintext = openRecord(body)
-                val frame = BtTransportFrame.decode(plaintext)
-                if (frame.chan == BtLinkConstants.CHAN_CONTROL) deliverControlFrame(frame) else deliverBulkFrame(frame)
+                val frame = BtTransportFrame.decode(openRecord(io.readRecord()))
+                // Làn bulk có đệm riêng (0.4.7 bulk rule 5-6); tin đủ của cả hai kênh lên cùng pipeline `/v1/ctl`.
+                val message =
+                    when {
+                        frame.chan != BtLinkConstants.CHAN_CONTROL -> bulkLane.accept(frame)
+                        frame.long -> reassembler.accept(frame)
+                        else -> frame.data
+                    }
+                message?.let { incomingFrames.trySend(Frame.Text(it.toString(Charsets.UTF_8))) }
             }
         } catch (e: CancellationException) {
             throw e
@@ -108,19 +110,9 @@ internal class BluetoothPeerSocket(
         return plaintext
     }
 
-    private fun deliverControlFrame(frame: BtTransportFrame) {
-        val message = if (frame.long) reassembler.accept(frame) else frame.data
-        message?.let { incomingFrames.trySend(Frame.Text(it.toString(Charsets.UTF_8))) }
-    }
-
-    /** Đệm riêng của làn bulk (0.4.7 bulk rule 5-6): tin hoàn chỉnh lên cùng pipeline `/v1/ctl` như làn điều khiển. */
-    private fun deliverBulkFrame(frame: BtTransportFrame) {
-        bulkReassembler.accept(frame)?.let { incomingFrames.trySend(Frame.Text(it.toString(Charsets.UTF_8))) }
-    }
-
     /** Làn bulk (0.4.7): [BulkLaneSocket.sendBulk] gọi trực tiếp, không qua [outgoingFrames] như làn điều khiển. */
     override suspend fun sendBulk(envelope: String) {
-        bulkQueueGate.acquire()
+        bulkLane.awaitQueueSlot()
         outgoingFrames.send(Frame.Binary(true, envelope.toByteArray(Charsets.UTF_8)))
     }
 
@@ -128,7 +120,7 @@ internal class BluetoothPeerSocket(
         try {
             for (frame in outgoingFrames) {
                 when (frame) {
-                    is Frame.Text -> enqueueEnvelope(frame.readText())
+                    is Frame.Text -> enqueueControlEnvelope(frame.readText())
                     is Frame.Binary -> scheduler.enqueueBulk(frame.data)
                     is Frame.Close -> break
                     else -> Unit
@@ -153,16 +145,15 @@ internal class BluetoothPeerSocket(
         withTimeoutOrNull(timeoutMillis) { writesFinished.await() }
     }
 
-    private fun enqueueEnvelope(json: String) {
-        val type = EnvelopeCodec.decode(json).type
-        scheduler.enqueueControlEnvelope(type, json.toByteArray(Charsets.UTF_8))
-    }
+    /** Phong bì JSON của làn điều khiển: [BluetoothLinkScheduler] tự chọn làn ngắn hay dài theo `type` và cỡ. */
+    private fun enqueueControlEnvelope(json: String) =
+        scheduler.enqueueControlEnvelope(EnvelopeCodec.decode(json).type, json.toByteArray(Charsets.UTF_8))
 
     private suspend fun drainScheduler() {
         var plaintext = scheduler.poll()
         while (plaintext != null) {
             io.writeRecord(sendCipher.seal(plaintext))
-            if (scheduler.onDrained()) bulkQueueGate.release()
+            if (scheduler.onDrained()) bulkLane.onEnvelopeWritten()
             plaintext = scheduler.poll()
         }
     }

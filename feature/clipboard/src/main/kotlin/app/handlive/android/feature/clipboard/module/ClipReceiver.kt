@@ -64,8 +64,7 @@ class ClipReceiver(
                 ("html" to 1).takeIf { push.html != null },
             ),
         )
-        // 0.4.7 bulk rule 1: the ack of a push with `transfer` (and chunks/cancel) is bulk; an inline push's ack isn't.
-        val lane = if (push.transfer != null) EnvelopeLane.BULK else EnvelopeLane.CONTROL
+        val lane = push.replyLane
         val rejection = PushValidator.check(push, acceptance(session))
         when {
             rejection != null -> {
@@ -201,7 +200,7 @@ class ClipReceiver(
                 state.latest?.asLocalChange(),
                 now,
             )
-        if (decision != ConflictDecision.APPLY) return keepLocal(session, pushId, push, content, decision, lane)
+        if (decision != ConflictDecision.APPLY) return keepLocal(session, pushId, push, content, decision)
         val written =
             runCatching {
                 val writer = context.platform.writer
@@ -272,8 +271,8 @@ class ClipReceiver(
         push: ClipboardPushData,
         content: ClipContent,
         decision: ConflictDecision,
-        lane: EnvelopeLane,
     ) {
+        val lane = push.replyLane
         (content as? ClipContent.FileBacked)?.file?.delete()
         state.ledger.recordFinal(push.clipId)
         reply(session, ClipWire.ignored(pushId, push.clipId, ClipboardValues.REASON_CONFLICT), push.clipId, lane)
@@ -305,6 +304,10 @@ class ClipReceiver(
         const val PEER_ID = 8
     }
 }
+
+/** 0.4.7 bulk rule 1: the ack of a push with `transfer` (and chunks/cancel) is bulk; an inline push's ack isn't. */
+private val ClipboardPushData.replyLane: EnvelopeLane
+    get() = if (transfer != null) EnvelopeLane.BULK else EnvelopeLane.CONTROL
 
 /**
  * The receiver never trusts the sender's sanitizing: `html` is sanitized again before any write. Escaping can grow

@@ -61,16 +61,13 @@ class BluetoothLinkScheduler(
      * tự) — [inflightCompletesBulkEnvelope] phải nhận một mục cho MỌI mảnh trả về ở đây, không riêng dài/bulk, để
      * khớp thứ tự với [onDrained].
      */
-    fun poll(): ByteArray? {
-        short.removeFirstOrNull()?.let {
-            inflightCompletesBulkEnvelope.addLast(false)
-            return it
-        }
-        if (longBulkInflight >= bulkInflight) return null
-        long.removeFirstOrNull()?.let { return dispatch(it) }
-        bulk.removeFirstOrNull()?.let { return dispatch(it) }
-        return null
-    }
+    fun poll(): ByteArray? =
+        short.removeFirstOrNull()?.also { inflightCompletesBulkEnvelope.addLast(false) }
+            ?: nextLongOrBulk()?.let { dispatch(it) }
+
+    /** Làn dài trước làn bulk, và chỉ khi còn chỗ trong [bulkInflight]; hết chỗ thì `null` dù hàng đợi còn mảnh. */
+    private fun nextLongOrBulk(): QueuedFrame? =
+        if (longBulkInflight >= bulkInflight) null else long.removeFirstOrNull() ?: bulk.removeFirstOrNull()
 
     /**
      * Gọi khi một bản ghi dài/bulk đã [poll] trước đó thật sự xả khỏi bộ đệm ghi (mở lại một chỗ inflight).
