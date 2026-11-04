@@ -28,6 +28,11 @@ class ClipNotifierTest {
 
     private fun posted(): List<Notification> = shadowOf(manager).allNotifications
 
+    private fun bluetoothProgress(
+        transferId: String,
+        sending: Boolean,
+    ) = TransferProgress(transferId, "pair-mac", "Lan's Pixel", sending, percent = 10, overBluetooth = true)
+
     @Test
     fun sensitiveContentIsSilentOnTheClipboardChannelWithSendAnywayForTwoMinutes() {
         notifier.sensitiveBlocked()
@@ -75,6 +80,42 @@ class ClipNotifierTest {
         assertEquals("Sending image to Lan's Pixel — 45%", NotificationCompat.getContentText(posted().single()))
         notifier.progress(progress.copy(percent = null))
         assertTrue(posted().isEmpty())
+    }
+
+    @Test
+    fun bluetoothProgressAddsTheBluetoothNoteUnderThePercent() {
+        // CLIP-03 field 10: the line under field 2 when the transfer runs over the Bluetooth link (0.4.7).
+        val sending = bluetoothProgress("t-2", sending = true)
+        notifier.progress(sending)
+        val notification = posted().single()
+        assertEquals("Sending image to Lan's Pixel — 10%", NotificationCompat.getContentText(notification))
+        assertEquals(
+            "Sending image to Lan's Pixel — 10%\nSending over Bluetooth. This can take a few minutes.",
+            notification.extras.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT).toString(),
+        )
+        notifier.progress(sending.copy(transferId = "t-3", sending = false))
+        val bigTexts = posted().map { it.extras.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT).toString() }
+        assertTrue(bigTexts.any { it.endsWith("Receiving over Bluetooth. This can take a few minutes.") })
+    }
+
+    @Test
+    fun lanProgressHasNoBluetoothNote() {
+        notifier.progress(TransferProgress("t-4", "pair-mac", "Lan's Pixel", sending = true, percent = 10))
+        assertEquals(null, posted().single().extras.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT))
+    }
+
+    @Test
+    @Config(qualifiers = "vi")
+    fun bluetoothNoteInVietnamese() {
+        notifier.progress(bluetoothProgress("t-5", sending = true))
+        assertTrue(
+            posted()
+                .single()
+                .extras
+                .getCharSequence(NotificationCompat.EXTRA_BIG_TEXT)
+                .toString()
+                .endsWith("Đang gửi qua Bluetooth. Có thể mất vài phút."),
+        )
     }
 
     @Test
